@@ -27,8 +27,16 @@ app.use(cors({
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
-// Health check endpoint
+// Health check endpoints (both root and /api for accessibility)
 app.get('/health', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/api/health', (req: Request, res: Response) => {
   res.json({
     success: true,
     message: 'Server is running',
