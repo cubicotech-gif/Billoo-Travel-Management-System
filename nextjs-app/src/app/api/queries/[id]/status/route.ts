@@ -7,10 +7,13 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = createClient<Database>(supabaseUrl, supabaseKey);
+
+    // In Next.js 15, params is a Promise and must be awaited
+    const { id } = await params;
 
     const body = await request.json();
     const { status } = body;
@@ -26,7 +29,7 @@ export async function PATCH(
     const { data: updatedQuery, error } = await supabase
       .from('queries')
       .update({ status })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
