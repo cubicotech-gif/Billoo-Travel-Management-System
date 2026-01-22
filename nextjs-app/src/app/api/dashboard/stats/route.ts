@@ -36,15 +36,16 @@ export async function GET(request: NextRequest) {
       .from('queries')
       .select('status');
 
-    const statusStats = allQueries?.reduce((acc: any[], query) => {
-      const existing = acc.find(item => item.status === query.status);
+    type StatusStat = { status: string; count: number };
+    const statusStats = allQueries?.reduce((acc: StatusStat[], query) => {
+      const existing = acc.find((item: StatusStat) => item.status === query.status);
       if (existing) {
         existing.count += 1;
       } else {
-        acc.push({ status: query.status, count: 1 });
+        acc.push({ status: query.status || '', count: 1 });
       }
       return acc;
-    }, []) || [];
+    }, [] as StatusStat[]) || [];
 
     // Get recent queries (last 5)
     const { data: recentQueries } = await supabase
