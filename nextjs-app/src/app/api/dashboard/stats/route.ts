@@ -9,16 +9,6 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createClient<Database>(supabaseUrl, supabaseKey);
 
-    // Get user from session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
     // Get total queries count
     const { count: totalQueries } = await supabase
       .from('queries')
@@ -59,12 +49,7 @@ export async function GET(request: NextRequest) {
     // Get recent queries (last 5)
     const { data: recentQueries } = await supabase
       .from('queries')
-      .select(`
-        *,
-        creator:users!created_by (
-          full_name
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false })
       .limit(5);
 

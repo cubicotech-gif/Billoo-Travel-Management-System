@@ -14,12 +14,12 @@ Modern travel agency management system built with Next.js 14, Supabase, and Tail
 
 ## ✨ Features
 
-- ✅ **User Authentication** - Secure login with Supabase Auth
 - ✅ **Dashboard** - Real-time statistics and analytics
 - ✅ **Query Management** - Create, view, and manage travel queries
 - ✅ **Status Tracking** - Track queries through different stages
 - ✅ **Responsive Design** - Works on all devices
 - ✅ **Auto-deployment** - Push to GitHub, deploys automatically
+- ✅ **Simplified Access** - No authentication required (for MVP)
 
 ## 📦 Project Structure
 
@@ -74,7 +74,6 @@ npm install
 
 1. Create a project at [supabase.com](https://supabase.com)
 2. Run the SQL in `supabase/schema.sql` in Supabase SQL Editor
-3. Create an admin user in Supabase Authentication
 
 ### 4. Configure environment variables
 
@@ -91,12 +90,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
-
-### 6. Login
-
-- Email: `admin@billoo.com`
-- Password: (what you set in Supabase)
+Open [http://localhost:3000](http://localhost:3000) - it will redirect directly to the dashboard.
 
 ## 🚀 Deployment
 
@@ -131,24 +125,22 @@ npm run type-check   # TypeScript type checking
 
 ### Tables
 
-**users**
-- Extends Supabase auth.users
-- Stores profile information (full_name, role)
-
 **queries**
 - Travel queries and bookings
-- Links to users table
-- Tracks status and travel details
+- Tracks passenger info, status, and travel details
+- No user authentication required (simplified for MVP)
 
 See `supabase/schema.sql` for complete schema.
 
 ## 🔐 Authentication
 
-Uses Supabase Authentication with:
-- Email/Password login
-- Session management
-- Protected routes
-- Row Level Security (RLS)
+**Currently disabled for MVP simplicity.**
+- Direct access to dashboard and queries
+- No login required
+- Will be added in future version with:
+  - User accounts and roles
+  - Session management
+  - Row Level Security (RLS)
 
 ## 🎨 Customization
 
@@ -183,12 +175,11 @@ All API routes are in `src/app/api/`:
 
 ## 🔒 Security Features
 
-- ✅ Row Level Security (RLS) enabled
-- ✅ Server-side authentication
-- ✅ Protected API routes
 - ✅ Input validation
 - ✅ SQL injection prevention (Supabase)
 - ✅ XSS protection (React/Next.js)
+- ⏳ Authentication (Coming in next version)
+- ⏳ Row Level Security (RLS) - Will be enabled with auth
 
 ## 🌐 Environment Variables
 
@@ -243,6 +234,6 @@ Built with:
 
 ---
 
-**Version:** 2.0.0
-**Last Updated:** 2026-01-21
-**Status:** Production Ready ✅
+**Version:** 2.1.0 (Simplified - No Auth)
+**Last Updated:** 2026-01-22
+**Status:** MVP Ready ✅
