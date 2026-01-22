@@ -9,9 +9,9 @@ Complete step-by-step guide to deploy Billoo Travel Management System to Vercel 
 ✅ **Automatic deployment** from GitHub
 ✅ **Free hosting** (Vercel free tier)
 ✅ **Managed database** (Supabase)
-✅ **Built-in authentication** (Supabase Auth)
 ✅ **Zero server management**
 ✅ **Automatic HTTPS**
+✅ **Simplified access** (No authentication required)
 
 ---
 
@@ -63,20 +63,9 @@ Complete step-by-step guide to deploy Billoo Travel Management System to Vercel 
 6. You should see: "Success. No rows returned"
 7. Click **"Table Editor"** to verify - you should see `users` and `queries` tables
 
-### 1.5 Create Admin User
-
-1. In Supabase dashboard, click **"Authentication"** in sidebar
-2. Click **"Users"** tab
-3. Click **"Add user"** button
-4. Choose **"Create new user"**
-5. Fill in:
-   - **Email:** `admin@billoo.com`
-   - **Password:** `admin123` (or your preferred password)
-   - **Auto Confirm User:** Check this box
-6. Click **"Create user"**
-7. Click **"Send magic link"** if needed
-
 **✅ Supabase Setup Complete!**
+
+**Note:** No user authentication is required in this simplified version. The app will be directly accessible without login.
 
 ---
 
@@ -133,15 +122,11 @@ Complete step-by-step guide to deploy Billoo Travel Management System to Vercel 
 1. Your site URL will be something like: `https://billoo-travel-xxxxx.vercel.app`
 2. Vercel also gives you a custom domain option (Settings → Domains)
 
-### 3.2 Test Login
+### 3.2 Test Access
 
 1. Go to your site URL
-2. You should see the login page
-3. Enter:
-   - **Email:** `admin@billoo.com`
-   - **Password:** `admin123` (or what you set)
-4. Click **"Sign In"**
-5. You should be redirected to the Dashboard!
+2. You should be automatically redirected to the Dashboard
+3. No login required!
 
 ### 3.3 Test Features
 
@@ -227,12 +212,12 @@ Supabase automatically backs up your database. To manual backup:
 2. Make sure `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are correct
 3. Redeploy after fixing
 
-### Issue: Login not working
+### Issue: Can't access dashboard
 
 **Solution:**
-1. Check if user exists in Supabase → Authentication → Users
-2. Make sure user is confirmed (green checkmark)
-3. Try resetting password in Supabase
+1. Make sure deployment was successful in Vercel
+2. Check browser console for any JavaScript errors
+3. Verify environment variables are set correctly
 
 ### Issue: "Table doesn't exist" error
 
@@ -252,24 +237,20 @@ Supabase automatically backs up your database. To manual backup:
 
 ## 🎓 Advanced Features
 
-### Add New User
+### Future Authentication (Coming Soon)
 
-**Method 1: Via Supabase Dashboard**
-1. Supabase → Authentication → Users
-2. Click "Add user"
-3. Enter email and password
-4. Check "Auto Confirm User"
+This simplified version doesn't have user authentication. In future versions, you can add:
+- User registration and login
+- Role-based access (Admin, Agent)
+- Row Level Security (RLS)
+- Personalized dashboards
 
-**Method 2: Via Sign Up Page** (coming soon)
-- You can add a sign-up page later
-- Uses Supabase Auth
+### Database Access
 
-### Row Level Security
-
-Your database has RLS (Row Level Security) enabled:
-- Users can only see their own data
-- Admins can see all data
-- Configured in the schema.sql file
+Currently, anyone with the app URL can access all data:
+- This is fine for internal use or MVP testing
+- For production, authentication should be added
+- RLS is currently disabled in the database
 
 ### Scaling
 
@@ -307,11 +288,10 @@ Both Vercel and Supabase scale automatically:
 ## ✅ Post-Deployment Checklist
 
 - [ ] Site is accessible at Vercel URL
-- [ ] Login works with admin credentials
+- [ ] Dashboard loads automatically (no login required)
 - [ ] Can create queries
 - [ ] Can update query status
 - [ ] Dashboard shows stats correctly
-- [ ] Changed default admin password
 - [ ] (Optional) Added custom domain
 - [ ] Bookmarked Vercel dashboard
 - [ ] Bookmarked Supabase dashboard
@@ -347,5 +327,5 @@ Your Billoo Travel Management System is now:
 
 **Congratulations on deploying your application! 🚀**
 
-*Last Updated: 2026-01-21*
-*Version: 2.0 (Next.js + Supabase)*
+*Last Updated: 2026-01-22*
+*Version: 2.1 (Next.js + Supabase - Simplified, No Auth)*

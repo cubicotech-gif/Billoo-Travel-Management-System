@@ -1,9 +1,7 @@
 'use client';
 
 import { useEffect, useState, FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import { supabase } from '@/lib/supabase';
 import { Plus, X } from 'lucide-react';
 
 interface Query {
@@ -15,11 +13,9 @@ interface Query {
   travel_type: string;
   status: string;
   created_at: string;
-  creator?: { full_name: string };
 }
 
 export default function QueriesPage() {
-  const router = useRouter();
   const [queries, setQueries] = useState<Query[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -31,16 +27,8 @@ export default function QueriesPage() {
   });
 
   useEffect(() => {
-    checkAuth();
     fetchQueries();
   }, []);
-
-  const checkAuth = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      router.push('/');
-    }
-  };
 
   const fetchQueries = async () => {
     try {
@@ -145,9 +133,6 @@ export default function QueriesPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created By
-                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -186,9 +171,6 @@ export default function QueriesPage() {
                         <option value="Finalized">Finalized</option>
                         <option value="Cancelled">Cancelled</option>
                       </select>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {query.creator?.full_name || 'N/A'}
                     </td>
                   </tr>
                 ))}

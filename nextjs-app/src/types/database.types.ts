@@ -9,29 +9,6 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      users: {
-        Row: {
-          id: string
-          email: string
-          full_name: string
-          role: 'Admin' | 'Agent'
-          created_at: string
-        }
-        Insert: {
-          id: string
-          email: string
-          full_name: string
-          role?: 'Admin' | 'Agent'
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          email?: string
-          full_name?: string
-          role?: 'Admin' | 'Agent'
-          created_at?: string
-        }
-      }
       queries: {
         Row: {
           id: number
@@ -41,7 +18,6 @@ export interface Database {
           email: string | null
           travel_type: 'Umrah' | 'Malaysia' | 'Flight' | 'Hotel' | 'Other'
           status: 'New' | 'Working' | 'Quoted' | 'Finalized' | 'Cancelled'
-          created_by: string
           created_at: string
           updated_at: string
         }
@@ -53,7 +29,6 @@ export interface Database {
           email?: string | null
           travel_type: 'Umrah' | 'Malaysia' | 'Flight' | 'Hotel' | 'Other'
           status?: 'New' | 'Working' | 'Quoted' | 'Finalized' | 'Cancelled'
-          created_by: string
           created_at?: string
           updated_at?: string
         }
@@ -65,7 +40,6 @@ export interface Database {
           email?: string | null
           travel_type?: 'Umrah' | 'Malaysia' | 'Flight' | 'Hotel' | 'Other'
           status?: 'New' | 'Working' | 'Quoted' | 'Finalized' | 'Cancelled'
-          created_by?: string
           created_at?: string
           updated_at?: string
         }

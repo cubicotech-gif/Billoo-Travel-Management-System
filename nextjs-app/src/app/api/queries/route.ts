@@ -10,25 +10,10 @@ export async function GET(request: NextRequest) {
   try {
     const supabase = createClient<Database>(supabaseUrl, supabaseKey);
 
-    // Get user from session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
-    // Get all queries with creator info
+    // Get all queries
     const { data: queries, error } = await supabase
       .from('queries')
-      .select(`
-        *,
-        creator:users!created_by (
-          full_name
-        )
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -55,16 +40,6 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = createClient<Database>(supabaseUrl, supabaseKey);
-
-    // Get user from session
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
 
     const body = await request.json();
     const { passenger_name, phone, email, travel_type } = body;
@@ -100,7 +75,6 @@ export async function POST(request: NextRequest) {
         phone,
         email: email || null,
         travel_type,
-        created_by: user.id,
       })
       .select()
       .single();
