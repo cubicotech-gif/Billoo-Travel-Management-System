@@ -37,10 +37,9 @@ export async function GET(request: NextRequest) {
       .select('status');
 
     type StatusStat = { status: string; count: number };
-    type QueryWithStatus = { status: string };
 
-    const statusStats = (allQueries || []).reduce((acc: StatusStat[], query: QueryWithStatus) => {
-      const existing = acc.find((item: StatusStat) => item.status === query.status);
+    const statusStats = ((allQueries || []) as Array<{ status: string }>).reduce((acc: StatusStat[], query) => {
+      const existing = acc.find((item) => item.status === query.status);
       if (existing) {
         existing.count += 1;
       } else {
