@@ -4,9 +4,37 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Create custom types
-CREATE TYPE travel_type AS ENUM ('Umrah', 'Malaysia', 'Flight', 'Hotel', 'Other');
-CREATE TYPE query_status AS ENUM ('New', 'Working', 'Quoted', 'Finalized', 'Cancelled');
+-- Clean up old schema if exists (migration from auth version)
+DROP TABLE IF EXISTS public.users CASCADE;
+DROP POLICY IF EXISTS "Users can view all queries" ON public.queries;
+DROP POLICY IF EXISTS "Users can insert own queries" ON public.queries;
+DROP POLICY IF EXISTS "Users can update own queries" ON public.queries;
+
+-- Remove created_by column if it exists
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public'
+    AND table_name = 'queries'
+    AND column_name = 'created_by'
+  ) THEN
+    ALTER TABLE public.queries DROP COLUMN created_by;
+  END IF;
+END $$;
+
+-- Create custom types (only if they don't exist)
+DO $$ BEGIN
+  CREATE TYPE travel_type AS ENUM ('Umrah', 'Malaysia', 'Flight', 'Hotel', 'Other');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+  CREATE TYPE query_status AS ENUM ('New', 'Working', 'Quoted', 'Finalized', 'Cancelled');
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- Queries table (simplified - no user relationships)
 CREATE TABLE IF NOT EXISTS public.queries (
