@@ -5,12 +5,31 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Clean up old schema if exists (migration from auth version)
-DROP TABLE IF EXISTS public.users CASCADE;
-DROP POLICY IF EXISTS "Users can view all queries" ON public.queries;
-DROP POLICY IF EXISTS "Users can insert own queries" ON public.queries;
-DROP POLICY IF EXISTS "Users can update own queries" ON public.queries;
 
--- Remove created_by column if it exists
+-- First, disable RLS and drop ALL policies on queries table
+DO $$
+DECLARE
+  policy_record RECORD;
+BEGIN
+  -- Disable RLS first
+  IF EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'queries') THEN
+    ALTER TABLE public.queries DISABLE ROW LEVEL SECURITY;
+
+    -- Drop all policies on queries table
+    FOR policy_record IN
+      SELECT policyname
+      FROM pg_policies
+      WHERE schemaname = 'public' AND tablename = 'queries'
+    LOOP
+      EXECUTE 'DROP POLICY IF EXISTS "' || policy_record.policyname || '" ON public.queries';
+    END LOOP;
+  END IF;
+END $$;
+
+-- Drop old users table
+DROP TABLE IF EXISTS public.users CASCADE;
+
+-- Remove created_by column if it exists (now safe since policies are gone)
 DO $$
 BEGIN
   IF EXISTS (
@@ -19,7 +38,7 @@ BEGIN
     AND table_name = 'queries'
     AND column_name = 'created_by'
   ) THEN
-    ALTER TABLE public.queries DROP COLUMN created_by;
+    ALTER TABLE public.queries DROP COLUMN created_by CASCADE;
   END IF;
 END $$;
 
