@@ -37,15 +37,17 @@ export async function GET(request: NextRequest) {
       .select('status');
 
     type StatusStat = { status: string; count: number };
-    const statusStats = allQueries?.reduce((acc: StatusStat[], query) => {
+    type QueryWithStatus = { status: string };
+
+    const statusStats = (allQueries || []).reduce((acc: StatusStat[], query: QueryWithStatus) => {
       const existing = acc.find((item: StatusStat) => item.status === query.status);
       if (existing) {
         existing.count += 1;
       } else {
-        acc.push({ status: query.status || '', count: 1 });
+        acc.push({ status: query.status, count: 1 });
       }
       return acc;
-    }, [] as StatusStat[]) || [];
+    }, [] as StatusStat[]);
 
     // Get recent queries (last 5)
     const { data: recentQueries } = await supabase
