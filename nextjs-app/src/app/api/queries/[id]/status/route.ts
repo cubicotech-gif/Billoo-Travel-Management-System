@@ -16,7 +16,7 @@ export async function PATCH(
     const { id } = await params;
 
     const body = await request.json();
-    const { status } = body;
+    const { status } = body as { status: Database['public']['Tables']['queries']['Update']['status'] };
 
     if (!status) {
       return NextResponse.json(
@@ -28,7 +28,7 @@ export async function PATCH(
     // Update the query status
     const { data: updatedQuery, error } = await supabase
       .from('queries')
-      .update({ status })
+      .update({ status } as Database['public']['Tables']['queries']['Update'])
       .eq('id', id)
       .select()
       .single();
