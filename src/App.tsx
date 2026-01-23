@@ -2,11 +2,14 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import Login from '@/pages/Login'
-import Dashboard from '@/pages/Dashboard'
-import Queries from '@/pages/Queries'
+import EnhancedDashboard from '@/pages/EnhancedDashboard'
+import EnhancedQueries from '@/pages/EnhancedQueries'
 import Passengers from '@/pages/Passengers'
 import Vendors from '@/pages/Vendors'
 import Invoices from '@/pages/Invoices'
+import Reports from '@/pages/Reports'
+import Calendar from '@/pages/Calendar'
+import Settings from '@/pages/Settings'
 import Layout from '@/components/Layout'
 
 function App() {
@@ -36,11 +39,14 @@ function App() {
           path="/"
           element={user ? <Layout /> : <Navigate to="/login" />}
         >
-          <Route index element={<Dashboard />} />
-          <Route path="queries" element={<Queries />} />
+          <Route index element={<EnhancedDashboard />} />
+          <Route path="queries" element={<EnhancedQueries />} />
           <Route path="passengers" element={<Passengers />} />
           <Route path="vendors" element={<Vendors />} />
           <Route path="invoices" element={<Invoices />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="calendar" element={<Calendar />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>
