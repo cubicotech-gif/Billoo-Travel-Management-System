@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS public.invoice_items (
 
 -- User preferences table
 CREATE TABLE IF NOT EXISTS public.user_preferences (
-  user_id UUID REFERENCES public.users(id) PRIMARY KEY ON DELETE CASCADE,
+  user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
   theme TEXT DEFAULT 'light' CHECK (theme IN ('light', 'dark', 'auto')),
   notifications_enabled BOOLEAN DEFAULT TRUE,
   email_notifications BOOLEAN DEFAULT TRUE,
