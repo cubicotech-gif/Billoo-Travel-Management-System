@@ -51,6 +51,10 @@ export interface Database {
           status: string
           assigned_to: string | null
           notes: string | null
+          cost_price: number
+          selling_price: number
+          profit: number
+          profit_margin: number
           created_at: string
           updated_at: string
         }
@@ -69,6 +73,8 @@ export interface Database {
           status?: string
           assigned_to?: string | null
           notes?: string | null
+          cost_price?: number
+          selling_price?: number
           created_at?: string
           updated_at?: string
         }
@@ -87,6 +93,8 @@ export interface Database {
           status?: string
           assigned_to?: string | null
           notes?: string | null
+          cost_price?: number
+          selling_price?: number
           created_at?: string
           updated_at?: string
         }
@@ -147,6 +155,13 @@ export interface Database {
           balance: number
           rating: number | null
           notes: string | null
+          bank_name: string | null
+          account_number: string | null
+          ifsc_code: string | null
+          pan_number: string | null
+          gst_number: string | null
+          credit_limit: number
+          payment_terms: number
           created_at: string
           updated_at: string
         }
@@ -161,6 +176,13 @@ export interface Database {
           balance?: number
           rating?: number | null
           notes?: string | null
+          bank_name?: string | null
+          account_number?: string | null
+          ifsc_code?: string | null
+          pan_number?: string | null
+          gst_number?: string | null
+          credit_limit?: number
+          payment_terms?: number
           created_at?: string
           updated_at?: string
         }
@@ -175,6 +197,13 @@ export interface Database {
           balance?: number
           rating?: number | null
           notes?: string | null
+          bank_name?: string | null
+          account_number?: string | null
+          ifsc_code?: string | null
+          pan_number?: string | null
+          gst_number?: string | null
+          credit_limit?: number
+          payment_terms?: number
           created_at?: string
           updated_at?: string
         }
@@ -253,6 +282,341 @@ export interface Database {
           payment_date?: string
           notes?: string | null
           created_at?: string
+        }
+      }
+      query_services: {
+        Row: {
+          id: string
+          query_id: string
+          type: 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other'
+          description: string
+          vendor: string
+          cost_price: number
+          selling_price: number
+          pnr: string | null
+          booking_reference: string | null
+          status: 'pending' | 'confirmed' | 'cancelled'
+          service_date: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          query_id: string
+          type: 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other'
+          description: string
+          vendor: string
+          cost_price?: number
+          selling_price?: number
+          pnr?: string | null
+          booking_reference?: string | null
+          status?: 'pending' | 'confirmed' | 'cancelled'
+          service_date?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          query_id?: string
+          type?: 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other'
+          description?: string
+          vendor?: string
+          cost_price?: number
+          selling_price?: number
+          pnr?: string | null
+          booking_reference?: string | null
+          status?: 'pending' | 'confirmed' | 'cancelled'
+          service_date?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      activities: {
+        Row: {
+          id: string
+          user_id: string | null
+          entity_type: 'query' | 'passenger' | 'vendor' | 'invoice' | 'payment' | 'document'
+          entity_id: string
+          action: 'created' | 'updated' | 'deleted' | 'status_changed' | 'email_sent' | 'payment_received'
+          description: string
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          entity_type: 'query' | 'passenger' | 'vendor' | 'invoice' | 'payment' | 'document'
+          entity_id: string
+          action: 'created' | 'updated' | 'deleted' | 'status_changed' | 'email_sent' | 'payment_received'
+          description: string
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          entity_type?: 'query' | 'passenger' | 'vendor' | 'invoice' | 'payment' | 'document'
+          entity_id?: string
+          action?: 'created' | 'updated' | 'deleted' | 'status_changed' | 'email_sent' | 'payment_received'
+          description?: string
+          metadata?: Json | null
+          created_at?: string
+        }
+      }
+      documents: {
+        Row: {
+          id: string
+          entity_type: 'query' | 'passenger' | 'vendor' | 'invoice'
+          entity_id: string
+          document_type: 'passport' | 'visa' | 'ticket' | 'voucher' | 'invoice' | 'receipt' | 'other'
+          file_name: string
+          file_url: string
+          file_size: number | null
+          mime_type: string | null
+          expiry_date: string | null
+          uploaded_by: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          entity_type: 'query' | 'passenger' | 'vendor' | 'invoice'
+          entity_id: string
+          document_type: 'passport' | 'visa' | 'ticket' | 'voucher' | 'invoice' | 'receipt' | 'other'
+          file_name: string
+          file_url: string
+          file_size?: number | null
+          mime_type?: string | null
+          expiry_date?: string | null
+          uploaded_by?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          entity_type?: 'query' | 'passenger' | 'vendor' | 'invoice'
+          entity_id?: string
+          document_type?: 'passport' | 'visa' | 'ticket' | 'voucher' | 'invoice' | 'receipt' | 'other'
+          file_name?: string
+          file_url?: string
+          file_size?: number | null
+          mime_type?: string | null
+          expiry_date?: string | null
+          uploaded_by?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+      }
+      reminders: {
+        Row: {
+          id: string
+          user_id: string
+          entity_type: 'query' | 'passenger' | 'invoice' | 'payment' | 'document'
+          entity_id: string
+          reminder_type: 'follow_up' | 'payment_due' | 'document_expiry' | 'travel_date' | 'custom'
+          title: string
+          description: string | null
+          due_date: string
+          is_completed: boolean
+          completed_at: string | null
+          priority: 'low' | 'medium' | 'high' | 'urgent'
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          entity_type: 'query' | 'passenger' | 'invoice' | 'payment' | 'document'
+          entity_id: string
+          reminder_type: 'follow_up' | 'payment_due' | 'document_expiry' | 'travel_date' | 'custom'
+          title: string
+          description?: string | null
+          due_date: string
+          is_completed?: boolean
+          completed_at?: string | null
+          priority?: 'low' | 'medium' | 'high' | 'urgent'
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          entity_type?: 'query' | 'passenger' | 'invoice' | 'payment' | 'document'
+          entity_id?: string
+          reminder_type?: 'follow_up' | 'payment_due' | 'document_expiry' | 'travel_date' | 'custom'
+          title?: string
+          description?: string | null
+          due_date?: string
+          is_completed?: boolean
+          completed_at?: string | null
+          priority?: 'low' | 'medium' | 'high' | 'urgent'
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      email_templates: {
+        Row: {
+          id: string
+          name: string
+          subject: string
+          body: string
+          category: 'query' | 'booking' | 'payment' | 'reminder' | 'general' | null
+          variables: Json | null
+          is_active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          subject: string
+          body: string
+          category?: 'query' | 'booking' | 'payment' | 'reminder' | 'general' | null
+          variables?: Json | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          subject?: string
+          body?: string
+          category?: 'query' | 'booking' | 'payment' | 'reminder' | 'general' | null
+          variables?: Json | null
+          is_active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      communications: {
+        Row: {
+          id: string
+          entity_type: 'query' | 'passenger'
+          entity_id: string
+          communication_type: 'email' | 'sms' | 'whatsapp' | 'call' | 'note'
+          direction: 'inbound' | 'outbound'
+          subject: string | null
+          body: string | null
+          from_contact: string | null
+          to_contact: string | null
+          status: 'draft' | 'sent' | 'delivered' | 'failed'
+          sent_by: string | null
+          sent_at: string
+          metadata: Json | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          entity_type: 'query' | 'passenger'
+          entity_id: string
+          communication_type: 'email' | 'sms' | 'whatsapp' | 'call' | 'note'
+          direction: 'inbound' | 'outbound'
+          subject?: string | null
+          body?: string | null
+          from_contact?: string | null
+          to_contact?: string | null
+          status?: 'draft' | 'sent' | 'delivered' | 'failed'
+          sent_by?: string | null
+          sent_at?: string
+          metadata?: Json | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          entity_type?: 'query' | 'passenger'
+          entity_id?: string
+          communication_type?: 'email' | 'sms' | 'whatsapp' | 'call' | 'note'
+          direction?: 'inbound' | 'outbound'
+          subject?: string | null
+          body?: string | null
+          from_contact?: string | null
+          to_contact?: string | null
+          status?: 'draft' | 'sent' | 'delivered' | 'failed'
+          sent_by?: string | null
+          sent_at?: string
+          metadata?: Json | null
+          created_at?: string
+        }
+      }
+      invoice_items: {
+        Row: {
+          id: string
+          invoice_id: string
+          service_id: string | null
+          description: string
+          quantity: number
+          unit_price: number
+          tax_percentage: number
+          total: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          invoice_id: string
+          service_id?: string | null
+          description: string
+          quantity?: number
+          unit_price: number
+          tax_percentage?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          invoice_id?: string
+          service_id?: string | null
+          description?: string
+          quantity?: number
+          unit_price?: number
+          tax_percentage?: number
+          created_at?: string
+        }
+      }
+      user_preferences: {
+        Row: {
+          user_id: string
+          theme: 'light' | 'dark' | 'auto'
+          notifications_enabled: boolean
+          email_notifications: boolean
+          sms_notifications: boolean
+          language: string
+          timezone: string
+          currency: string
+          date_format: string
+          preferences: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          theme?: 'light' | 'dark' | 'auto'
+          notifications_enabled?: boolean
+          email_notifications?: boolean
+          sms_notifications?: boolean
+          language?: string
+          timezone?: string
+          currency?: string
+          date_format?: string
+          preferences?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          theme?: 'light' | 'dark' | 'auto'
+          notifications_enabled?: boolean
+          email_notifications?: boolean
+          sms_notifications?: boolean
+          language?: string
+          timezone?: string
+          currency?: string
+          date_format?: string
+          preferences?: Json | null
+          created_at?: string
+          updated_at?: string
         }
       }
     }
