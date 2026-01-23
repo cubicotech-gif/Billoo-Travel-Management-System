@@ -6,6 +6,9 @@ import {
   Users,
   Building2,
   FileText,
+  BarChart3,
+  Calendar as CalendarIcon,
+  Settings as SettingsIcon,
   LogOut,
   Menu,
   X,
@@ -18,6 +21,9 @@ const navigation = [
   { name: 'Passengers', href: '/passengers', icon: Users },
   { name: 'Vendors', href: '/vendors', icon: Building2 },
   { name: 'Invoices', href: '/invoices', icon: FileText },
+  { name: 'Reports', href: '/reports', icon: BarChart3 },
+  { name: 'Calendar', href: '/calendar', icon: CalendarIcon },
+  { name: 'Settings', href: '/settings', icon: SettingsIcon },
 ]
 
 export default function Layout() {
