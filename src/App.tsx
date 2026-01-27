@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import Login from '@/pages/Login'
-import EnhancedDashboard from '@/pages/EnhancedDashboard'
+import ModernDashboard from '@/pages/ModernDashboard'
 import EnhancedQueries from '@/pages/EnhancedQueries'
 import Passengers from '@/pages/Passengers'
 import Vendors from '@/pages/Vendors'
@@ -10,7 +10,7 @@ import Invoices from '@/pages/Invoices'
 import Reports from '@/pages/Reports'
 import Calendar from '@/pages/Calendar'
 import Settings from '@/pages/Settings'
-import Layout from '@/components/Layout'
+import ModernLayout from '@/components/ModernLayout'
 
 function App() {
   const { user, loading, initialize } = useAuthStore()
@@ -37,9 +37,9 @@ function App() {
 
         <Route
           path="/"
-          element={user ? <Layout /> : <Navigate to="/login" />}
+          element={user ? <ModernLayout /> : <Navigate to="/login" />}
         >
-          <Route index element={<EnhancedDashboard />} />
+          <Route index element={<ModernDashboard />} />
           <Route path="queries" element={<EnhancedQueries />} />
           <Route path="passengers" element={<Passengers />} />
           <Route path="vendors" element={<Vendors />} />
