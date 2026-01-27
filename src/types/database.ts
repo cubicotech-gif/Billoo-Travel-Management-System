@@ -216,6 +216,7 @@ export interface Database {
           gst_number: string | null
           credit_limit: number
           payment_terms: number
+          is_active: boolean
           created_at: string
           updated_at: string
         }
@@ -237,6 +238,7 @@ export interface Database {
           gst_number?: string | null
           credit_limit?: number
           payment_terms?: number
+          is_active?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -258,6 +260,7 @@ export interface Database {
           gst_number?: string | null
           credit_limit?: number
           payment_terms?: number
+          is_active?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -342,15 +345,18 @@ export interface Database {
         Row: {
           id: string
           query_id: string
-          type: 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other'
-          description: string
-          vendor: string
-          cost_price: number
-          selling_price: number
-          pnr: string | null
-          booking_reference: string | null
-          status: 'pending' | 'confirmed' | 'cancelled'
+          service_type: 'Hotel' | 'Flight' | 'Transport' | 'Visa' | 'Insurance' | 'Tours' | 'Other'
+          vendor_id: string | null
+          vendor_name: string | null
+          service_description: string
+          city: string | null
           service_date: string | null
+          purchase_price: number
+          selling_price: number
+          profit: number
+          profit_margin: number
+          booking_reference: string | null
+          status: 'Draft' | 'Quoted' | 'Booked' | 'Confirmed' | 'Cancelled'
           notes: string | null
           created_at: string
           updated_at: string
@@ -358,15 +364,16 @@ export interface Database {
         Insert: {
           id?: string
           query_id: string
-          type: 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other'
-          description: string
-          vendor: string
-          cost_price?: number
-          selling_price?: number
-          pnr?: string | null
-          booking_reference?: string | null
-          status?: 'pending' | 'confirmed' | 'cancelled'
+          service_type: 'Hotel' | 'Flight' | 'Transport' | 'Visa' | 'Insurance' | 'Tours' | 'Other'
+          vendor_id?: string | null
+          vendor_name?: string | null
+          service_description: string
+          city?: string | null
           service_date?: string | null
+          purchase_price?: number
+          selling_price?: number
+          booking_reference?: string | null
+          status?: 'Draft' | 'Quoted' | 'Booked' | 'Confirmed' | 'Cancelled'
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -374,15 +381,16 @@ export interface Database {
         Update: {
           id?: string
           query_id?: string
-          type?: 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other'
-          description?: string
-          vendor?: string
-          cost_price?: number
-          selling_price?: number
-          pnr?: string | null
-          booking_reference?: string | null
-          status?: 'pending' | 'confirmed' | 'cancelled'
+          service_type?: 'Hotel' | 'Flight' | 'Transport' | 'Visa' | 'Insurance' | 'Tours' | 'Other'
+          vendor_id?: string | null
+          vendor_name?: string | null
+          service_description?: string
+          city?: string | null
           service_date?: string | null
+          purchase_price?: number
+          selling_price?: number
+          booking_reference?: string | null
+          status?: 'Draft' | 'Quoted' | 'Booked' | 'Confirmed' | 'Cancelled'
           notes?: string | null
           created_at?: string
           updated_at?: string

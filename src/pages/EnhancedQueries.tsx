@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   Plus, Search, Phone, Mail, MapPin,
-  FileText, User, Trash2, X, Users, MessageCircle, AlertTriangle, CheckCircle, Clock
+  FileText, User, Trash2, X, Users, MessageCircle, AlertTriangle, CheckCircle, Clock, Briefcase, Package
 } from 'lucide-react'
 import { format } from 'date-fns'
 import PassengerSelector from '@/components/PassengerSelector'
 import CommunicationLog from '@/components/CommunicationLog'
 import AddCommunication from '@/components/AddCommunication'
 import QuickActions from '@/components/QuickActions'
+import QueryWorkspace from '@/components/QueryWorkspace'
 
 interface Query {
   id: string
@@ -23,6 +24,7 @@ interface Query {
   children: number
   infants: number
   status: string
+  assigned_to: string | null
   notes: string | null
   query_source: string | null
   service_type: string | null
@@ -32,9 +34,15 @@ interface Query {
   response_given: string | null
   is_tentative_dates: boolean
   created_at: string
-  cost_price?: number
-  selling_price?: number
+  updated_at: string
+  cost_price: number
+  selling_price: number
+  profit: number
+  profit_margin: number
   services?: QueryService[]
+  service_count?: number
+  total_selling_price?: number
+  total_profit?: number
 }
 
 interface QueryService {
@@ -69,8 +77,10 @@ export default function EnhancedQueries() {
   const [showModal, setShowModal] = useState(false)
   const [showPassengerModal, setShowPassengerModal] = useState(false)
   const [showCommModal, setShowCommModal] = useState(false)
+  const [showWorkspace, setShowWorkspace] = useState(false)
   const [selectedQueryId, setSelectedQueryId] = useState<string | null>(null)
   const [selectedQuery, setSelectedQuery] = useState<Query | null>(null)
+  const [workspaceQuery, setWorkspaceQuery] = useState<Query | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [priorityTab, setPriorityTab] = useState<'all' | 'urgent' | 'awaiting'>('all')
@@ -119,7 +129,29 @@ export default function EnhancedQueries() {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      setQueries(data || [])
+
+      // Load service counts and totals for each query
+      const queriesWithServices = await Promise.all(
+        (data || []).map(async (query) => {
+          const { data: services } = await supabase
+            .from('query_services')
+            .select('selling_price, profit')
+            .eq('query_id', query.id)
+
+          const service_count = services?.length || 0
+          const total_selling_price = services?.reduce((sum, s) => sum + s.selling_price, 0) || 0
+          const total_profit = services?.reduce((sum, s) => sum + s.profit, 0) || 0
+
+          return {
+            ...query,
+            service_count,
+            total_selling_price,
+            total_profit
+          }
+        })
+      )
+
+      setQueries(queriesWithServices)
     } catch (error) {
       console.error('Error loading queries:', error)
     } finally {
@@ -545,8 +577,47 @@ export default function EnhancedQueries() {
                   </div>
                 )}
 
+                {/* Service Summary */}
+                {query.service_count && query.service_count > 0 && (
+                  <div className="mb-4 p-3 bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900/20 dark:to-blue-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2">
+                        <Package className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                          Services: {query.service_count}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-4 text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          Package: <span className="font-bold text-primary-600 dark:text-primary-400">Rs {query.total_selling_price?.toLocaleString('en-IN')}</span>
+                        </span>
+                        <span className="text-gray-600 dark:text-gray-400">
+                          Profit: <span className={`font-bold ${(query.total_profit || 0) > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                            Rs {query.total_profit?.toLocaleString('en-IN')}
+                          </span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Action Buttons */}
                 <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <button
+                    onClick={() => {
+                      setWorkspaceQuery(query)
+                      setShowWorkspace(true)
+                    }}
+                    className="px-4 py-2 bg-gradient-to-r from-primary-600 to-accent-purple text-white rounded-lg hover:from-primary-700 hover:to-accent-purple transition-colors text-sm font-medium inline-flex items-center space-x-1"
+                  >
+                    <Briefcase className="h-4 w-4" />
+                    <span>Work on Query</span>
+                    {query.service_count && query.service_count > 0 && (
+                      <span className="ml-1 px-2 py-0.5 bg-white bg-opacity-20 rounded-full text-xs">
+                        {query.service_count}
+                      </span>
+                    )}
+                  </button>
                   <QuickActions
                     phone={query.client_phone}
                     email={query.client_email}
@@ -981,6 +1052,20 @@ export default function EnhancedQueries() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Query Workspace Modal */}
+      {showWorkspace && workspaceQuery && (
+        <QueryWorkspace
+          query={workspaceQuery}
+          onClose={() => {
+            setShowWorkspace(false)
+            setWorkspaceQuery(null)
+          }}
+          onUpdate={() => {
+            loadQueries()
+          }}
+        />
       )}
     </div>
   )

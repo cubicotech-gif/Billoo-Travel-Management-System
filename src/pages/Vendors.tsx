@@ -14,6 +14,9 @@ interface Vendor {
   address: string | null
   balance: number
   rating: number | null
+  bank_name: string | null
+  account_number: string | null
+  is_active: boolean
   notes: string | null
   created_at: string
 }
@@ -38,6 +41,9 @@ export default function Vendors() {
     address: '',
     balance: 0,
     rating: 5,
+    bank_name: '',
+    account_number: '',
+    is_active: true,
     notes: '',
   })
 
@@ -79,6 +85,9 @@ export default function Vendors() {
         address: '',
         balance: 0,
         rating: 5,
+        bank_name: '',
+        account_number: '',
+        is_active: true,
         notes: '',
       })
       loadVendors()
@@ -132,14 +141,21 @@ export default function Vendors() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredVendors.map((vendor) => (
-          <div key={vendor.id} className="card hover:shadow-md transition-shadow">
+          <div key={vendor.id} className={`card hover:shadow-md transition-shadow ${!vendor.is_active ? 'opacity-60 border-gray-300' : ''}`}>
             <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                  <Building2 className="w-6 h-6 text-purple-600" />
+              <div className="flex items-center flex-1">
+                <div className={`w-12 h-12 ${vendor.is_active ? 'bg-purple-100' : 'bg-gray-100'} rounded-full flex items-center justify-center mr-3`}>
+                  <Building2 className={`w-6 h-6 ${vendor.is_active ? 'text-purple-600' : 'text-gray-400'}`} />
                 </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{vendor.name}</h3>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-gray-900">{vendor.name}</h3>
+                    {!vendor.is_active && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 text-gray-700">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500">{vendor.type}</p>
                 </div>
               </div>
@@ -326,6 +342,46 @@ export default function Vendors() {
                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                         className="input"
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Bank Name
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.bank_name}
+                        onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                        className="input"
+                        placeholder="e.g., HBL, Meezan Bank"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Account Number
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.account_number}
+                        onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                        className="input"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={formData.is_active}
+                          onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                          className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                        />
+                        <span className="ml-2 text-sm font-medium text-gray-700">Active Vendor</span>
+                      </label>
+                      <p className="mt-1 text-xs text-gray-500">
+                        Inactive vendors will not appear in service dropdowns
+                      </p>
                     </div>
 
                     <div className="md:col-span-2">
