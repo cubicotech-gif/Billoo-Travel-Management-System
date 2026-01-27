@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  Plus, Search, Calendar, Phone, Mail, MapPin, Plane, Hotel,
-  FileText, User, Trash2, X, Users, MessageCircle
+  Plus, Search, Phone, Mail, MapPin,
+  FileText, User, Trash2, X, Users, MessageCircle, AlertTriangle, CheckCircle, Clock
 } from 'lucide-react'
 import { format } from 'date-fns'
 import PassengerSelector from '@/components/PassengerSelector'
@@ -24,6 +24,13 @@ interface Query {
   infants: number
   status: string
   notes: string | null
+  query_source: string | null
+  service_type: string | null
+  tentative_plan: string | null
+  internal_reminders: string | null
+  is_responded: boolean
+  response_given: string | null
+  is_tentative_dates: boolean
   created_at: string
   cost_price?: number
   selling_price?: number
@@ -42,7 +49,19 @@ interface QueryService {
 }
 
 const STATUSES = ['New', 'Working', 'Quoted', 'Finalized', 'Booking', 'Issued', 'Completed']
-const SERVICE_TYPES = ['Flight', 'Hotel', 'Visa', 'Transport', 'Tour', 'Insurance', 'Other']
+
+const QUERY_SOURCES = ['Phone Call', 'WhatsApp', 'Walk-in', 'Website', 'Email', 'Referral']
+const SERVICE_CATEGORIES = [
+  'Umrah Package',
+  'Umrah Plus Package',
+  'Hajj Package',
+  'Leisure Tourism',
+  'Ticket Booking',
+  'Visa Service',
+  'Transport Service',
+  'Hotel Only',
+  'Other'
+]
 
 export default function EnhancedQueries() {
   const [queries, setQueries] = useState<Query[]>([])
@@ -54,6 +73,8 @@ export default function EnhancedQueries() {
   const [selectedQuery, setSelectedQuery] = useState<Query | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [priorityTab, setPriorityTab] = useState<'all' | 'urgent' | 'awaiting'>('all')
+
   const [formData, setFormData] = useState({
     client_name: '',
     client_email: '',
@@ -68,23 +89,27 @@ export default function EnhancedQueries() {
     notes: '',
     cost_price: 0,
     selling_price: 0,
-  })
-
-  const [services, setServices] = useState<QueryService[]>([])
-  const [showServiceModal, setShowServiceModal] = useState(false)
-  const [serviceForm, setServiceForm] = useState({
-    type: 'Flight' as any,
-    description: '',
-    vendor: '',
-    cost: 0,
-    selling: 0,
-    pnr: '',
-    booking_ref: '',
+    query_source: '',
+    service_type: '',
+    tentative_plan: '',
+    internal_reminders: '',
+    is_responded: false,
+    response_given: '',
+    is_tentative_dates: false,
   })
 
   useEffect(() => {
     loadQueries()
   }, [])
+
+  // Auto-fill destination based on service type
+  useEffect(() => {
+    if (formData.service_type === 'Umrah Package' || formData.service_type === 'Umrah Plus Package') {
+      setFormData(prev => ({ ...prev, destination: 'Makkah & Madinah' }))
+    } else if (formData.service_type === 'Hajj Package') {
+      setFormData(prev => ({ ...prev, destination: 'Makkah, Madinah, Arafat' }))
+    }
+  }, [formData.service_type])
 
   const loadQueries = async () => {
     try {
@@ -106,16 +131,56 @@ export default function EnhancedQueries() {
     e.preventDefault()
 
     try {
-      const { error } = await supabase.from('queries').insert([formData])
+      const queryData = {
+        ...formData,
+        query_source: formData.query_source || null,
+        service_type: formData.service_type || null,
+        tentative_plan: formData.tentative_plan || null,
+        internal_reminders: formData.internal_reminders || null,
+        response_given: formData.response_given || null,
+      }
+
+      const { error } = await supabase.from('queries').insert([queryData])
 
       if (error) throw error
 
+      await loadQueries()
       setShowModal(false)
       resetForm()
-      loadQueries()
     } catch (error) {
       console.error('Error creating query:', error)
       alert('Failed to create query')
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this query?')) return
+
+    try {
+      const { error } = await supabase.from('queries').delete().eq('id', id)
+
+      if (error) throw error
+
+      await loadQueries()
+    } catch (error) {
+      console.error('Error deleting query:', error)
+      alert('Failed to delete query')
+    }
+  }
+
+  const toggleResponded = async (query: Query) => {
+    try {
+      const { error } = await supabase
+        .from('queries')
+        .update({ is_responded: !query.is_responded })
+        .eq('id', query.id)
+
+      if (error) throw error
+
+      await loadQueries()
+    } catch (error) {
+      console.error('Error updating query:', error)
+      alert('Failed to update query status')
     }
   }
 
@@ -134,283 +199,368 @@ export default function EnhancedQueries() {
       notes: '',
       cost_price: 0,
       selling_price: 0,
+      query_source: '',
+      service_type: '',
+      tentative_plan: '',
+      internal_reminders: '',
+      is_responded: false,
+      response_given: '',
+      is_tentative_dates: false,
     })
-    setServices([])
   }
 
-  const updateStatus = async (id: string, newStatus: string) => {
-    try {
-      const { error } = await supabase
-        .from('queries')
-        .update({ status: newStatus })
-        .eq('id', id)
+  // Filter queries based on priority tab
+  const getFilteredQueries = () => {
+    let filtered = queries
 
-      if (error) throw error
-      loadQueries()
-    } catch (error) {
-      console.error('Error updating status:', error)
-    }
-  }
-
-  const addService = () => {
-    if (!serviceForm.description || !serviceForm.vendor) {
-      alert('Please fill in service details')
-      return
+    // Priority tab filtering
+    if (priorityTab === 'urgent') {
+      filtered = filtered.filter(q => !q.is_responded)
+      // Sort by oldest first for urgent
+      filtered = [...filtered].sort((a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+    } else if (priorityTab === 'awaiting') {
+      filtered = filtered.filter(q => q.is_responded)
+      // Sort by newest first for awaiting
+      filtered = [...filtered].sort((a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
     }
 
-    setServices([...services, { ...serviceForm, id: Date.now().toString() }])
-    setServiceForm({
-      type: 'Flight',
-      description: '',
-      vendor: '',
-      cost: 0,
-      selling: 0,
-      pnr: '',
-      booking_ref: '',
-    })
-    setShowServiceModal(false)
-  }
-
-  const removeService = (id: string) => {
-    setServices(services.filter(s => s.id !== id))
-  }
-
-  const filteredQueries = queries.filter((query) => {
-    const matchesSearch =
-      query.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      query.destination.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      query.query_number.toLowerCase().includes(searchTerm.toLowerCase())
-
-    const matchesStatus = filterStatus === 'all' || query.status === filterStatus
-
-    return matchesSearch && matchesStatus
-  })
-
-  const getStatusColor = (status: string) => {
-    const colors: Record<string, string> = {
-      'New': 'bg-blue-100 text-blue-800 border-blue-200',
-      'Working': 'bg-yellow-100 text-yellow-800 border-yellow-200',
-      'Quoted': 'bg-purple-100 text-purple-800 border-purple-200',
-      'Finalized': 'bg-green-100 text-green-800 border-green-200',
-      'Booking': 'bg-cyan-100 text-cyan-800 border-cyan-200',
-      'Issued': 'bg-teal-100 text-teal-800 border-teal-200',
-      'Completed': 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    // Status filtering
+    if (filterStatus !== 'all') {
+      filtered = filtered.filter(q => q.status === filterStatus)
     }
-    return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200'
-  }
 
-  const getServiceIcon = (type: string) => {
-    const icons: Record<string, any> = {
-      'Flight': Plane,
-      'Hotel': Hotel,
-      'Visa': FileText,
-      'Transport': MapPin,
-      'Tour': User,
-      'Insurance': FileText,
-      'Other': FileText,
+    // Search filtering
+    if (searchTerm) {
+      filtered = filtered.filter(
+        q =>
+          q.query_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          q.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          q.client_phone.includes(searchTerm) ||
+          q.destination.toLowerCase().includes(searchTerm.toLowerCase())
+      )
     }
-    return icons[type] || FileText
+
+    return filtered
   }
 
-  const totalCost = services.reduce((sum, s) => sum + s.cost, 0)
-  const totalSelling = services.reduce((sum, s) => sum + s.selling, 0)
-  const totalProfit = totalSelling - totalCost
-  const profitMargin = totalSelling > 0 ? ((totalProfit / totalSelling) * 100).toFixed(1) : '0'
+  const urgentCount = queries.filter(q => !q.is_responded).length
+  const awaitingCount = queries.filter(q => q.is_responded).length
+
+  const filteredQueries = getFilteredQueries()
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      <div className="flex items-center justify-center h-64 bg-white dark:bg-gray-800 rounded-lg">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading queries...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Queries & Bookings</h1>
-          <p className="mt-1 text-sm text-gray-600">
-            Manage travel inquiries with detailed service breakdown
-          </p>
+    <div className="p-6 bg-gray-50 dark:bg-gray-900">
+      {/* Page Header */}
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Query Management</h1>
+        <p className="text-gray-600 dark:text-gray-400">Track and manage customer travel queries</p>
+      </div>
+
+      {/* Urgent Alert Banner */}
+      {urgentCount > 0 && (
+        <div className="mb-6 bg-red-50 dark:bg-red-900/20 border-2 border-red-500 dark:border-red-700 rounded-xl p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-red-900 dark:text-red-200">
+                  ⚠️ {urgentCount} {urgentCount === 1 ? 'query' : 'queries'} awaiting response!
+                </h3>
+                <p className="text-red-700 dark:text-red-300 text-sm mt-1">
+                  These queries have not been responded to yet. Please review and respond as soon as possible.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setPriorityTab('urgent')}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium whitespace-nowrap"
+            >
+              View Urgent
+            </button>
+          </div>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus className="w-5 h-5 mr-2" />
-          New Query
+      )}
+
+      {/* Priority Tabs */}
+      <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-1 inline-flex">
+        <button
+          onClick={() => setPriorityTab('all')}
+          className={`px-6 py-3 rounded-lg font-medium transition-all ${
+            priorityTab === 'all'
+              ? 'bg-primary-600 text-white shadow-md'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+          }`}
+        >
+          All Queries
+          <span className="ml-2 px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-xs">
+            {queries.length}
+          </span>
+        </button>
+        <button
+          onClick={() => setPriorityTab('urgent')}
+          className={`px-6 py-3 rounded-lg font-medium transition-all ${
+            priorityTab === 'urgent'
+              ? 'bg-red-600 text-white shadow-md'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+          }`}
+        >
+          🔴 Urgent - Not Responded
+          <span className="ml-2 px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 text-xs font-bold">
+            {urgentCount}
+          </span>
+        </button>
+        <button
+          onClick={() => setPriorityTab('awaiting')}
+          className={`px-6 py-3 rounded-lg font-medium transition-all ${
+            priorityTab === 'awaiting'
+              ? 'bg-yellow-600 text-white shadow-md'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+          }`}
+        >
+          🟡 Awaiting Reply
+          <span className="ml-2 px-2 py-0.5 rounded-full bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 text-xs font-bold">
+            {awaitingCount}
+          </span>
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="card">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="flex items-center border border-gray-300 rounded-lg px-3 py-2">
-            <Search className="w-5 h-5 text-gray-400 mr-2" />
-            <input
-              type="text"
-              placeholder="Search queries..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1 outline-none"
-            />
-          </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="input"
-          >
-            <option value="all">All Statuses</option>
-            {STATUSES.map(status => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </select>
+      {/* Search and Filters */}
+      <div className="mb-6 flex flex-col md:flex-row gap-4">
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
+          <input
+            type="text"
+            placeholder="Search by query number, client name, phone, destination..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+          />
         </div>
-      </div>
 
-      {/* Status Pipeline */}
-      <div className="card overflow-x-auto">
-        <div className="flex space-x-2 pb-2">
-          <button
-            onClick={() => setFilterStatus('all')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              filterStatus === 'all' ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            All ({queries.length})
-          </button>
-          {STATUSES.map(status => {
-            const count = queries.filter(q => q.status === status).length
-            return (
-              <button
-                key={status}
-                onClick={() => setFilterStatus(status)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                  filterStatus === status ? getStatusColor(status) + ' border' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {status} ({count})
-              </button>
-            )
-          })}
-        </div>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+        >
+          <option value="all">All Statuses</option>
+          {STATUSES.map(status => (
+            <option key={status} value={status}>{status}</option>
+          ))}
+        </select>
+
+        <button
+          onClick={() => setShowModal(true)}
+          className="px-6 py-3 bg-gradient-primary text-white rounded-lg hover:opacity-90 transition-opacity font-medium inline-flex items-center space-x-2 shadow-lg"
+        >
+          <Plus className="h-5 w-5" />
+          <span>New Query</span>
+        </button>
       </div>
 
       {/* Queries Grid */}
       <div className="grid grid-cols-1 gap-4">
-        {filteredQueries.map((query) => {
-          const profit = (query.selling_price || 0) - (query.cost_price || 0)
-          const margin = query.selling_price && query.selling_price > 0
-            ? ((profit / query.selling_price) * 100).toFixed(1)
-            : '0'
+        {filteredQueries.length === 0 ? (
+          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+            <FileText className="mx-auto h-12 w-12 text-gray-400" />
+            <p className="mt-2 text-gray-500 dark:text-gray-400">No queries found</p>
+          </div>
+        ) : (
+          filteredQueries.map((query) => (
+            <div
+              key={query.id}
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all overflow-hidden"
+            >
+              <div className="p-6">
+                {/* Header Row */}
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 flex-wrap gap-2 mb-2">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                        #{query.query_number}
+                      </h3>
 
-          return (
-            <div key={query.id} className="card hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">{query.client_name}</h3>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(query.status)}`}>
-                      {query.status}
-                    </span>
+                      {/* Urgent Badge */}
+                      {!query.is_responded && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200 border border-red-300 dark:border-red-700 animate-pulse">
+                          URGENT
+                        </span>
+                      )}
+
+                      {/* Query Source Tag */}
+                      {query.query_source && (
+                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                          via {query.query_source}
+                        </span>
+                      )}
+
+                      {/* Service Type Badge */}
+                      {query.service_type && (
+                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
+                          {query.service_type}
+                        </span>
+                      )}
+
+                      {/* Status Badge */}
+                      <span
+                        className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                          query.status === 'Completed'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                            : query.status === 'Cancelled'
+                            ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
+                            : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200'
+                        }`}
+                      >
+                        {query.status}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center space-x-1">
+                        <User className="h-4 w-4" />
+                        <span className="font-medium">{query.client_name}</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Phone className="h-4 w-4" />
+                        <span>{query.client_phone}</span>
+                      </div>
+                      {query.client_email && (
+                        <div className="flex items-center space-x-1">
+                          <Mail className="h-4 w-4" />
+                          <span>{query.client_email}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-500 mb-3">Query #{query.query_number}</p>
-                </div>
-                <select
-                  value={query.status}
-                  onChange={(e) => updateStatus(query.id, e.target.value)}
-                  className="px-3 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  {STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <div className="flex items-center text-sm text-gray-600">
-                  <MapPin className="w-4 h-4 mr-2 text-primary-600" />
-                  <span className="font-medium">{query.destination}</span>
-                </div>
-                <div className="flex items-center text-sm text-gray-600">
-                  <Phone className="w-4 h-4 mr-2 text-primary-600" />
-                  {query.client_phone}
-                </div>
-                {query.client_email && (
-                  <div className="flex items-center text-sm text-gray-600">
-                    <Mail className="w-4 h-4 mr-2 text-primary-600" />
-                    {query.client_email}
+                  {/* Response Toggle & Actions */}
+                  <div className="flex items-center space-x-2 ml-4">
+                    <button
+                      onClick={() => toggleResponded(query)}
+                      className={`p-2 rounded-lg transition-all ${
+                        query.is_responded
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50'
+                          : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50'
+                      }`}
+                      title={query.is_responded ? 'Mark as not responded' : 'Mark as responded'}
+                    >
+                      {query.is_responded ? (
+                        <CheckCircle className="h-5 w-5" />
+                      ) : (
+                        <Clock className="h-5 w-5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(query.id)}
+                      className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </button>
                   </div>
-                )}
-              </div>
-
-              <div className="flex items-center gap-6 text-sm mb-4">
-                {query.travel_date && (
-                  <div className="flex items-center text-gray-600">
-                    <Calendar className="w-4 h-4 mr-2 text-primary-600" />
-                    {format(new Date(query.travel_date), 'MMM dd, yyyy')}
-                    {query.return_date && ` - ${format(new Date(query.return_date), 'MMM dd')}`}
-                  </div>
-                )}
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-600">👥 {query.adults} Adults</span>
-                  {query.children > 0 && <span className="text-gray-600">👶 {query.children} Children</span>}
-                  {query.infants > 0 && <span className="text-gray-600">🍼 {query.infants} Infants</span>}
                 </div>
-              </div>
 
-              {/* Pricing Section */}
-              {(query.cost_price || query.selling_price) && (
-                <div className="grid grid-cols-3 gap-4 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg mb-4">
+                {/* Travel Details */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Cost Price</p>
-                    <p className="text-lg font-bold text-gray-900">₹{(query.cost_price || 0).toLocaleString('en-IN')}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Destination</p>
+                    <p className="font-medium text-gray-900 dark:text-white flex items-center space-x-1">
+                      <MapPin className="h-4 w-4" />
+                      <span>{query.destination}</span>
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Selling Price</p>
-                    <p className="text-lg font-bold text-primary-600">₹{(query.selling_price || 0).toLocaleString('en-IN')}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Travel Date</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {query.travel_date ? format(new Date(query.travel_date), 'MMM d, yyyy') : 'Not set'}
+                      {query.is_tentative_dates && (
+                        <span className="ml-1 text-xs text-orange-600 dark:text-orange-400">(Tentative)</span>
+                      )}
+                    </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-600 mb-1">Profit ({margin}%)</p>
-                    <p className={`text-lg font-bold ${profit > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      ₹{profit.toLocaleString('en-IN')}
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Passengers</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {query.adults}A {query.children > 0 && `${query.children}C`} {query.infants > 0 && `${query.infants}I`}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Created</p>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {format(new Date(query.created_at), 'MMM d, yyyy')}
                     </p>
                   </div>
                 </div>
-              )}
 
-              {query.notes && (
-                <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded mb-4">
-                  <p className="text-sm text-gray-700">{query.notes}</p>
-                </div>
-              )}
+                {/* Tentative Plan */}
+                {query.tentative_plan && (
+                  <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2">
+                      Customer Plan:
+                    </p>
+                    <p className="text-sm text-blue-800 dark:text-blue-300 whitespace-pre-wrap">
+                      {query.tentative_plan}
+                    </p>
+                  </div>
+                )}
 
-              {/* Quick Actions */}
-              <div className="pt-4 border-t border-gray-200">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
-                    Quick Actions
-                  </span>
+                {/* Internal Reminders */}
+                {query.internal_reminders && (
+                  <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                    <p className="text-sm font-semibold text-yellow-900 dark:text-yellow-200 mb-2 flex items-center space-x-1">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span>⚠️ Internal Notes:</span>
+                    </p>
+                    <p className="text-sm text-yellow-800 dark:text-yellow-300 whitespace-pre-wrap">
+                      {query.internal_reminders}
+                    </p>
+                  </div>
+                )}
+
+                {/* Response Given */}
+                {query.response_given && (
+                  <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <p className="text-sm font-semibold text-green-900 dark:text-green-200 mb-2 flex items-center space-x-1">
+                      <CheckCircle className="h-4 w-4" />
+                      <span>✓ What Was Told:</span>
+                    </p>
+                    <p className="text-sm text-green-800 dark:text-green-300 whitespace-pre-wrap">
+                      {query.response_given}
+                    </p>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <QuickActions
                     phone={query.client_phone}
                     email={query.client_email}
-                    onActionComplete={() => {
-                      // Optionally auto-open communication log modal
-                    }}
+                    onActionComplete={() => {}}
                   />
-                </div>
-
-                {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-2">
                   <button
                     onClick={() => {
                       setSelectedQueryId(query.id)
                       setShowPassengerModal(true)
                     }}
-                    className="btn btn-secondary btn-sm"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium inline-flex items-center space-x-1"
                   >
-                    <Users className="w-4 h-4 mr-2" />
-                    Passengers
+                    <Users className="h-4 w-4" />
+                    <span>Manage Passengers</span>
                   </button>
                   <button
                     onClick={() => {
@@ -418,44 +568,82 @@ export default function EnhancedQueries() {
                       setSelectedQueryId(query.id)
                       setShowCommModal(true)
                     }}
-                    className="btn btn-secondary btn-sm"
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-sm font-medium inline-flex items-center space-x-1"
                   >
-                    <MessageCircle className="w-4 h-4 mr-2" />
-                    Communications
+                    <MessageCircle className="h-4 w-4" />
+                    <span>Communications</span>
                   </button>
                 </div>
               </div>
             </div>
-          )
-        })}
-
-        {filteredQueries.length === 0 && (
-          <div className="card text-center py-12">
-            <Search className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No queries found</p>
-          </div>
+          ))
         )}
       </div>
 
-      {/* Create Query Modal */}
+      {/* New Query Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowModal(false)} />
+            <div className="fixed inset-0 transition-opacity bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75" onClick={() => setShowModal(false)} />
 
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
-              <form onSubmit={handleSubmit}>
-                <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900">Create New Query</h3>
-                    <button type="button" onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">
-                      <X className="w-6 h-6" />
-                    </button>
+            <div className="inline-block w-full max-w-4xl overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-2xl">
+              {/* Modal Header */}
+              <div className="px-6 py-4 bg-gradient-primary">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-white">Create New Query</h3>
+                  <button
+                    onClick={() => setShowModal(false)}
+                    className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Content */}
+              <form onSubmit={handleSubmit} className="px-6 py-4 max-h-[calc(100vh-200px)] overflow-y-auto">
+                <div className="space-y-6">
+                  {/* Query Source & Service Type */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Query Source *
+                      </label>
+                      <select
+                        required
+                        value={formData.query_source}
+                        onChange={(e) => setFormData({ ...formData, query_source: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                      >
+                        <option value="">Select source</option>
+                        {QUERY_SOURCES.map(source => (
+                          <option key={source} value={source}>{source}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Service Type *
+                      </label>
+                      <select
+                        required
+                        value={formData.service_type}
+                        onChange={(e) => setFormData({ ...formData, service_type: e.target.value })}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                      >
+                        <option value="">Select service type</option>
+                        {SERVICE_CATEGORIES.map(category => (
+                          <option key={category} value={category}>{category}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  {/* Client Information */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Client Name *
                       </label>
                       <input
@@ -463,392 +651,274 @@ export default function EnhancedQueries() {
                         required
                         value={formData.client_name}
                         onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
-                        className="input"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Phone Number *
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Phone *
                       </label>
                       <input
                         type="tel"
                         required
                         value={formData.client_phone}
                         onChange={(e) => setFormData({ ...formData, client_phone: e.target.value })}
-                        className="input"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Email
                       </label>
                       <input
                         type="email"
                         value={formData.client_email}
                         onChange={(e) => setFormData({ ...formData, client_email: e.target.value })}
-                        className="input"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Destination *
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={formData.destination}
-                        onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
-                        className="input"
-                      />
+                  {/* Destination */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Destination *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.destination}
+                      onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                      placeholder="Auto-fills for Umrah/Hajj packages"
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  {/* Number of Passengers */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Number of Passengers *
+                    </label>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Adults</label>
+                        <input
+                          type="number"
+                          min="1"
+                          required
+                          value={formData.adults}
+                          onChange={(e) => setFormData({ ...formData, adults: parseInt(e.target.value) })}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Children</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.children}
+                          onChange={(e) => setFormData({ ...formData, children: parseInt(e.target.value) })}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">Infants</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.infants}
+                          onChange={(e) => setFormData({ ...formData, infants: parseInt(e.target.value) })}
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                        />
+                      </div>
                     </div>
+                  </div>
 
+                  {/* Travel Dates */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Travel Date
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Departure Date
                       </label>
                       <input
                         type="date"
                         value={formData.travel_date}
                         onChange={(e) => setFormData({ ...formData, travel_date: e.target.value })}
-                        className="input"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Return Date
                       </label>
                       <input
                         type="date"
                         value={formData.return_date}
                         onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
-                        className="input"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Adults
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        value={formData.adults}
-                        onChange={(e) => setFormData({ ...formData, adults: parseInt(e.target.value) })}
-                        className="input"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Children
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formData.children}
-                        onChange={(e) => setFormData({ ...formData, children: parseInt(e.target.value) })}
-                        className="input"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Infants
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formData.infants}
-                        onChange={(e) => setFormData({ ...formData, infants: parseInt(e.target.value) })}
-                        className="input"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Status
-                      </label>
-                      <select
-                        value={formData.status}
-                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                        className="input"
-                      >
-                        {STATUSES.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Cost Price (₹)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formData.cost_price}
-                        onChange={(e) => setFormData({ ...formData, cost_price: parseFloat(e.target.value) })}
-                        className="input"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Selling Price (₹)
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={formData.selling_price}
-                        onChange={(e) => setFormData({ ...formData, selling_price: parseFloat(e.target.value) })}
-                        className="input"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Notes
-                      </label>
-                      <textarea
-                        rows={3}
-                        value={formData.notes}
-                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                        className="input"
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
                       />
                     </div>
                   </div>
 
-                  {/* Services Section */}
-                  <div className="border-t pt-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-md font-semibold text-gray-900">Services Breakdown</h4>
-                      <button
-                        type="button"
-                        onClick={() => setShowServiceModal(true)}
-                        className="text-sm text-primary-600 hover:text-primary-700"
-                      >
-                        + Add Service
-                      </button>
+                  {/* Tentative Dates Checkbox */}
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="tentative-dates"
+                      checked={formData.is_tentative_dates}
+                      onChange={(e) => setFormData({ ...formData, is_tentative_dates: e.target.checked })}
+                      className="w-4 h-4 text-primary-600 border-gray-300 dark:border-gray-600 rounded focus:ring-primary-500"
+                    />
+                    <label htmlFor="tentative-dates" className="text-sm text-gray-700 dark:text-gray-300">
+                      Dates are tentative / not confirmed yet
+                    </label>
+                  </div>
+
+                  {/* Tentative Plan */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Tentative Plan / Customer Details
+                    </label>
+                    <textarea
+                      value={formData.tentative_plan}
+                      onChange={(e) => setFormData({ ...formData, tentative_plan: e.target.value })}
+                      rows={6}
+                      placeholder="Paste customer's WhatsApp message or write query details here..."
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  {/* Internal Reminders */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Internal Reminders <span className="text-xs text-gray-500">(Only visible to team)</span>
+                    </label>
+                    <textarea
+                      value={formData.internal_reminders}
+                      onChange={(e) => setFormData({ ...formData, internal_reminders: e.target.value })}
+                      rows={4}
+                      placeholder="Internal notes: budget constraints, follow-up date, special requirements..."
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  {/* Response Tracking */}
+                  <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+                    <div className="flex items-center space-x-2 mb-4">
+                      <input
+                        type="checkbox"
+                        id="is-responded"
+                        checked={formData.is_responded}
+                        onChange={(e) => setFormData({ ...formData, is_responded: e.target.checked })}
+                        className="w-4 h-4 text-primary-600 border-gray-300 dark:border-gray-600 rounded focus:ring-primary-500"
+                      />
+                      <label htmlFor="is-responded" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Have you responded to this query?
+                      </label>
                     </div>
 
-                    {services.length > 0 ? (
-                      <div className="space-y-2">
-                        {services.map(service => {
-                          const ServiceIcon = getServiceIcon(service.type)
-                          return (
-                            <div key={service.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                              <div className="flex items-center gap-3 flex-1">
-                                <ServiceIcon className="w-5 h-5 text-primary-600" />
-                                <div>
-                                  <p className="text-sm font-medium text-gray-900">{service.type}: {service.description}</p>
-                                  <p className="text-xs text-gray-600">Vendor: {service.vendor}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                <div className="text-right">
-                                  <p className="text-xs text-gray-600">Cost: ₹{service.cost}</p>
-                                  <p className="text-xs text-primary-600">Selling: ₹{service.selling}</p>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => removeService(service.id)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-                          )
-                        })}
-
-                        <div className="flex justify-end gap-6 p-3 bg-primary-50 rounded-lg mt-3">
-                          <div>
-                            <p className="text-xs text-gray-600">Total Cost</p>
-                            <p className="text-sm font-bold text-gray-900">₹{totalCost.toLocaleString('en-IN')}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-600">Total Selling</p>
-                            <p className="text-sm font-bold text-primary-600">₹{totalSelling.toLocaleString('en-IN')}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-gray-600">Profit ({profitMargin}%)</p>
-                            <p className={`text-sm font-bold ${totalProfit > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                              ₹{totalProfit.toLocaleString('en-IN')}
-                            </p>
-                          </div>
-                        </div>
+                    {formData.is_responded && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          What was told to the customer?
+                        </label>
+                        <textarea
+                          value={formData.response_given}
+                          onChange={(e) => setFormData({ ...formData, response_given: e.target.value })}
+                          rows={3}
+                          placeholder="Enter what you communicated to the customer..."
+                          className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                        />
                       </div>
-                    ) : (
-                      <p className="text-sm text-gray-500 text-center py-4">No services added yet</p>
                     )}
                   </div>
-                </div>
 
-                <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-2">
-                  <button type="submit" className="btn btn-primary">
-                    Create Query
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="btn btn-secondary"
-                  >
-                    Cancel
-                  </button>
+                  {/* Status */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Status
+                    </label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    >
+                      {STATUSES.map(status => (
+                        <option key={status} value={status}>{status}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Additional Notes */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Additional Notes
+                    </label>
+                    <textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      rows={3}
+                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
                 </div>
               </form>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Add Service Modal */}
-      {showServiceModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75" onClick={() => setShowServiceModal(false)} />
-            <div className="inline-block bg-white rounded-lg p-6 shadow-xl transform transition-all sm:max-w-lg sm:w-full z-50">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Add Service</h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Service Type</label>
-                  <select
-                    value={serviceForm.type}
-                    onChange={(e) => setServiceForm({ ...serviceForm, type: e.target.value as any })}
-                    className="input"
-                  >
-                    {SERVICE_TYPES.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description *</label>
-                  <input
-                    type="text"
-                    value={serviceForm.description}
-                    onChange={(e) => setServiceForm({ ...serviceForm, description: e.target.value })}
-                    className="input"
-                    placeholder="e.g., Mumbai to Dubai return"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vendor *</label>
-                  <input
-                    type="text"
-                    value={serviceForm.vendor}
-                    onChange={(e) => setServiceForm({ ...serviceForm, vendor: e.target.value })}
-                    className="input"
-                    placeholder="e.g., Emirates Airlines"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={serviceForm.cost}
-                      onChange={(e) => setServiceForm({ ...serviceForm, cost: parseFloat(e.target.value) })}
-                      className="input"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Selling Price (₹)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={serviceForm.selling}
-                      onChange={(e) => setServiceForm({ ...serviceForm, selling: parseFloat(e.target.value) })}
-                      className="input"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">PNR</label>
-                    <input
-                      type="text"
-                      value={serviceForm.pnr}
-                      onChange={(e) => setServiceForm({ ...serviceForm, pnr: e.target.value })}
-                      className="input"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Booking Ref</label>
-                    <input
-                      type="text"
-                      value={serviceForm.booking_ref}
-                      onChange={(e) => setServiceForm({ ...serviceForm, booking_ref: e.target.value })}
-                      className="input"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-6">
-                <button onClick={addService} className="btn btn-primary flex-1">
-                  Add Service
-                </button>
-                <button onClick={() => setShowServiceModal(false)} className="btn btn-secondary flex-1">
+              {/* Modal Footer */}
+              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900 flex justify-end space-x-3 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-6 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                >
                   Cancel
                 </button>
+                <button
+                  onClick={handleSubmit}
+                  className="px-6 py-2 bg-gradient-primary text-white rounded-lg hover:opacity-90 transition-opacity font-medium"
+                >
+                  Create Query
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Passenger Management Modal */}
+      {/* Passenger Modal */}
       {showPassengerModal && selectedQueryId && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-            <div
-              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-              onClick={() => setShowPassengerModal(false)}
-            />
+            <div className="fixed inset-0 transition-opacity bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75" onClick={() => setShowPassengerModal(false)} />
 
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
-              <div className="bg-white px-6 py-4">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    Manage Passengers
-                  </h3>
+            <div className="inline-block w-full max-w-4xl overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-2xl">
+              <div className="px-6 py-4 bg-gradient-primary">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold text-white">Manage Passengers</h3>
                   <button
                     onClick={() => setShowPassengerModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
                   >
-                    <X className="w-6 h-6" />
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
+              </div>
 
+              <div className="px-6 py-4">
                 <PassengerSelector
                   queryId={selectedQueryId}
-                  onPassengersChange={loadQueries}
+                  onPassengersChange={() => {}}
                 />
               </div>
 
-              <div className="bg-gray-50 px-6 py-3 flex justify-end">
+              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900 flex justify-end border-t border-gray-200 dark:border-gray-700">
                 <button
                   onClick={() => setShowPassengerModal(false)}
-                  className="btn btn-secondary"
+                  className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                 >
-                  Close
+                  Done
                 </button>
               </div>
             </div>
@@ -856,41 +926,28 @@ export default function EnhancedQueries() {
         </div>
       )}
 
-      {/* Communications Modal */}
-      {showCommModal && selectedQueryId && selectedQuery && (
+      {/* Communication Modal */}
+      {showCommModal && selectedQuery && selectedQueryId && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-            <div
-              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-              onClick={() => setShowCommModal(false)}
-            />
+            <div className="fixed inset-0 transition-opacity bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75" onClick={() => setShowCommModal(false)} />
 
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
-              {/* Header */}
-              <div className="bg-primary-600 px-6 py-4">
+            <div className="inline-block w-full max-w-4xl overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 shadow-xl rounded-2xl">
+              <div className="px-6 py-4 bg-gradient-primary">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-semibold text-white">
-                      Communications
-                    </h3>
-                    <p className="text-sm text-primary-100 mt-1">
-                      {selectedQuery.client_name} - #{selectedQuery.query_number}
-                    </p>
-                  </div>
+                  <h3 className="text-xl font-bold text-white">Communications</h3>
                   <button
                     onClick={() => setShowCommModal(false)}
-                    className="text-white hover:text-gray-200"
+                    className="text-white hover:bg-white/20 rounded-lg p-2 transition-colors"
                   >
-                    <X className="w-6 h-6" />
+                    <X className="h-5 w-5" />
                   </button>
                 </div>
               </div>
 
-              {/* Content */}
               <div className="px-6 py-4 max-h-[calc(100vh-300px)] overflow-y-auto">
-                {/* Add Communication Form */}
                 <div className="mb-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                     Log New Communication
                   </h4>
                   <AddCommunication
@@ -898,17 +955,12 @@ export default function EnhancedQueries() {
                     entityId={selectedQueryId}
                     contactPhone={selectedQuery.client_phone}
                     contactEmail={selectedQuery.client_email || undefined}
-                    onSuccess={() => {
-                      // Refresh communication log
-                      const event = new CustomEvent('refreshCommunications')
-                      window.dispatchEvent(event)
-                    }}
+                    onSuccess={() => {}}
                   />
                 </div>
 
-                {/* Communication History */}
-                <div className="pt-6 border-t border-gray-200">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                     Communication History
                   </h4>
                   <CommunicationLog
@@ -918,11 +970,10 @@ export default function EnhancedQueries() {
                 </div>
               </div>
 
-              {/* Footer */}
-              <div className="bg-gray-50 px-6 py-3 flex justify-end">
+              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900 flex justify-end border-t border-gray-200 dark:border-gray-700">
                 <button
                   onClick={() => setShowCommModal(false)}
-                  className="btn btn-secondary"
+                  className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
                 >
                   Close
                 </button>

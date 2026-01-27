@@ -55,6 +55,13 @@ export interface Database {
           selling_price: number
           profit: number
           profit_margin: number
+          query_source: string | null
+          service_type: string | null
+          tentative_plan: string | null
+          internal_reminders: string | null
+          is_responded: boolean
+          response_given: string | null
+          is_tentative_dates: boolean
           created_at: string
           updated_at: string
         }
@@ -75,6 +82,13 @@ export interface Database {
           notes?: string | null
           cost_price?: number
           selling_price?: number
+          query_source?: string | null
+          service_type?: string | null
+          tentative_plan?: string | null
+          internal_reminders?: string | null
+          is_responded?: boolean
+          response_given?: string | null
+          is_tentative_dates?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -95,6 +109,13 @@ export interface Database {
           notes?: string | null
           cost_price?: number
           selling_price?: number
+          query_source?: string | null
+          service_type?: string | null
+          tentative_plan?: string | null
+          internal_reminders?: string | null
+          is_responded?: boolean
+          response_given?: string | null
+          is_tentative_dates?: boolean
           created_at?: string
           updated_at?: string
         }
