@@ -34,7 +34,6 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
   const [searchTerm, setSearchTerm] = useState('')
   const [showSearchModal, setShowSearchModal] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     loadLinkedPassengers()
@@ -102,13 +101,11 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
   }
 
   const handleAddPassenger = async (passenger: Passenger, type: 'adult' | 'child' | 'infant' = 'adult') => {
-    setSaving(true)
     try {
       // Check if passenger is already linked
       const alreadyLinked = linkedPassengers.some((lp) => lp.passenger_id === passenger.id)
       if (alreadyLinked) {
         alert('This passenger is already added to this query')
-        setSaving(false)
         return
       }
 
@@ -131,8 +128,6 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
     } catch (error) {
       console.error('Error adding passenger:', error)
       alert('Failed to add passenger')
-    } finally {
-      setSaving(false)
     }
   }
 

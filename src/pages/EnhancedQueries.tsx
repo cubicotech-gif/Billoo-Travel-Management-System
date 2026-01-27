@@ -394,7 +394,7 @@ export default function EnhancedQueries() {
                   <QuickActions
                     phone={query.client_phone}
                     email={query.client_email}
-                    onActionComplete={(type) => {
+                    onActionComplete={() => {
                       // Optionally auto-open communication log modal
                     }}
                   />
@@ -897,7 +897,7 @@ export default function EnhancedQueries() {
                     entityType="query"
                     entityId={selectedQueryId}
                     contactPhone={selectedQuery.client_phone}
-                    contactEmail={selectedQuery.client_email}
+                    contactEmail={selectedQuery.client_email || undefined}
                     onSuccess={() => {
                       // Refresh communication log
                       const event = new CustomEvent('refreshCommunications')

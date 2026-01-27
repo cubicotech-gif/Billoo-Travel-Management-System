@@ -5,13 +5,12 @@ import {
   Trash2,
   Calendar,
   AlertTriangle,
-  Eye,
   File,
   Image,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { downloadFile, deleteFile } from '@/lib/storage'
-import { format, isAfter, differenceInDays } from 'date-fns'
+import { format, differenceInDays } from 'date-fns'
 
 interface Document {
   id: string

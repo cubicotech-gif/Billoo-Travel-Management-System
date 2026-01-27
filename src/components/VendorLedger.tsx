@@ -75,7 +75,7 @@ export default function VendorLedger({
       const allEntries: LedgerEntry[] = []
 
       // Add purchases as debit entries
-      (services || []).forEach((service: any) => {
+      ;(services || []).forEach((service: any) => {
         allEntries.push({
           id: service.id,
           date: service.service_date || service.created_at,
@@ -89,7 +89,7 @@ export default function VendorLedger({
       })
 
       // Add payments as credit entries
-      (payments || []).forEach((payment) => {
+      ;(payments || []).forEach((payment: any) => {
         allEntries.push({
           id: payment.id,
           date: payment.payment_date,

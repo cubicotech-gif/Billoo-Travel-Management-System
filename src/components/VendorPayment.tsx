@@ -20,7 +20,6 @@ const PAYMENT_METHODS = [
 
 export default function VendorPayment({
   vendorId,
-  vendorName,
   outstandingBalance,
   onSuccess,
   onCancel,

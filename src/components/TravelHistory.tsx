@@ -105,7 +105,7 @@ export default function TravelHistory({ passengerId }: TravelHistoryProps) {
     }
   }
 
-  const handleViewQuery = (queryId: string) => {
+  const handleViewQuery = () => {
     navigate('/queries')
   }
 
@@ -168,7 +168,7 @@ export default function TravelHistory({ passengerId }: TravelHistoryProps) {
             {travelRecords.map((record) => (
               <div
                 key={record.id}
-                onClick={() => handleViewQuery(record.query_id)}
+                onClick={() => handleViewQuery()}
                 className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-all cursor-pointer"
               >
                 <div className="flex items-start justify-between">
