@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, Search, User, Mail, Phone, CreditCard, Calendar, FileText, X, MapPin } from 'lucide-react'
+import { Plus, Search, User, Mail, Phone, CreditCard, Calendar, FileText, X, MapPin, MessageCircle } from 'lucide-react'
 import { format } from 'date-fns'
 import DocumentUpload from '@/components/DocumentUpload'
 import DocumentList from '@/components/DocumentList'
 import TravelHistory from '@/components/TravelHistory'
+import CommunicationLog from '@/components/CommunicationLog'
+import AddCommunication from '@/components/AddCommunication'
 
 interface Passenger {
   id: string
@@ -26,7 +28,7 @@ export default function Passengers() {
   const [showModal, setShowModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null)
-  const [activeTab, setActiveTab] = useState<'info' | 'documents' | 'travel'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'documents' | 'travel' | 'communications'>('info')
   const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState({
     first_name: '',
@@ -415,6 +417,17 @@ export default function Passengers() {
                     <MapPin className="w-4 h-4 inline-block mr-2" />
                     Travel History
                   </button>
+                  <button
+                    onClick={() => setActiveTab('communications')}
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'communications'
+                        ? 'border-primary-600 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <MessageCircle className="w-4 h-4 inline-block mr-2" />
+                    Communications
+                  </button>
                 </div>
               </div>
 
@@ -535,6 +548,35 @@ export default function Passengers() {
 
                 {activeTab === 'travel' && (
                   <TravelHistory passengerId={selectedPassenger.id} />
+                )}
+
+                {activeTab === 'communications' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                        Log New Communication
+                      </h4>
+                      <AddCommunication
+                        entityType="passenger"
+                        entityId={selectedPassenger.id}
+                        contactPhone={selectedPassenger.phone}
+                        contactEmail={selectedPassenger.email}
+                        onSuccess={() => {
+                          // Refresh communication log
+                        }}
+                      />
+                    </div>
+
+                    <div className="pt-6 border-t border-gray-200">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                        Communication History
+                      </h4>
+                      <CommunicationLog
+                        entityType="passenger"
+                        entityId={selectedPassenger.id}
+                      />
+                    </div>
+                  </div>
                 )}
               </div>
 
