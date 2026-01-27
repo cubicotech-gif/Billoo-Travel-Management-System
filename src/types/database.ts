@@ -127,10 +127,21 @@ export interface Database {
           last_name: string
           email: string | null
           phone: string
+          cnic: string | null
           passport_number: string | null
           passport_expiry: string | null
           date_of_birth: string | null
           nationality: string | null
+          whatsapp_number: string | null
+          alternate_phone: string | null
+          address: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          is_vip: boolean
+          is_active: boolean
+          total_trips: number
+          total_revenue: number
+          outstanding_balance: number
           notes: string | null
           created_at: string
           updated_at: string
@@ -141,10 +152,21 @@ export interface Database {
           last_name: string
           email?: string | null
           phone: string
+          cnic?: string | null
           passport_number?: string | null
           passport_expiry?: string | null
           date_of_birth?: string | null
           nationality?: string | null
+          whatsapp_number?: string | null
+          alternate_phone?: string | null
+          address?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          is_vip?: boolean
+          is_active?: boolean
+          total_trips?: number
+          total_revenue?: number
+          outstanding_balance?: number
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -155,10 +177,21 @@ export interface Database {
           last_name?: string
           email?: string | null
           phone?: string
+          cnic?: string | null
           passport_number?: string | null
           passport_expiry?: string | null
           date_of_birth?: string | null
           nationality?: string | null
+          whatsapp_number?: string | null
+          alternate_phone?: string | null
+          address?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          is_vip?: boolean
+          is_active?: boolean
+          total_trips?: number
+          total_revenue?: number
+          outstanding_balance?: number
           notes?: string | null
           created_at?: string
           updated_at?: string
