@@ -619,6 +619,44 @@ export interface Database {
           updated_at?: string
         }
       }
+      query_passengers: {
+        Row: {
+          id: string
+          query_id: string
+          passenger_id: string
+          is_primary: boolean
+          passenger_type: 'adult' | 'child' | 'infant'
+          seat_preference: string | null
+          meal_preference: string | null
+          special_requirements: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          query_id: string
+          passenger_id: string
+          is_primary?: boolean
+          passenger_type?: 'adult' | 'child' | 'infant'
+          seat_preference?: string | null
+          meal_preference?: string | null
+          special_requirements?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          query_id?: string
+          passenger_id?: string
+          is_primary?: boolean
+          passenger_type?: 'adult' | 'child' | 'infant'
+          seat_preference?: string | null
+          meal_preference?: string | null
+          special_requirements?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }

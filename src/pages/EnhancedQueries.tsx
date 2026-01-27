@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   Plus, Search, Calendar, Phone, Mail, MapPin, Plane, Hotel,
-  FileText, User, Trash2, X
+  FileText, User, Trash2, X, Users
 } from 'lucide-react'
 import { format } from 'date-fns'
+import PassengerSelector from '@/components/PassengerSelector'
 
 interface Query {
   id: string
@@ -44,6 +45,8 @@ export default function EnhancedQueries() {
   const [queries, setQueries] = useState<Query[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showPassengerModal, setShowPassengerModal] = useState(false)
+  const [selectedQueryId, setSelectedQueryId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [formData, setFormData] = useState({
@@ -372,10 +375,24 @@ export default function EnhancedQueries() {
               )}
 
               {query.notes && (
-                <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded mb-4">
                   <p className="text-sm text-gray-700">{query.notes}</p>
                 </div>
               )}
+
+              {/* Manage Passengers Button */}
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => {
+                    setSelectedQueryId(query.id)
+                    setShowPassengerModal(true)
+                  }}
+                  className="btn btn-secondary btn-sm w-full"
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  Manage Passengers
+                </button>
+              </div>
             </div>
           )
         })}
@@ -758,6 +775,48 @@ export default function EnhancedQueries() {
                 </button>
                 <button onClick={() => setShowServiceModal(false)} className="btn btn-secondary flex-1">
                   Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Passenger Management Modal */}
+      {showPassengerModal && selectedQueryId && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => setShowPassengerModal(false)}
+            />
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+              <div className="bg-white px-6 py-4">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Manage Passengers
+                  </h3>
+                  <button
+                    onClick={() => setShowPassengerModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <PassengerSelector
+                  queryId={selectedQueryId}
+                  onPassengersChange={loadQueries}
+                />
+              </div>
+
+              <div className="bg-gray-50 px-6 py-3 flex justify-end">
+                <button
+                  onClick={() => setShowPassengerModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Close
                 </button>
               </div>
             </div>

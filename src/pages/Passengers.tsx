@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, Search, User, Mail, Phone, CreditCard, Calendar, FileText, X } from 'lucide-react'
+import { Plus, Search, User, Mail, Phone, CreditCard, Calendar, FileText, X, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 import DocumentUpload from '@/components/DocumentUpload'
 import DocumentList from '@/components/DocumentList'
+import TravelHistory from '@/components/TravelHistory'
 
 interface Passenger {
   id: string
@@ -25,7 +26,7 @@ export default function Passengers() {
   const [showModal, setShowModal] = useState(false)
   const [showDetailModal, setShowDetailModal] = useState(false)
   const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null)
-  const [activeTab, setActiveTab] = useState<'info' | 'documents'>('info')
+  const [activeTab, setActiveTab] = useState<'info' | 'documents' | 'travel'>('info')
   const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState({
     first_name: '',
@@ -403,6 +404,17 @@ export default function Passengers() {
                     <FileText className="w-4 h-4 inline-block mr-2" />
                     Documents
                   </button>
+                  <button
+                    onClick={() => setActiveTab('travel')}
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'travel'
+                        ? 'border-primary-600 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <MapPin className="w-4 h-4 inline-block mr-2" />
+                    Travel History
+                  </button>
                 </div>
               </div>
 
@@ -519,6 +531,10 @@ export default function Passengers() {
                       <DocumentList entityType="passenger" entityId={selectedPassenger.id} />
                     </div>
                   </div>
+                )}
+
+                {activeTab === 'travel' && (
+                  <TravelHistory passengerId={selectedPassenger.id} />
                 )}
               </div>
 
