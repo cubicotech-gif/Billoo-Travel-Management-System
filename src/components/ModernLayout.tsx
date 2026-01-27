@@ -68,7 +68,7 @@ export default function ModernLayout() {
             <Menu className="h-6 w-6" />
           </button>
           <h1 className="text-lg font-bold bg-gradient-primary bg-clip-text text-transparent">
-            HYBIZ
+            Billoo Travels
           </h1>
           <div className="flex items-center space-x-2">
             <button className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">

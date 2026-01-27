@@ -33,7 +33,8 @@ export default function Login() {
                 <Plane className="w-10 h-10 text-primary-600" />
               </div>
             </div>
-            <h2 className="text-3xl font-bold text-gray-900">Billoo Travel</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Billoo Travels Services</h2>
+            <p className="mt-1 text-xs font-medium text-gray-500">PVT Ltd.</p>
             <p className="mt-2 text-sm text-gray-600">
               Sign in to your account
             </p>

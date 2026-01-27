@@ -35,8 +35,8 @@ export default function ModernSidebar() {
           <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
             <Plane className="h-5 w-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-gray-900 dark:text-white">
-            HYBIZ
+          <span className="text-lg font-bold text-gray-900 dark:text-white">
+            Billoo Travels
           </span>
         </div>
       </div>
