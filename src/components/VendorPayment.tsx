@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase'
 
 interface VendorPaymentProps {
   vendorId: string
-  vendorName: string
   outstandingBalance: number
   onSuccess?: () => void
   onCancel?: () => void

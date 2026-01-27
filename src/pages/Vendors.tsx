@@ -438,7 +438,6 @@ export default function Vendors() {
                 {activeTab === 'payment' && (
                   <VendorPayment
                     vendorId={selectedVendor.id}
-                    vendorName={selectedVendor.name}
                     outstandingBalance={selectedVendor.balance}
                     onSuccess={() => {
                       loadVendors()
@@ -489,7 +488,6 @@ export default function Vendors() {
               <div className="px-6 py-4">
                 <VendorPayment
                   vendorId={selectedVendor.id}
-                  vendorName={selectedVendor.name}
                   outstandingBalance={selectedVendor.balance}
                   onSuccess={() => {
                     loadVendors()
