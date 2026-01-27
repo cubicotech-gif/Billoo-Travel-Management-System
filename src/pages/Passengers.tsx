@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, Search, User, Mail, Phone, CreditCard, Calendar } from 'lucide-react'
+import { Plus, Search, User, Mail, Phone, CreditCard, Calendar, FileText, X, MapPin, MessageCircle } from 'lucide-react'
 import { format } from 'date-fns'
+import DocumentUpload from '@/components/DocumentUpload'
+import DocumentList from '@/components/DocumentList'
+import TravelHistory from '@/components/TravelHistory'
+import CommunicationLog from '@/components/CommunicationLog'
+import AddCommunication from '@/components/AddCommunication'
 
 interface Passenger {
   id: string
@@ -21,6 +26,9 @@ export default function Passengers() {
   const [passengers, setPassengers] = useState<Passenger[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showDetailModal, setShowDetailModal] = useState(false)
+  const [selectedPassenger, setSelectedPassenger] = useState<Passenger | null>(null)
+  const [activeTab, setActiveTab] = useState<'info' | 'documents' | 'travel' | 'communications'>('info')
   const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState({
     first_name: '',
@@ -81,6 +89,12 @@ export default function Passengers() {
     }
   }
 
+  const handleViewDetails = (passenger: Passenger) => {
+    setSelectedPassenger(passenger)
+    setActiveTab('info')
+    setShowDetailModal(true)
+  }
+
   const filteredPassengers = passengers.filter((passenger) =>
     `${passenger.first_name} ${passenger.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
     passenger.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -126,7 +140,11 @@ export default function Passengers() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filteredPassengers.map((passenger) => (
-          <div key={passenger.id} className="card hover:shadow-md transition-shadow">
+          <div
+            key={passenger.id}
+            onClick={() => handleViewDetails(passenger)}
+            className="card hover:shadow-md transition-shadow cursor-pointer"
+          >
             <div className="flex items-center mb-4">
               <div className="w-12 h-12 bg-primary-100 rounded-full flex items-center justify-center mr-3">
                 <User className="w-6 h-6 text-primary-600" />
@@ -187,7 +205,7 @@ export default function Passengers() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* Add Passenger Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
@@ -325,6 +343,252 @@ export default function Passengers() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Passenger Detail Modal */}
+      {showDetailModal && selectedPassenger && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => setShowDetailModal(false)}
+            />
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+              {/* Header */}
+              <div className="bg-primary-600 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                      <User className="w-6 h-6 text-primary-600" />
+                    </div>
+                    <div className="text-white">
+                      <h3 className="text-xl font-semibold">
+                        {selectedPassenger.first_name} {selectedPassenger.last_name}
+                      </h3>
+                      <p className="text-sm text-primary-100">{selectedPassenger.nationality}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowDetailModal(false)}
+                    className="text-white hover:text-gray-200"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="border-b border-gray-200">
+                <div className="flex">
+                  <button
+                    onClick={() => setActiveTab('info')}
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'info'
+                        ? 'border-primary-600 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <User className="w-4 h-4 inline-block mr-2" />
+                    Information
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('documents')}
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'documents'
+                        ? 'border-primary-600 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <FileText className="w-4 h-4 inline-block mr-2" />
+                    Documents
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('travel')}
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'travel'
+                        ? 'border-primary-600 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <MapPin className="w-4 h-4 inline-block mr-2" />
+                    Travel History
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('communications')}
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'communications'
+                        ? 'border-primary-600 text-primary-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <MessageCircle className="w-4 h-4 inline-block mr-2" />
+                    Communications
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-4 max-h-[calc(100vh-300px)] overflow-y-auto">
+                {activeTab === 'info' && (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Email
+                        </label>
+                        <div className="flex items-center text-gray-900">
+                          <Mail className="w-4 h-4 mr-2 text-gray-400" />
+                          {selectedPassenger.email || 'Not provided'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Phone
+                        </label>
+                        <div className="flex items-center text-gray-900">
+                          <Phone className="w-4 h-4 mr-2 text-gray-400" />
+                          {selectedPassenger.phone}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Passport Number
+                        </label>
+                        <div className="flex items-center text-gray-900">
+                          <CreditCard className="w-4 h-4 mr-2 text-gray-400" />
+                          {selectedPassenger.passport_number || 'Not provided'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Passport Expiry
+                        </label>
+                        <div className="flex items-center text-gray-900">
+                          <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                          {selectedPassenger.passport_expiry
+                            ? format(new Date(selectedPassenger.passport_expiry), 'MMM dd, yyyy')
+                            : 'Not provided'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Date of Birth
+                        </label>
+                        <div className="flex items-center text-gray-900">
+                          <Calendar className="w-4 h-4 mr-2 text-gray-400" />
+                          {selectedPassenger.date_of_birth
+                            ? format(new Date(selectedPassenger.date_of_birth), 'MMM dd, yyyy')
+                            : 'Not provided'}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Nationality
+                        </label>
+                        <div className="text-gray-900">
+                          {selectedPassenger.nationality || 'Not provided'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {selectedPassenger.notes && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Notes
+                        </label>
+                        <div className="p-3 bg-gray-50 rounded-lg text-gray-900">
+                          {selectedPassenger.notes}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-4 border-t border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Created At
+                      </label>
+                      <div className="text-gray-600 text-sm">
+                        {format(new Date(selectedPassenger.created_at), 'PPpp')}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'documents' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                        Upload New Document
+                      </h4>
+                      <DocumentUpload
+                        entityType="passenger"
+                        entityId={selectedPassenger.id}
+                        onUploadComplete={() => {
+                          // Refresh document list
+                        }}
+                      />
+                    </div>
+
+                    <div className="pt-6 border-t border-gray-200">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                        Uploaded Documents
+                      </h4>
+                      <DocumentList entityType="passenger" entityId={selectedPassenger.id} />
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === 'travel' && (
+                  <TravelHistory passengerId={selectedPassenger.id} />
+                )}
+
+                {activeTab === 'communications' && (
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                        Log New Communication
+                      </h4>
+                      <AddCommunication
+                        entityType="passenger"
+                        entityId={selectedPassenger.id}
+                        contactPhone={selectedPassenger.phone}
+                        contactEmail={selectedPassenger.email}
+                        onSuccess={() => {
+                          // Refresh communication log
+                        }}
+                      />
+                    </div>
+
+                    <div className="pt-6 border-t border-gray-200">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                        Communication History
+                      </h4>
+                      <CommunicationLog
+                        entityType="passenger"
+                        entityId={selectedPassenger.id}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-6 py-3 flex justify-end">
+                <button
+                  onClick={() => setShowDetailModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
         </div>

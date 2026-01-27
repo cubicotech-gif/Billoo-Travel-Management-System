@@ -2,9 +2,13 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   Plus, Search, Calendar, Phone, Mail, MapPin, Plane, Hotel,
-  FileText, User, Trash2, X
+  FileText, User, Trash2, X, Users, MessageCircle
 } from 'lucide-react'
 import { format } from 'date-fns'
+import PassengerSelector from '@/components/PassengerSelector'
+import CommunicationLog from '@/components/CommunicationLog'
+import AddCommunication from '@/components/AddCommunication'
+import QuickActions from '@/components/QuickActions'
 
 interface Query {
   id: string
@@ -44,6 +48,10 @@ export default function EnhancedQueries() {
   const [queries, setQueries] = useState<Query[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showPassengerModal, setShowPassengerModal] = useState(false)
+  const [showCommModal, setShowCommModal] = useState(false)
+  const [selectedQueryId, setSelectedQueryId] = useState<string | null>(null)
+  const [selectedQuery, setSelectedQuery] = useState<Query | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [formData, setFormData] = useState({
@@ -372,10 +380,51 @@ export default function EnhancedQueries() {
               )}
 
               {query.notes && (
-                <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+                <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded mb-4">
                   <p className="text-sm text-gray-700">{query.notes}</p>
                 </div>
               )}
+
+              {/* Quick Actions */}
+              <div className="pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Quick Actions
+                  </span>
+                  <QuickActions
+                    phone={query.client_phone}
+                    email={query.client_email}
+                    onActionComplete={(type) => {
+                      // Optionally auto-open communication log modal
+                    }}
+                  />
+                </div>
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedQueryId(query.id)
+                      setShowPassengerModal(true)
+                    }}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    Passengers
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedQuery(query)
+                      setSelectedQueryId(query.id)
+                      setShowCommModal(true)
+                    }}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <MessageCircle className="w-4 h-4 mr-2" />
+                    Communications
+                  </button>
+                </div>
+              </div>
             </div>
           )
         })}
@@ -758,6 +807,124 @@ export default function EnhancedQueries() {
                 </button>
                 <button onClick={() => setShowServiceModal(false)} className="btn btn-secondary flex-1">
                   Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Passenger Management Modal */}
+      {showPassengerModal && selectedQueryId && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => setShowPassengerModal(false)}
+            />
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+              <div className="bg-white px-6 py-4">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900">
+                    Manage Passengers
+                  </h3>
+                  <button
+                    onClick={() => setShowPassengerModal(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+
+                <PassengerSelector
+                  queryId={selectedQueryId}
+                  onPassengersChange={loadQueries}
+                />
+              </div>
+
+              <div className="bg-gray-50 px-6 py-3 flex justify-end">
+                <button
+                  onClick={() => setShowPassengerModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Communications Modal */}
+      {showCommModal && selectedQueryId && selectedQuery && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => setShowCommModal(false)}
+            />
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-4xl sm:w-full">
+              {/* Header */}
+              <div className="bg-primary-600 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-white">
+                      Communications
+                    </h3>
+                    <p className="text-sm text-primary-100 mt-1">
+                      {selectedQuery.client_name} - #{selectedQuery.query_number}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowCommModal(false)}
+                    className="text-white hover:text-gray-200"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-4 max-h-[calc(100vh-300px)] overflow-y-auto">
+                {/* Add Communication Form */}
+                <div className="mb-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                    Log New Communication
+                  </h4>
+                  <AddCommunication
+                    entityType="query"
+                    entityId={selectedQueryId}
+                    contactPhone={selectedQuery.client_phone}
+                    contactEmail={selectedQuery.client_email}
+                    onSuccess={() => {
+                      // Refresh communication log
+                      const event = new CustomEvent('refreshCommunications')
+                      window.dispatchEvent(event)
+                    }}
+                  />
+                </div>
+
+                {/* Communication History */}
+                <div className="pt-6 border-t border-gray-200">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                    Communication History
+                  </h4>
+                  <CommunicationLog
+                    entityType="query"
+                    entityId={selectedQueryId}
+                  />
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-6 py-3 flex justify-end">
+                <button
+                  onClick={() => setShowCommModal(false)}
+                  className="btn btn-secondary"
+                >
+                  Close
                 </button>
               </div>
             </div>

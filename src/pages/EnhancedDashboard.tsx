@@ -9,6 +9,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts'
 import { format, subDays } from 'date-fns'
+import DocumentExpiryAlerts from '@/components/DocumentExpiryAlerts'
 
 interface Stats {
   totalQueries: number
@@ -396,6 +397,9 @@ export default function EnhancedDashboard() {
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Document Expiry Alerts */}
+      <DocumentExpiryAlerts />
     </div>
   )
 }

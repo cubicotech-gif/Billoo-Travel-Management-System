@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, Search, Building2, Mail, Phone, Star } from 'lucide-react'
+import { Plus, Search, Building2, Mail, Phone, Star, FileText, DollarSign, X } from 'lucide-react'
+import VendorLedger from '@/components/VendorLedger'
+import VendorPayment from '@/components/VendorPayment'
 
 interface Vendor {
   id: string
@@ -22,6 +24,10 @@ export default function Vendors() {
   const [vendors, setVendors] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
+  const [showLedgerModal, setShowLedgerModal] = useState(false)
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null)
+  const [activeTab, setActiveTab] = useState<'ledger' | 'payment'>('ledger')
   const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState({
     name: '',
@@ -181,6 +187,32 @@ export default function Vendors() {
                 <p className="text-sm text-gray-700">{vendor.notes}</p>
               </div>
             )}
+
+            {/* Action Buttons */}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  setSelectedVendor(vendor)
+                  setActiveTab('ledger')
+                  setShowLedgerModal(true)
+                }}
+                className="btn btn-secondary btn-sm"
+              >
+                <FileText className="w-4 h-4 mr-2" />
+                View Ledger
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedVendor(vendor)
+                  setShowPaymentModal(true)
+                }}
+                className="btn btn-primary btn-sm"
+                disabled={vendor.balance <= 0}
+              >
+                <DollarSign className="w-4 h-4 mr-2" />
+                Pay Vendor
+              </button>
+            </div>
           </div>
         ))}
 
@@ -323,6 +355,149 @@ export default function Vendors() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ledger Modal */}
+      {showLedgerModal && selectedVendor && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => setShowLedgerModal(false)}
+            />
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full">
+              {/* Header */}
+              <div className="bg-purple-600 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Building2 className="w-6 h-6 text-white" />
+                    <div className="text-white">
+                      <h3 className="text-xl font-semibold">{selectedVendor.name}</h3>
+                      <p className="text-sm text-purple-100">{selectedVendor.type}</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowLedgerModal(false)}
+                    className="text-white hover:text-gray-200"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Tabs */}
+              <div className="border-b border-gray-200">
+                <div className="flex">
+                  <button
+                    onClick={() => setActiveTab('ledger')}
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'ledger'
+                        ? 'border-purple-600 text-purple-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <FileText className="w-4 h-4 inline-block mr-2" />
+                    Ledger & Transactions
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('payment')}
+                    className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                      activeTab === 'payment'
+                        ? 'border-purple-600 text-purple-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    <DollarSign className="w-4 h-4 inline-block mr-2" />
+                    Record Payment
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-4 max-h-[calc(100vh-300px)] overflow-y-auto">
+                {activeTab === 'ledger' && (
+                  <VendorLedger
+                    vendorId={selectedVendor.id}
+                    vendorName={selectedVendor.name}
+                    onBalanceUpdate={(balance) => {
+                      // Update vendor balance in local state
+                      setVendors((prev) =>
+                        prev.map((v) =>
+                          v.id === selectedVendor.id ? { ...v, balance } : v
+                        )
+                      )
+                      setSelectedVendor({ ...selectedVendor, balance })
+                    }}
+                  />
+                )}
+
+                {activeTab === 'payment' && (
+                  <VendorPayment
+                    vendorId={selectedVendor.id}
+                    vendorName={selectedVendor.name}
+                    outstandingBalance={selectedVendor.balance}
+                    onSuccess={() => {
+                      loadVendors()
+                      setActiveTab('ledger')
+                    }}
+                  />
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="bg-gray-50 px-6 py-3 flex justify-end">
+                <button onClick={() => setShowLedgerModal(false)} className="btn btn-secondary">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal (Quick Access) */}
+      {showPaymentModal && selectedVendor && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
+            <div
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+              onClick={() => setShowPaymentModal(false)}
+            />
+
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
+              {/* Header */}
+              <div className="bg-purple-600 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xl font-semibold text-white">Record Payment</h3>
+                    <p className="text-sm text-purple-100 mt-1">{selectedVendor.name}</p>
+                  </div>
+                  <button
+                    onClick={() => setShowPaymentModal(false)}
+                    className="text-white hover:text-gray-200"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-4">
+                <VendorPayment
+                  vendorId={selectedVendor.id}
+                  vendorName={selectedVendor.name}
+                  outstandingBalance={selectedVendor.balance}
+                  onSuccess={() => {
+                    loadVendors()
+                    setShowPaymentModal(false)
+                  }}
+                  onCancel={() => setShowPaymentModal(false)}
+                />
+              </div>
             </div>
           </div>
         </div>
