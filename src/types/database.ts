@@ -118,6 +118,11 @@ export interface Database {
           selling_price: number
           profit: number
           profit_margin: number
+          proposal_sent_date: string | null
+          finalized_date: string | null
+          current_proposal_version: number | null
+          advance_payment_amount: number | null
+          advance_payment_date: string | null
           created_at: string
           updated_at: string
         }
@@ -147,6 +152,11 @@ export interface Database {
           notes?: string | null
           cost_price?: number
           selling_price?: number
+          proposal_sent_date?: string | null
+          finalized_date?: string | null
+          current_proposal_version?: number | null
+          advance_payment_amount?: number | null
+          advance_payment_date?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -176,6 +186,79 @@ export interface Database {
           notes?: string | null
           cost_price?: number
           selling_price?: number
+          proposal_sent_date?: string | null
+          finalized_date?: string | null
+          current_proposal_version?: number | null
+          advance_payment_amount?: number | null
+          advance_payment_date?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      query_proposals: {
+        Row: {
+          id: string
+          query_id: string
+          version_number: number
+          proposal_text: string
+          services_snapshot: Json
+          total_amount: number
+          cost_amount: number | null
+          profit_amount: number | null
+          profit_percentage: number | null
+          sent_date: string
+          sent_via: string[]
+          validity_days: number
+          valid_until: string | null
+          status: 'sent' | 'accepted' | 'rejected' | 'revised' | 'expired'
+          customer_response: string | null
+          customer_feedback: string | null
+          response_date: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          query_id: string
+          version_number: number
+          proposal_text: string
+          services_snapshot: Json
+          total_amount: number
+          cost_amount?: number | null
+          profit_amount?: number | null
+          profit_percentage?: number | null
+          sent_date?: string
+          sent_via?: string[]
+          validity_days?: number
+          valid_until?: string | null
+          status?: 'sent' | 'accepted' | 'rejected' | 'revised' | 'expired'
+          customer_response?: string | null
+          customer_feedback?: string | null
+          response_date?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          query_id?: string
+          version_number?: number
+          proposal_text?: string
+          services_snapshot?: Json
+          total_amount?: number
+          cost_amount?: number | null
+          profit_amount?: number | null
+          profit_percentage?: number | null
+          sent_date?: string
+          sent_via?: string[]
+          validity_days?: number
+          valid_until?: string | null
+          status?: 'sent' | 'accepted' | 'rejected' | 'revised' | 'expired'
+          customer_response?: string | null
+          customer_feedback?: string | null
+          response_date?: string | null
+          created_by?: string | null
           created_at?: string
           updated_at?: string
         }
