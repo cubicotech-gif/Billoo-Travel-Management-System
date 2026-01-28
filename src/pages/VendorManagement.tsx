@@ -13,11 +13,14 @@ import {
   Trash2,
   Edit,
   Eye,
-  RotateCcw
+  RotateCcw,
+  Users,
+  Calculator
 } from 'lucide-react'
 import { Database } from '@/types/database'
 import VendorForm from '@/components/VendorForm'
 import VendorProfile from '@/components/VendorProfile'
+import VendorAccounting from '@/components/VendorAccounting'
 
 type Vendor = Database['public']['Tables']['vendors']['Row']
 
@@ -27,6 +30,7 @@ export default function VendorManagement() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive' | 'deleted'>('all')
   const [filterType, setFilterType] = useState<string>('all')
+  const [mainTab, setMainTab] = useState<'management' | 'accounting'>('management')
 
   const [showForm, setShowForm] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
@@ -189,16 +193,53 @@ export default function VendorManagement() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Vendor Management</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Vendor Module</h1>
           <p className="mt-1 text-sm text-gray-600">
-            Manage suppliers and service providers
+            Manage vendors and track accounting
           </p>
         </div>
-        <button onClick={handleAddVendor} className="btn btn-primary">
-          <Plus className="w-5 h-5 mr-2" />
-          Add Vendor
-        </button>
+        {mainTab === 'management' && (
+          <button onClick={handleAddVendor} className="btn btn-primary">
+            <Plus className="w-5 h-5 mr-2" />
+            Add Vendor
+          </button>
+        )}
       </div>
+
+      {/* Main Tabs */}
+      <div className="card p-0 overflow-hidden">
+        <div className="border-b border-gray-200">
+          <div className="flex">
+            <button
+              onClick={() => setMainTab('management')}
+              className={`flex-1 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+                mainTab === 'management'
+                  ? 'border-purple-600 text-purple-600 bg-purple-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Users className="w-5 h-5 inline-block mr-2" />
+              Vendor Management
+            </button>
+            <button
+              onClick={() => setMainTab('accounting')}
+              className={`flex-1 px-6 py-4 text-sm font-medium border-b-2 transition-colors ${
+                mainTab === 'accounting'
+                  ? 'border-purple-600 text-purple-600 bg-purple-50'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <Calculator className="w-5 h-5 inline-block mr-2" />
+              Accounting Section
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      {mainTab === 'management' ? (
+        <>
+          {/* Vendor Management Tab Content */}
 
       {/* Search and Filters */}
       <div className="card space-y-4">
@@ -547,6 +588,13 @@ export default function VendorManagement() {
             </div>
           </div>
         </div>
+      )}
+        </>
+      ) : (
+        <>
+          {/* Accounting Section Tab Content */}
+          <VendorAccounting />
+        </>
       )}
     </div>
   )
