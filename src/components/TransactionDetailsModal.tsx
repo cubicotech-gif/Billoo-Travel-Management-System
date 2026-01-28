@@ -1,4 +1,4 @@
-import { X, Calendar, User, DollarSign, FileText, MapPin, CreditCard, ExternalLink } from 'lucide-react'
+import { X, DollarSign, FileText, MapPin, CreditCard, ExternalLink } from 'lucide-react'
 import { format } from 'date-fns'
 import { formatDualCurrency, formatExchangeRate, formatProfit, getCurrencyName } from '@/lib/formatCurrency'
 import type { CurrencyCode } from '@/lib/formatCurrency'
