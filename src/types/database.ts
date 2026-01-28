@@ -189,17 +189,28 @@ export interface Database {
           contact_person: string | null
           email: string | null
           phone: string | null
+          whatsapp_number: string | null
           address: string | null
           balance: number
           rating: number | null
           notes: string | null
           bank_name: string | null
           account_number: string | null
+          swift_code: string | null
+          iban: string | null
           ifsc_code: string | null
           pan_number: string | null
           gst_number: string | null
+          credit_days: number
+          payment_method_preference: string | null
           credit_limit: number
           payment_terms: number
+          is_active: boolean
+          is_deleted: boolean
+          total_business: number
+          total_paid: number
+          total_pending: number
+          total_profit: number
           created_at: string
           updated_at: string
         }
@@ -210,17 +221,28 @@ export interface Database {
           contact_person?: string | null
           email?: string | null
           phone?: string | null
+          whatsapp_number?: string | null
           address?: string | null
           balance?: number
           rating?: number | null
           notes?: string | null
           bank_name?: string | null
           account_number?: string | null
+          swift_code?: string | null
+          iban?: string | null
           ifsc_code?: string | null
           pan_number?: string | null
           gst_number?: string | null
+          credit_days?: number
+          payment_method_preference?: string | null
           credit_limit?: number
           payment_terms?: number
+          is_active?: boolean
+          is_deleted?: boolean
+          total_business?: number
+          total_paid?: number
+          total_pending?: number
+          total_profit?: number
           created_at?: string
           updated_at?: string
         }
@@ -231,17 +253,115 @@ export interface Database {
           contact_person?: string | null
           email?: string | null
           phone?: string | null
+          whatsapp_number?: string | null
           address?: string | null
           balance?: number
           rating?: number | null
           notes?: string | null
           bank_name?: string | null
           account_number?: string | null
+          swift_code?: string | null
+          iban?: string | null
           ifsc_code?: string | null
           pan_number?: string | null
           gst_number?: string | null
+          credit_days?: number
+          payment_method_preference?: string | null
           credit_limit?: number
           payment_terms?: number
+          is_active?: boolean
+          is_deleted?: boolean
+          total_business?: number
+          total_paid?: number
+          total_pending?: number
+          total_profit?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      vendor_transactions: {
+        Row: {
+          id: string
+          vendor_id: string
+          query_id: string
+          service_id: string
+          passenger_id: string | null
+          transaction_date: string
+          service_description: string
+          service_type: string
+          city: string | null
+          currency: string
+          exchange_rate_to_pkr: number
+          purchase_amount_original: number
+          purchase_amount_pkr: number
+          selling_amount_original: number
+          selling_amount_pkr: number
+          profit_pkr: number
+          payment_status: string
+          amount_paid: number
+          payment_date: string | null
+          payment_method: string | null
+          payment_reference: string | null
+          payment_notes: string | null
+          receipt_url: string | null
+          booking_reference: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          vendor_id: string
+          query_id: string
+          service_id: string
+          passenger_id?: string | null
+          transaction_date?: string
+          service_description: string
+          service_type: string
+          city?: string | null
+          currency?: string
+          exchange_rate_to_pkr?: number
+          purchase_amount_original: number
+          purchase_amount_pkr: number
+          selling_amount_original: number
+          selling_amount_pkr: number
+          payment_status?: string
+          amount_paid?: number
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          payment_notes?: string | null
+          receipt_url?: string | null
+          booking_reference?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          vendor_id?: string
+          query_id?: string
+          service_id?: string
+          passenger_id?: string | null
+          transaction_date?: string
+          service_description?: string
+          service_type?: string
+          city?: string | null
+          currency?: string
+          exchange_rate_to_pkr?: number
+          purchase_amount_original?: number
+          purchase_amount_pkr?: number
+          selling_amount_original?: number
+          selling_amount_pkr?: number
+          payment_status?: string
+          amount_paid?: number
+          payment_date?: string | null
+          payment_method?: string | null
+          payment_reference?: string | null
+          payment_notes?: string | null
+          receipt_url?: string | null
+          booking_reference?: string | null
+          notes?: string | null
           created_at?: string
           updated_at?: string
         }
