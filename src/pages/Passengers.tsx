@@ -963,7 +963,7 @@ export default function Passengers() {
                         entityType="passenger"
                         entityId={selectedPassenger.id}
                         contactPhone={selectedPassenger.phone}
-                        contactEmail={selectedPassenger.email}
+                        contactEmail={selectedPassenger.email || undefined}
                         onSuccess={() => {
                           // Refresh communication log
                         }}

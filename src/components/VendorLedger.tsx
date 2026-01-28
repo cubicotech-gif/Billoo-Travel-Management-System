@@ -72,10 +72,11 @@ export default function VendorLedger({
       if (paymentsError) throw paymentsError
 
       // Combine and process entries
-      const allEntries: LedgerEntry[] = []
+      const allEntries: LedgerEntry[] = [] as LedgerEntry[]
 
       // Add purchases as debit entries
-      (services || []).forEach((service: any) => {
+      const servicesList: any[] = services || []
+      servicesList.forEach((service: any) => {
         allEntries.push({
           id: service.id,
           date: service.service_date || service.created_at,
@@ -89,7 +90,8 @@ export default function VendorLedger({
       })
 
       // Add payments as credit entries
-      (payments || []).forEach((payment) => {
+      const paymentsList: any[] = payments || []
+      paymentsList.forEach((payment: any) => {
         allEntries.push({
           id: payment.id,
           date: payment.payment_date,
@@ -107,7 +109,7 @@ export default function VendorLedger({
 
       // Calculate running balance
       let runningBalance = 0
-      allEntries.forEach((entry) => {
+      allEntries.forEach((entry: LedgerEntry) => {
         runningBalance += entry.debit - entry.credit
         entry.balance = runningBalance
       })

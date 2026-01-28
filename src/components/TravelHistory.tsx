@@ -105,7 +105,7 @@ export default function TravelHistory({ passengerId }: TravelHistoryProps) {
     }
   }
 
-  const handleViewQuery = (queryId: string) => {
+  const handleViewQuery = (_queryId: string) => {
     navigate('/queries')
   }
 
