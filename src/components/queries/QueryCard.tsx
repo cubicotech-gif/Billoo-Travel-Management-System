@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import {
   MapPin, Users, Calendar, Phone, Mail, Clock,
@@ -25,7 +25,7 @@ interface QueryCardProps {
 export default function QueryCard({
   query,
   onView,
-  onStatusChange,
+  onStatusChange: _onStatusChange,
   onSendProposal,
   onLogResponse,
   isUrgent = false
@@ -52,7 +52,6 @@ export default function QueryCard({
     icon: '📋'
   };
 
-  const totalPassengers = query.adults + query.children + query.infants;
   const passengerText = [
     query.adults > 0 ? `${query.adults} Adult${query.adults > 1 ? 's' : ''}` : '',
     query.children > 0 ? `${query.children} Child${query.children > 1 ? 'ren' : ''}` : '',

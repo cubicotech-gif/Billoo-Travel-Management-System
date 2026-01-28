@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Send, Edit, FileText } from 'lucide-react';
 import type { Database } from '../../types/database';
 import type { ProposalCalculation } from '../../types/proposals';

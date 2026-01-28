@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Send, Edit, X, MessageCircle, Eye, Clock, AlertCircle } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Send, Edit, MessageCircle, Eye, Clock, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import type { Database } from '../../types/database';
 import type { ProposalCalculation } from '../../types/proposals';
@@ -21,7 +21,7 @@ export default function ProposalSummaryPanel({
   query,
   onSendProposal,
   onLogResponse,
-  onFinalize
+  onFinalize: _onFinalize
 }: ProposalSummaryPanelProps) {
   const [latestProposal, setLatestProposal] = useState<QueryProposal | null>(null);
   const [calculation, setCalculation] = useState<ProposalCalculation | null>(null);
@@ -78,7 +78,6 @@ export default function ProposalSummaryPanel({
     );
   }
 
-  const totalPassengers = query.adults + query.children + query.infants;
   const passengerText = [
     query.adults > 0 ? `${query.adults} Adult${query.adults > 1 ? 's' : ''}` : '',
     query.children > 0 ? `${query.children} Child${query.children > 1 ? 'ren' : ''}` : '',

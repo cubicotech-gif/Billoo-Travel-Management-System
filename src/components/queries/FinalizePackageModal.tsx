@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, CheckCircle, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
 import type { PaymentMethod } from '../../types/proposals';
