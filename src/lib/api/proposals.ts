@@ -148,7 +148,7 @@ export async function updateProposalResponse(
   const { proposalId, responseType, feedback, responseDate } = responseData;
 
   // Determine proposal status based on response type
-  let proposalStatus: 'accepted' | 'rejected' | 'sent' = 'sent';
+  let proposalStatus: 'accepted' | 'rejected' | 'sent' | 'revised' | 'expired' = 'sent';
   let queryStatus = 'Proposal Sent';
 
   switch (responseType) {
@@ -343,7 +343,7 @@ export async function getQueryServicesForProposal(
  */
 export async function logProposalCommunication(
   queryId: string,
-  proposalId: string,
+  _proposalId: string,
   sentVia: string[],
   userId: string
 ): Promise<void> {

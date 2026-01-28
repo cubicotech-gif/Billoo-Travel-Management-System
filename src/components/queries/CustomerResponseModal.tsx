@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { X, CheckCircle, XCircle, Clock, Edit3 } from 'lucide-react';
 import type { CustomerResponseType } from '../../types/proposals';
 import { updateProposalResponse } from '../../lib/api/proposals';

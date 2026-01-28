@@ -4,8 +4,7 @@ import { format, addDays } from 'date-fns';
 import type {
   ProposalCalculation,
   ProposalService,
-  ProposalTemplate,
-  TEMPLATE_VARIABLES
+  ProposalTemplate
 } from '../types/proposals';
 import { DEFAULT_PROPOSAL_TEMPLATE } from '../types/proposals';
 
@@ -100,7 +99,6 @@ export function generateProposalText(
   calculation: ProposalCalculation,
   validityDays: number = 7
 ): string {
-  const totalPassengers = query.adults + query.children + query.infants;
   const passengerText = [
     query.adults > 0 ? `${query.adults} Adult${query.adults > 1 ? 's' : ''}` : '',
     query.children > 0 ? `${query.children} Child${query.children > 1 ? 'ren' : ''}` : '',
