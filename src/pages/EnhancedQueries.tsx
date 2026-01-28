@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  Plus, Search, Calendar, Phone, Mail, MapPin, AlertCircle,
-  Users, MessageCircle, Clock, CheckCircle, X, Filter, ChevronDown
+  Plus, Search, Calendar, Phone, MapPin, AlertCircle,
+  Users, MessageCircle, Clock, X
 } from 'lucide-react'
 import { format } from 'date-fns'
 import PassengerSelector from '@/components/PassengerSelector'
@@ -534,7 +534,7 @@ export default function EnhancedQueries() {
                   <QuickActions
                     phone={query.client_phone}
                     email={query.client_email}
-                    onActionComplete={(type) => {
+                    onActionComplete={(_type) => {
                       // Optionally auto-open communication log modal
                     }}
                   />
@@ -927,7 +927,7 @@ Budget: Rs 250,000 per person"
                       entityType="query"
                       entityId={selectedQueryId}
                       contactPhone={selectedQuery.client_phone}
-                      contactEmail={selectedQuery.client_email}
+                      contactEmail={selectedQuery.client_email || undefined}
                       onSuccess={() => {
                         // Refresh communication log
                       }}

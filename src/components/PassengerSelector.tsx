@@ -34,7 +34,7 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
   const [searchTerm, setSearchTerm] = useState('')
   const [showSearchModal, setShowSearchModal] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
+  const [, setSaving] = useState(false)
 
   useEffect(() => {
     loadLinkedPassengers()

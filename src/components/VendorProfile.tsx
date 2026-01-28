@@ -28,7 +28,7 @@ interface VendorProfileProps {
 
 export default function VendorProfile({ vendor, onEdit, onClose }: VendorProfileProps) {
   const [transactionCount, setTransactionCount] = useState<number>(0)
-  const [loading, setLoading] = useState(true)
+  const [, setLoading] = useState(true)
 
   useEffect(() => {
     loadTransactionCount()
