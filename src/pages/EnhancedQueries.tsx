@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import {
   Plus, Search, Calendar, Phone, MapPin, AlertCircle,
-  Users, MessageCircle, Clock, X
+  Users, MessageCircle, Clock, X, Eye
 } from 'lucide-react'
 import { format } from 'date-fns'
 import PassengerSelector from '@/components/PassengerSelector'
@@ -66,6 +67,7 @@ const SERVICE_TYPES = [
 ]
 
 export default function EnhancedQueries() {
+  const navigate = useNavigate()
   const [queries, setQueries] = useState<Query[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
@@ -540,28 +542,38 @@ export default function EnhancedQueries() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-2">
                   <button
-                    onClick={() => {
-                      setSelectedQueryId(query.id)
-                      setShowPassengerModal(true)
-                    }}
-                    className="btn btn-secondary btn-sm"
+                    onClick={() => navigate(`/queries/${query.id}`)}
+                    className="btn btn-primary btn-sm w-full"
                   >
-                    <Users className="w-4 h-4 mr-2" />
-                    Passengers
+                    <Eye className="w-4 h-4 mr-2" />
+                    View Full Details
                   </button>
-                  <button
-                    onClick={() => {
-                      setSelectedQuery(query)
-                      setSelectedQueryId(query.id)
-                      setShowCommModal(true)
-                    }}
-                    className="btn btn-secondary btn-sm"
-                  >
-                    <MessageCircle className="w-4 h-4 mr-2" />
-                    Communications
-                  </button>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedQueryId(query.id)
+                        setShowPassengerModal(true)
+                      }}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      <Users className="w-4 h-4 mr-2" />
+                      Passengers
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSelectedQuery(query)
+                        setSelectedQueryId(query.id)
+                        setShowCommModal(true)
+                      }}
+                      className="btn btn-secondary btn-sm"
+                    >
+                      <MessageCircle className="w-4 h-4 mr-2" />
+                      Communications
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

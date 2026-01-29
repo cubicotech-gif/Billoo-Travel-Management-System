@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/authStore'
 import Login from '@/pages/Login'
 import EnhancedDashboard from '@/pages/EnhancedDashboard'
 import EnhancedQueries from '@/pages/EnhancedQueries'
+import QueryWorkspace from '@/components/queries/QueryWorkspace'
 import Passengers from '@/pages/Passengers'
 import Vendors from '@/pages/Vendors'
 import Invoices from '@/pages/Invoices'
@@ -41,6 +42,7 @@ function App() {
         >
           <Route index element={<EnhancedDashboard />} />
           <Route path="queries" element={<EnhancedQueries />} />
+          <Route path="queries/:queryId" element={<QueryWorkspace />} />
           <Route path="passengers" element={<Passengers />} />
           <Route path="vendors" element={<Vendors />} />
           <Route path="invoices" element={<Invoices />} />
