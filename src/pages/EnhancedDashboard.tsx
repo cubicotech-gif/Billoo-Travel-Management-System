@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
   Search, Users, FileText, TrendingUp,
-  Calendar, Clock, DollarSign, Activity, ArrowUpRight
+  Calendar, Clock, DollarSign, Activity
 } from 'lucide-react'
 import {
   AreaChart, Area, LineChart, Line,
@@ -185,114 +185,188 @@ export default function EnhancedDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="relative">
+          <div className="spinner w-16 h-16"></div>
+          <p className="text-sm text-gray-600 mt-4 text-center">Loading Dashboard...</p>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Welcome back! Here's what's happening with your business today.
-        </p>
+    <div className="space-y-8 animate-fade-in">
+      {/* Premium Hero Section */}
+      <div className="relative rounded-3xl bg-gradient-hero p-8 md:p-12 text-white shadow-xl overflow-hidden">
+        {/* Background Decorations */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none">
+          <div className="absolute top-0 right-0 w-96 h-96 bg-white rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-accent-400 rounded-full blur-3xl"></div>
+        </div>
+
+        <div className="relative z-10">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div>
+              <h1 className="text-3xl md:text-4xl lg:text-5xl font-display font-bold mb-3 animate-slide-up">
+                Welcome to Your Dashboard
+              </h1>
+              <p className="text-lg md:text-xl text-primary-100 mb-6 max-w-2xl">
+                Manage your premium travel business with world-class tools and insights.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <button className="btn btn-accent btn-lg shadow-glow-accent">
+                  <Search className="w-5 h-5" />
+                  New Query
+                </button>
+                <button className="btn btn-secondary btn-lg bg-white/10 border-white/30 text-white hover:bg-white/20 backdrop-blur-sm">
+                  <FileText className="w-5 h-5" />
+                  View Reports
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 md:gap-6">
+              <div className="glass p-4 rounded-2xl text-center shadow-large">
+                <div className="text-3xl md:text-4xl font-bold mb-1">{conversionRate}%</div>
+                <div className="text-sm text-primary-100">Conversion Rate</div>
+              </div>
+              <div className="glass p-4 rounded-2xl text-center shadow-large">
+                <div className="text-3xl md:text-4xl font-bold mb-1">
+                  ₹{(stats.revenue / 100000).toFixed(1)}L
+                </div>
+                <div className="text-sm text-primary-100">Total Revenue</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-              <p className="text-2xl font-bold text-gray-900">₹{stats.revenue.toLocaleString('en-IN')}</p>
-              <div className="flex items-center mt-2 text-sm text-green-600">
-                <TrendingUp className="w-4 h-4 mr-1" />
-                <span>+12.5% from last month</span>
-              </div>
+      {/* Premium Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Revenue Stat */}
+        <div className="stat-card group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-success-100 rounded-xl group-hover:scale-110 transition-transform duration-300">
+              <DollarSign className="w-6 h-6 text-success-600" />
             </div>
-            <div className="p-3 bg-green-100 rounded-lg">
-              <DollarSign className="w-6 h-6 text-green-600" />
-            </div>
+            <span className="badge badge-success">
+              <TrendingUp className="w-3 h-3 mr-1" />
+              +12.5%
+            </span>
           </div>
+          <div className="stat-label">Total Revenue</div>
+          <div className="stat-value">₹{(stats.revenue / 100000).toFixed(1)}L</div>
+          <p className="text-sm text-gray-500 mt-2">from last month</p>
         </div>
 
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Total Queries</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.totalQueries}</p>
-              <div className="flex items-center mt-2 text-sm text-blue-600">
-                <ArrowUpRight className="w-4 h-4 mr-1" />
-                <span>{stats.totalQueries} this month</span>
-              </div>
+        {/* Queries Stat */}
+        <div className="stat-card group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-primary-100 rounded-xl group-hover:scale-110 transition-transform duration-300">
+              <Search className="w-6 h-6 text-primary-600" />
             </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Search className="w-6 h-6 text-blue-600" />
-            </div>
+            <span className="badge badge-primary">
+              This Month
+            </span>
           </div>
+          <div className="stat-label">Total Queries</div>
+          <div className="stat-value">{stats.totalQueries}</div>
+          <p className="text-sm text-gray-500 mt-2">active inquiries</p>
         </div>
 
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Completed Bookings</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.completedBookings}</p>
-              <div className="flex items-center mt-2 text-sm text-purple-600">
-                <Activity className="w-4 h-4 mr-1" />
-                <span>{conversionRate}% conversion rate</span>
-              </div>
+        {/* Bookings Stat */}
+        <div className="stat-card group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-accent-100 rounded-xl group-hover:scale-110 transition-transform duration-300">
+              <Calendar className="w-6 h-6 text-accent-600" />
             </div>
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <Calendar className="w-6 h-6 text-purple-600" />
-            </div>
+            <span className="badge badge-accent">
+              {conversionRate}%
+            </span>
           </div>
+          <div className="stat-label">Completed Bookings</div>
+          <div className="stat-value">{stats.completedBookings}</div>
+          <p className="text-sm text-gray-500 mt-2">conversion rate</p>
         </div>
 
-        <div className="card">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-600">Pending Payments</p>
-              <p className="text-2xl font-bold text-gray-900">₹{stats.pendingAmount.toLocaleString('en-IN')}</p>
-              <div className="flex items-center mt-2 text-sm text-orange-600">
-                <Clock className="w-4 h-4 mr-1" />
-                <span>Follow up required</span>
-              </div>
+        {/* Pending Payments Stat */}
+        <div className="stat-card group">
+          <div className="flex items-center justify-between mb-4">
+            <div className="p-3 bg-warning-100 rounded-xl group-hover:scale-110 transition-transform duration-300">
+              <Clock className="w-6 h-6 text-warning-600" />
             </div>
-            <div className="p-3 bg-orange-100 rounded-lg">
-              <FileText className="w-6 h-6 text-orange-600" />
-            </div>
+            <span className="badge badge-warning">
+              Urgent
+            </span>
           </div>
+          <div className="stat-label">Pending Payments</div>
+          <div className="stat-value">₹{(stats.pendingAmount / 100000).toFixed(1)}L</div>
+          <p className="text-sm text-gray-500 mt-2">follow up required</p>
         </div>
       </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Revenue Trend */}
-        <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Trend (Last 7 Days)</h3>
+        <div className="card-premium">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-display font-bold text-gray-900">Revenue Trend</h3>
+              <p className="text-sm text-gray-500 mt-1">Last 7 days performance</p>
+            </div>
+            <div className="p-2 bg-success-100 rounded-xl">
+              <TrendingUp className="w-5 h-5 text-success-600" />
+            </div>
+          </div>
           <ResponsiveContainer width="100%" height={300}>
             <AreaChart data={trendData}>
               <defs>
                 <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Area type="monotone" dataKey="revenue" stroke="#10b981" fillOpacity={1} fill="url(#colorRevenue)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis
+                dataKey="date"
+                stroke="#64748b"
+                style={{ fontSize: '12px' }}
+              />
+              <YAxis
+                stroke="#64748b"
+                style={{ fontSize: '12px' }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#fff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '12px',
+                  boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="revenue"
+                stroke="#10b981"
+                strokeWidth={3}
+                fillOpacity={1}
+                fill="url(#colorRevenue)"
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Query Status Distribution */}
-        <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Query Pipeline</h3>
+        <div className="card-premium">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-display font-bold text-gray-900">Query Pipeline</h3>
+              <p className="text-sm text-gray-500 mt-1">Status distribution overview</p>
+            </div>
+            <div className="p-2 bg-primary-100 rounded-xl">
+              <Activity className="w-5 h-5 text-primary-600" />
+            </div>
+          </div>
           {queryStats.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -305,17 +379,30 @@ export default function EnhancedDashboard() {
                   outerRadius={100}
                   fill="#8884d8"
                   dataKey="value"
+                  style={{ fontSize: '13px', fontWeight: '600' }}
                 >
                   {queryStats.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <div className="flex items-center justify-center h-64 text-gray-500">
-              No data available
+            <div className="flex items-center justify-center h-[300px]">
+              <div className="text-center">
+                <div className="text-gray-400 mb-2">
+                  <Activity className="w-12 h-12 mx-auto" />
+                </div>
+                <p className="text-gray-500">No data available</p>
+              </div>
             </div>
           )}
         </div>
@@ -324,76 +411,151 @@ export default function EnhancedDashboard() {
       {/* Activity & Quick Stats */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {/* Recent Activity Feed */}
-        <div className="lg:col-span-2 card">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
-            <button className="text-sm text-primary-600 hover:text-primary-700">View All</button>
+        <div className="lg:col-span-2 card-premium">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-display font-bold text-gray-900">Recent Activity</h3>
+              <p className="text-sm text-gray-500 mt-1">Latest updates from your business</p>
+            </div>
+            <button className="text-sm font-semibold text-primary-600 hover:text-primary-700 transition-colors">
+              View All →
+            </button>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {recentActivity.length > 0 ? (
               recentActivity.map((activity) => (
-                <div key={activity.id} className="flex items-start space-x-3 p-3 hover:bg-gray-50 rounded-lg transition-colors">
-                  <div className={`p-2 rounded-lg ${
-                    activity.type === 'query' ? 'bg-blue-100' :
-                    activity.type === 'invoice' ? 'bg-green-100' :
-                    activity.type === 'passenger' ? 'bg-purple-100' :
-                    'bg-orange-100'
+                <div
+                  key={activity.id}
+                  className="flex items-start gap-4 p-4 hover:bg-gradient-card rounded-xl transition-all duration-200 cursor-pointer group border border-transparent hover:border-primary-100"
+                >
+                  <div className={`p-2.5 rounded-xl shadow-soft group-hover:scale-110 transition-transform duration-200 ${
+                    activity.type === 'query' ? 'bg-primary-100' :
+                    activity.type === 'invoice' ? 'bg-success-100' :
+                    activity.type === 'passenger' ? 'bg-accent-100' :
+                    'bg-warning-100'
                   }`}>
-                    {activity.type === 'query' && <Search className="w-4 h-4 text-blue-600" />}
-                    {activity.type === 'invoice' && <FileText className="w-4 h-4 text-green-600" />}
-                    {activity.type === 'passenger' && <Users className="w-4 h-4 text-purple-600" />}
-                    {activity.type === 'payment' && <DollarSign className="w-4 h-4 text-orange-600" />}
+                    {activity.type === 'query' && <Search className="w-5 h-5 text-primary-600" />}
+                    {activity.type === 'invoice' && <FileText className="w-5 h-5 text-success-600" />}
+                    {activity.type === 'passenger' && <Users className="w-5 h-5 text-accent-600" />}
+                    {activity.type === 'payment' && <DollarSign className="w-5 h-5 text-warning-600" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{activity.title}</p>
-                    <p className="text-sm text-gray-500">{activity.description}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {format(new Date(activity.timestamp), 'MMM dd, yyyy HH:mm')}
+                    <p className="text-sm font-semibold text-gray-900 mb-1">{activity.title}</p>
+                    <p className="text-sm text-gray-600 mb-1.5">{activity.description}</p>
+                    <p className="text-xs text-gray-400 font-medium">
+                      {format(new Date(activity.timestamp), 'MMM dd, yyyy • HH:mm')}
                     </p>
                   </div>
                 </div>
               ))
             ) : (
-              <p className="text-center text-gray-500 py-8">No recent activity</p>
+              <div className="text-center py-12">
+                <div className="text-gray-300 mb-3">
+                  <Activity className="w-16 h-16 mx-auto" />
+                </div>
+                <p className="text-gray-500 font-medium">No recent activity</p>
+                <p className="text-sm text-gray-400 mt-1">Activity will appear here as you work</p>
+              </div>
             )}
           </div>
         </div>
 
         {/* Quick Stats */}
-        <div className="card">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Stats</h3>
-          <div className="space-y-4">
-            <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg">
-              <p className="text-sm text-blue-600 font-medium">Avg. Booking Value</p>
-              <p className="text-2xl font-bold text-blue-900">₹{avgBookingValue}</p>
+        <div className="card-premium">
+          <div className="mb-6">
+            <h3 className="text-xl font-display font-bold text-gray-900">Quick Stats</h3>
+            <p className="text-sm text-gray-500 mt-1">Key performance metrics</p>
+          </div>
+          <div className="space-y-3">
+            <div className="p-4 bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl border-2 border-primary-200/50 hover:scale-105 transition-transform duration-200">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-primary-700 font-semibold uppercase tracking-wide">Avg. Booking Value</p>
+                <DollarSign className="w-5 h-5 text-primary-600" />
+              </div>
+              <p className="text-3xl font-bold text-primary-900">₹{avgBookingValue}</p>
             </div>
-            <div className="p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg">
-              <p className="text-sm text-green-600 font-medium">Conversion Rate</p>
-              <p className="text-2xl font-bold text-green-900">{conversionRate}%</p>
+
+            <div className="p-4 bg-gradient-to-br from-success-50 to-success-100 rounded-xl border-2 border-success-200/50 hover:scale-105 transition-transform duration-200">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-success-700 font-semibold uppercase tracking-wide">Conversion Rate</p>
+                <TrendingUp className="w-5 h-5 text-success-600" />
+              </div>
+              <p className="text-3xl font-bold text-success-900">{conversionRate}%</p>
             </div>
-            <div className="p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg">
-              <p className="text-sm text-purple-600 font-medium">Est. Profit</p>
-              <p className="text-2xl font-bold text-purple-900">₹{stats.profit.toLocaleString('en-IN')}</p>
+
+            <div className="p-4 bg-gradient-to-br from-accent-50 to-accent-100 rounded-xl border-2 border-accent-200/50 hover:scale-105 transition-transform duration-200">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-accent-700 font-semibold uppercase tracking-wide">Est. Profit</p>
+                <Activity className="w-5 h-5 text-accent-600" />
+              </div>
+              <p className="text-3xl font-bold text-accent-900">₹{(stats.profit / 100000).toFixed(1)}L</p>
             </div>
-            <div className="p-4 bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg">
-              <p className="text-sm text-orange-600 font-medium">Active Passengers</p>
-              <p className="text-2xl font-bold text-orange-900">{stats.totalPassengers}</p>
+
+            <div className="p-4 bg-gradient-to-br from-warning-50 to-warning-100 rounded-xl border-2 border-warning-200/50 hover:scale-105 transition-transform duration-200">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-warning-700 font-semibold uppercase tracking-wide">Active Passengers</p>
+                <Users className="w-5 h-5 text-warning-600" />
+              </div>
+              <p className="text-3xl font-bold text-warning-900">{stats.totalPassengers}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Booking Trend */}
-      <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Booking Trend (Last 7 Days)</h3>
+      <div className="card-premium">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-xl font-display font-bold text-gray-900">Booking Trend</h3>
+            <p className="text-sm text-gray-500 mt-1">Queries vs bookings over the last 7 days</p>
+          </div>
+          <div className="flex gap-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-accent-500"></div>
+              <span className="text-sm text-gray-600 font-medium">Bookings</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-primary-500"></div>
+              <span className="text-sm text-gray-600 font-medium">Queries</span>
+            </div>
+          </div>
+        </div>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={trendData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip />
-            <Line type="monotone" dataKey="bookings" stroke="#8b5cf6" strokeWidth={2} />
-            <Line type="monotone" dataKey="queries" stroke="#3b82f6" strokeWidth={2} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis
+              dataKey="date"
+              stroke="#64748b"
+              style={{ fontSize: '12px' }}
+            />
+            <YAxis
+              stroke="#64748b"
+              style={{ fontSize: '12px' }}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#fff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '12px',
+                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey="bookings"
+              stroke="#eab308"
+              strokeWidth={3}
+              dot={{ fill: '#eab308', r: 5 }}
+              activeDot={{ r: 7 }}
+            />
+            <Line
+              type="monotone"
+              dataKey="queries"
+              stroke="#0ea5e9"
+              strokeWidth={3}
+              dot={{ fill: '#0ea5e9', r: 5 }}
+              activeDot={{ r: 7 }}
+            />
           </LineChart>
         </ResponsiveContainer>
       </div>
