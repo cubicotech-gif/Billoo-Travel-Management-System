@@ -10,6 +10,7 @@ import PassengerSelector from '@/components/PassengerSelector'
 import CommunicationLog from '@/components/CommunicationLog'
 import AddCommunication from '@/components/AddCommunication'
 import QuickActions from '@/components/QuickActions'
+import { WORKFLOW_STAGES, QUERY_STATUS } from '@/constants/queryStatuses'
 
 interface Query {
   id: string
@@ -40,18 +41,6 @@ interface Query {
   updated_at: string
 }
 
-// Your 8-stage workflow
-const WORKFLOW_STAGES = [
-  { value: 'New Query - Not Responded', label: '🔴 New Query (Not Responded)', color: 'red', priority: 1 },
-  { value: 'Responded - Awaiting Reply', label: '🟡 Awaiting Client Reply', color: 'yellow', priority: 2 },
-  { value: 'Working on Proposal', label: '🔵 Working on Proposal', color: 'blue', priority: 3 },
-  { value: 'Proposal Sent', label: '🟢 Proposal Sent', color: 'green', priority: 4 },
-  { value: 'Revisions Requested', label: '🟣 Revisions Requested', color: 'purple', priority: 5 },
-  { value: 'Finalized & Booking', label: '✅ Finalized & Booking', color: 'teal', priority: 6 },
-  { value: 'Service Delivered', label: '📦 Service Delivered', color: 'emerald', priority: 7 },
-  { value: 'Cancelled', label: '❌ Cancelled/Lost', color: 'gray', priority: 8 },
-]
-
 const QUERY_SOURCES = ['Phone Call', 'WhatsApp', 'Walk-in', 'Website', 'Email', 'Referral']
 
 const SERVICE_TYPES = [
@@ -79,7 +68,28 @@ export default function EnhancedQueries() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [viewMode, setViewMode] = useState<'all' | 'urgent' | 'awaiting'>('all')
   
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    client_name: string;
+    client_email: string;
+    client_phone: string;
+    query_source: any;
+    service_type: any;
+    destination: string;
+    travel_date: string;
+    return_date: string;
+    is_tentative_dates: boolean;
+    adults: number;
+    children: number;
+    infants: number;
+    tentative_plan: string;
+    internal_reminders: string;
+    is_responded: boolean;
+    response_given: string;
+    status: string;
+    priority_level: any;
+    cost_price: number;
+    selling_price: number;
+  }>({
     client_name: '',
     client_email: '',
     client_phone: '',
@@ -96,7 +106,7 @@ export default function EnhancedQueries() {
     internal_reminders: '',
     is_responded: false,
     response_given: '',
-    status: 'New Query - Not Responded',
+    status: QUERY_STATUS.NEW_QUERY,
     priority_level: 'normal' as any,
     cost_price: 0,
     selling_price: 0,
@@ -119,10 +129,10 @@ export default function EnhancedQueries() {
 
   // Auto-update status based on response
   useEffect(() => {
-    if (formData.is_responded && formData.status === 'New Query - Not Responded') {
-      setFormData(prev => ({ ...prev, status: 'Responded - Awaiting Reply' }))
-    } else if (!formData.is_responded && formData.status !== 'New Query - Not Responded') {
-      setFormData(prev => ({ ...prev, status: 'New Query - Not Responded' }))
+    if (formData.is_responded && formData.status === QUERY_STATUS.NEW_QUERY) {
+      setFormData(prev => ({ ...prev, status: QUERY_STATUS.RESPONDED }))
+    } else if (!formData.is_responded && formData.status !== QUERY_STATUS.NEW_QUERY) {
+      setFormData(prev => ({ ...prev, status: QUERY_STATUS.NEW_QUERY }))
     }
   }, [formData.is_responded])
 
@@ -177,7 +187,7 @@ export default function EnhancedQueries() {
       internal_reminders: '',
       is_responded: false,
       response_given: '',
-      status: 'New Query - Not Responded',
+      status: QUERY_STATUS.NEW_QUERY,
       priority_level: 'normal',
       cost_price: 0,
       selling_price: 0,
