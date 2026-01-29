@@ -97,6 +97,9 @@ export default function EnhancedQueries() {
     is_responded: false,
     response_given: '',
     status: 'New Query - Not Responded',
+    priority_level: 'normal' as any,
+    cost_price: 0,
+    selling_price: 0,
   })
 
   useEffect(() => {
@@ -175,6 +178,9 @@ export default function EnhancedQueries() {
       is_responded: false,
       response_given: '',
       status: 'New Query - Not Responded',
+      priority_level: 'normal',
+      cost_price: 0,
+      selling_price: 0,
     })
   }
 

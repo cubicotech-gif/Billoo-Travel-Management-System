@@ -63,6 +63,13 @@ export default function QueryWorkspace() {
     }
   }, [queryId]);
 
+  // Force re-render when query status changes
+  useEffect(() => {
+    if (query) {
+      console.log('🔄 Query status changed, re-rendering UI for:', query.status);
+    }
+  }, [query?.status]);
+
   // Add console logging for debugging
   useEffect(() => {
     if (query) {
@@ -110,6 +117,8 @@ export default function QueryWorkspace() {
   const handleStatusChange = async (newStatus: string) => {
     if (!query) return;
 
+    console.log('🔄 Starting status change from:', query.status, 'to:', newStatus);
+
     try {
       const { error: updateError } = await supabase
         .from('queries')
@@ -119,16 +128,22 @@ export default function QueryWorkspace() {
         })
         .eq('id', query.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('❌ Database update error:', updateError);
+        throw updateError;
+      }
+
+      console.log('✅ Database updated successfully');
 
       // Reload query data to refresh UI
       await loadQueryData();
       await loadServices();
 
       console.log('✅ Status changed to:', newStatus);
+      console.log('✅ UI should now show sections for:', newStatus);
     } catch (err) {
-      console.error('Error updating status:', err);
-      alert('Failed to update status');
+      console.error('❌ Error updating status:', err);
+      alert('Failed to update status: ' + (err as Error).message);
     }
   };
 
@@ -210,6 +225,44 @@ export default function QueryWorkspace() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        {/* Debug Info (always visible in dev mode) */}
+        {DEV_MODE && (
+          <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-4 text-sm">
+            <div className="font-bold text-purple-900 mb-2">🐛 DEBUG INFO:</div>
+            <div className="space-y-1 text-purple-800">
+              <div>Current Status: <span className="font-mono font-bold">"{query.status}"</span></div>
+              <div>Services Count: {services.length}</div>
+              <div className="mt-2 font-semibold">Sections that should be visible:</div>
+              <ul className="list-disc list-inside space-y-1 ml-2">
+                {['New Query - Not Responded', 'Responded - Awaiting Reply', 'Working on Proposal'].includes(query.status) && (
+                  <li className="text-green-700">✅ Service Addition (Stages 1-3)</li>
+                )}
+                {query.status === 'Proposal Sent' && (
+                  <li className="text-green-700">✅ Proposal Sent Section</li>
+                )}
+                {query.status === 'Revisions Requested' && (
+                  <li className="text-green-700">✅ Revisions Section</li>
+                )}
+                {query.status === 'Finalized & Booking' && (
+                  <li className="text-green-700">✅ Booking Section</li>
+                )}
+                {query.status === 'Services Booked' && (
+                  <li className="text-green-700">✅ Services Booked Section</li>
+                )}
+                {query.status === 'In Delivery' && (
+                  <li className="text-green-700">✅ In Delivery Section</li>
+                )}
+                {query.status === 'Completed' && (
+                  <li className="text-green-700">✅ Completed Section</li>
+                )}
+                {query.status === 'Cancelled' && (
+                  <li className="text-green-700">✅ Cancelled Section</li>
+                )}
+              </ul>
+            </div>
+          </div>
+        )}
+
         {/* Stage Indicator */}
         <StageIndicator status={query.status} />
 
