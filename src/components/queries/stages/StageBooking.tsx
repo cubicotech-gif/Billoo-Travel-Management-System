@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, CreditCard, Upload, AlertCircle } from 'lucide-react';
 import { Query, QueryService } from '../../../types/query-workflow';
 import { supabase } from '../../../lib/supabase';
@@ -13,11 +13,7 @@ interface Props {
 export default function StageBooking({ query: _query, services, onRefresh, onAllBooked }: Props) {
   const [bookingProgress, setBookingProgress] = useState({ confirmed: 0, total: services.length });
 
-  useEffect(() => {
-    checkBookingProgress();
-  }, [services]);
-
-  const checkBookingProgress = () => {
+  const checkBookingProgress = useCallback(() => {
     const confirmed = services.filter((s) => s.booking_status === 'confirmed').length;
     setBookingProgress({ confirmed, total: services.length });
 
@@ -25,7 +21,11 @@ export default function StageBooking({ query: _query, services, onRefresh, onAll
     if (confirmed === services.length && services.length > 0) {
       setTimeout(() => onAllBooked(), 1000);
     }
-  };
+  }, [services, onAllBooked]);
+
+  useEffect(() => {
+    checkBookingProgress();
+  }, [checkBookingProgress]);
 
   const handleMarkAsBooked = async (serviceId: string) => {
     const { error } = await supabase
@@ -138,7 +138,7 @@ function ServiceBookingCard({
   service,
   index,
   onMarkBooked,
-  onRefresh,
+  onRefresh: _onRefresh,
 }: {
   service: QueryService;
   index: number;
