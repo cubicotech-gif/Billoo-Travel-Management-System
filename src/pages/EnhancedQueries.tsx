@@ -40,16 +40,18 @@ interface Query {
   updated_at: string
 }
 
-// Your 8-stage workflow
+// Complete 10-stage workflow
 const WORKFLOW_STAGES = [
   { value: 'New Query - Not Responded', label: '🔴 New Query (Not Responded)', color: 'red', priority: 1 },
   { value: 'Responded - Awaiting Reply', label: '🟡 Awaiting Client Reply', color: 'yellow', priority: 2 },
   { value: 'Working on Proposal', label: '🔵 Working on Proposal', color: 'blue', priority: 3 },
-  { value: 'Proposal Sent', label: '🟢 Proposal Sent', color: 'green', priority: 4 },
+  { value: 'Proposal Sent', label: '📧 Proposal Sent', color: 'green', priority: 4 },
   { value: 'Revisions Requested', label: '🟣 Revisions Requested', color: 'purple', priority: 5 },
   { value: 'Finalized & Booking', label: '✅ Finalized & Booking', color: 'teal', priority: 6 },
-  { value: 'Service Delivered', label: '📦 Service Delivered', color: 'emerald', priority: 7 },
-  { value: 'Cancelled', label: '❌ Cancelled/Lost', color: 'gray', priority: 8 },
+  { value: 'Services Booked', label: '📦 Services Booked', color: 'indigo', priority: 7 },
+  { value: 'In Delivery', label: '🚚 In Delivery', color: 'cyan', priority: 8 },
+  { value: 'Completed', label: '✅ Completed', color: 'emerald', priority: 9 },
+  { value: 'Cancelled', label: '❌ Cancelled', color: 'gray', priority: 10 },
 ]
 
 const QUERY_SOURCES = ['Phone Call', 'WhatsApp', 'Walk-in', 'Website', 'Email', 'Referral']
