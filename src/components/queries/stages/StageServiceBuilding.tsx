@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Package, Plus } from 'lucide-react';
 import { Query, QueryService } from '../../../types/query-workflow';
+import ServiceAddModal from '../ServiceAddModal';
 
 interface Props {
   query: Query;
@@ -9,15 +11,22 @@ interface Props {
 }
 
 export default function StageServiceBuilding({
-  query: _query,
+  query,
   services,
   onRefresh,
   onSendProposal
 }: Props) {
+  const [showAddService, setShowAddService] = useState(false);
+
   const totalCost = services.reduce((sum, s) => sum + (s.cost_price || 0) * (s.quantity || 1), 0);
   const totalSelling = services.reduce((sum, s) => sum + (s.selling_price || 0) * (s.quantity || 1), 0);
   const totalProfit = totalSelling - totalCost;
   const profitMargin = totalSelling > 0 ? (totalProfit / totalSelling) * 100 : 0;
+
+  const handleServiceAdded = () => {
+    setShowAddService(false);
+    onRefresh();
+  };
 
   return (
     <div className="space-y-6">
@@ -45,12 +54,23 @@ export default function StageServiceBuilding({
           <h3 className="text-xl font-semibold text-gray-900">
             Package Services ({services.length})
           </h3>
-          <button
-            onClick={onRefresh}
-            className="text-sm text-blue-600 hover:text-blue-700"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-3">
+            {services.length > 0 && (
+              <button
+                onClick={() => setShowAddService(true)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Service
+              </button>
+            )}
+            <button
+              onClick={onRefresh}
+              className="text-sm text-blue-600 hover:text-blue-700"
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
         {services.length === 0 ? (
@@ -62,7 +82,7 @@ export default function StageServiceBuilding({
             </p>
             <button
               className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              onClick={() => alert('Service addition interface will be integrated from Phase B')}
+              onClick={() => setShowAddService(true)}
             >
               <Plus className="w-4 h-4" />
               Add First Service
@@ -170,13 +190,14 @@ export default function StageServiceBuilding({
         </>
       )}
 
-      {/* Service Addition Coming Soon Notice */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <p className="text-sm text-amber-800">
-          <strong>Note:</strong> Full service addition interface will be integrated from Phase B (Booking & Vendor Payments System).
-          For now, services can be added directly via the database or upcoming service management interface.
-        </p>
-      </div>
+      {/* Service Add Modal */}
+      {showAddService && (
+        <ServiceAddModal
+          queryId={query.id}
+          onClose={() => setShowAddService(false)}
+          onSuccess={handleServiceAdded}
+        />
+      )}
     </div>
   );
 }
