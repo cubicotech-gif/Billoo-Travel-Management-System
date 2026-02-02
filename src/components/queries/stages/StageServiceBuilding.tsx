@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function StageServiceBuilding({
-  query,
+  query: _query,
   services,
   onRefresh,
   onSendProposal

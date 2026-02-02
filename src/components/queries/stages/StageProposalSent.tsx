@@ -69,7 +69,7 @@ export default function StageProposalSent({ query, services, onLogResponse, onRe
             </div>
             <div>
               <div className="text-xs text-gray-600 mb-1">Customer</div>
-              <div className="text-lg font-semibold text-gray-900">{query.customer_name}</div>
+              <div className="text-lg font-semibold text-gray-900">{query.client_name}</div>
             </div>
           </div>
 

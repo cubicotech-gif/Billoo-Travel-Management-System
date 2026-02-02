@@ -10,7 +10,7 @@ interface Props {
   onComplete: () => void;
 }
 
-export default function StageDelivery({ query, services, onRefresh, onComplete }: Props) {
+export default function StageDelivery({ query: _query, services, onRefresh, onComplete }: Props) {
   const deliveredCount = services.filter((s) => s.delivery_status === 'delivered').length;
   const deliveryProgress = services.length > 0 ? (deliveredCount / services.length) * 100 : 0;
   const allDelivered = deliveredCount === services.length && services.length > 0;
