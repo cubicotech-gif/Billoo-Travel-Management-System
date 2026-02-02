@@ -7,7 +7,7 @@ interface Props {
   onStartDelivery: () => void;
 }
 
-export default function StageServicesBooked({ query, services, onStartDelivery }: Props) {
+export default function StageServicesBooked({ query: _query, services, onStartDelivery }: Props) {
   return (
     <div className="space-y-6">
       {/* Stage Banner */}

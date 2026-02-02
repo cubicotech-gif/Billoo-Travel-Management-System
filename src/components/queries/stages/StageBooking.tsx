@@ -10,7 +10,7 @@ interface Props {
   onAllBooked: () => void;
 }
 
-export default function StageBooking({ query, services, onRefresh, onAllBooked }: Props) {
+export default function StageBooking({ query: _query, services, onRefresh, onAllBooked }: Props) {
   const [bookingProgress, setBookingProgress] = useState({ confirmed: 0, total: services.length });
 
   useEffect(() => {

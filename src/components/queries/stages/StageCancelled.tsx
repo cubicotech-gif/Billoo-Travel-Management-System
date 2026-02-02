@@ -42,7 +42,7 @@ export default function StageCancelled({ query }: Props) {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Customer:</span>
-                <span className="font-medium text-gray-900">{query.customer_name}</span>
+                <span className="font-medium text-gray-900">{query.client_name}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Destination:</span>
@@ -50,7 +50,7 @@ export default function StageCancelled({ query }: Props) {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Contact:</span>
-                <span className="font-medium text-gray-900">{query.customer_phone}</span>
+                <span className="font-medium text-gray-900">{query.client_phone}</span>
               </div>
             </div>
           </div>
