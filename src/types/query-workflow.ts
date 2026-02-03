@@ -76,6 +76,9 @@ export interface QueryService {
   created_at: string
   updated_at: string
 
+  // Service-specific details (JSON field)
+  service_details?: any
+
   // Booking fields
   booking_status: BookingStatus
   booked_date?: string
