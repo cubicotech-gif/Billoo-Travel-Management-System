@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Edit, AlertTriangle } from 'lucide-react';
 import { Query, QueryService } from '../../../types/query-workflow';
+import ServiceAddModal from '../ServiceAddModal';
 
 interface Props {
   query: Query;
@@ -9,6 +11,13 @@ interface Props {
 }
 
 export default function StageRevisions({ query, services, onRefresh, onSendRevised }: Props) {
+  const [showAddService, setShowAddService] = useState(false);
+
+  const handleServiceAdded = () => {
+    setShowAddService(false);
+    onRefresh();
+  };
+
   return (
     <div className="space-y-6">
       {/* Stage Banner */}
@@ -82,7 +91,7 @@ export default function StageRevisions({ query, services, onRefresh, onSendRevis
         {/* Add More Services */}
         <div className="border-t border-gray-200 pt-4">
           <button
-            onClick={onRefresh}
+            onClick={() => setShowAddService(true)}
             className="text-sm text-blue-600 hover:text-blue-700 font-medium"
           >
             + Add More Services
@@ -138,13 +147,14 @@ export default function StageRevisions({ query, services, onRefresh, onSendRevis
         </div>
       </div>
 
-      {/* Note */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <p className="text-sm text-amber-800">
-          <strong>Note:</strong> Full service editing interface will be available in the integrated Phase B system.
-          For now, you can update service details directly or add/remove services as needed.
-        </p>
-      </div>
+      {/* Service Add Modal */}
+      {showAddService && (
+        <ServiceAddModal
+          queryId={query.id}
+          onClose={() => setShowAddService(false)}
+          onSuccess={handleServiceAdded}
+        />
+      )}
     </div>
   );
 }
