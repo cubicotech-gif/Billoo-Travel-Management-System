@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { X, Package, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import QuickAddVendorModal from './QuickAddVendorModal';
+import ServiceDetailsForm from './ServiceDetailsForm';
 
 interface Vendor {
   id: string;
   name: string;
   type: string;
-  currency: string;
+  default_currency: string;
 }
 
 interface Props {
@@ -32,6 +33,7 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
   const [loadingVendors, setLoadingVendors] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showQuickAddVendor, setShowQuickAddVendor] = useState(false);
+  const [serviceDetails, setServiceDetails] = useState<any>({});
 
   const [formData, setFormData] = useState({
     service_type: 'Hotel',
@@ -46,6 +48,18 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
 
   useEffect(() => {
     loadVendors();
+
+    // Listen for vendor updates from QuickAddVendorModal
+    const handleVendorsUpdated = () => {
+      console.log('Vendors updated event received');
+      loadVendors();
+    };
+
+    window.addEventListener('vendorsUpdated', handleVendorsUpdated);
+
+    return () => {
+      window.removeEventListener('vendorsUpdated', handleVendorsUpdated);
+    };
   }, []);
 
   const loadVendors = async () => {
@@ -53,13 +67,21 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
     try {
       const { data, error } = await supabase
         .from('vendors')
-        .select('id, name, type, currency')
+        .select('id, name, type, default_currency')
+        .eq('is_deleted', false)
+        .eq('is_active', true)
         .order('name');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading vendors:', error);
+        throw error;
+      }
+
+      console.log('Loaded vendors:', data);
       setVendors(data || []);
     } catch (error) {
       console.error('Error loading vendors:', error);
+      alert('Failed to load vendors. Please ensure the database migrations have been applied.');
     } finally {
       setLoadingVendors(false);
     }
@@ -92,7 +114,7 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
       const vendor = vendors.find(v => v.id === formData.vendor_id);
       if (!vendor) throw new Error('Vendor not found');
 
-      // 1. Create query service
+      // 1. Create query service with service_details
       const { data: service, error: serviceError } = await supabase
         .from('query_services')
         .insert({
@@ -106,7 +128,8 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
           vendor_id: formData.vendor_id,
           booking_status: 'pending',
           delivery_status: 'not_started',
-          notes: formData.notes || null
+          notes: formData.notes || null,
+          service_details: serviceDetails // Include service-specific details
         })
         .select()
         .single();
@@ -125,7 +148,7 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
           service_description: formData.service_description,
           purchase_amount_original: totalCost,
           purchase_amount_pkr: totalCost, // Will be updated by exchange rate if needed
-          currency: vendor.currency,
+          currency: vendor.default_currency,
           amount_paid: 0,
           payment_status: 'PENDING',
           transaction_type: 'SERVICE_BOOKING',
@@ -146,6 +169,8 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
   const handleVendorAdded = () => {
     setShowQuickAddVendor(false);
     loadVendors();
+    // Emit event for other components
+    window.dispatchEvent(new Event('vendorsUpdated'));
   };
 
   const profitMargin = formData.selling_price > 0
@@ -204,6 +229,15 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
               />
             </div>
 
+            {/* Service-Type-Specific Details */}
+            {formData.service_type && (
+              <ServiceDetailsForm
+                serviceType={formData.service_type}
+                details={serviceDetails}
+                onChange={setServiceDetails}
+              />
+            )}
+
             {/* Service Date and Quantity */}
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -245,10 +279,13 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
                   required
                   disabled={loadingVendors}
                 >
-                  <option value="">Select vendor...</option>
+                  <option value="">{loadingVendors ? 'Loading vendors...' : 'Select vendor...'}</option>
+                  {vendors.length === 0 && !loadingVendors && (
+                    <option value="" disabled>No vendors found - add one using "New" button</option>
+                  )}
                   {vendors.map((vendor) => (
                     <option key={vendor.id} value={vendor.id}>
-                      {vendor.name} ({vendor.type}) - {vendor.currency}
+                      {vendor.name} ({vendor.type}) - {vendor.default_currency}
                     </option>
                   ))}
                 </select>

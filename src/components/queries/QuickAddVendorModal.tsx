@@ -55,6 +55,9 @@ export default function QuickAddVendorModal({ prefilledType, onClose, onVendorAd
 
       if (error) throw error;
 
+      // Emit event for all components listening for vendor updates
+      window.dispatchEvent(new Event('vendorsUpdated'));
+
       onVendorAdded(data);
     } catch (error: any) {
       console.error('Error creating vendor:', error);
