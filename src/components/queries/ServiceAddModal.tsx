@@ -126,6 +126,7 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
           cost_price: formData.cost_price,
           selling_price: formData.selling_price,
           vendor_id: formData.vendor_id,
+          vendor: vendor.name, // Populate legacy text field for backward compatibility
           booking_status: 'pending',
           delivery_status: 'not_started',
           notes: formData.notes || null,
