@@ -139,6 +139,7 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
 
       // 2. Create vendor transaction
       const totalCost = formData.cost_price * formData.quantity;
+      const totalSellingPrice = formData.selling_price * formData.quantity;
 
       const { error: transactionError } = await supabase
         .from('vendor_transactions')
@@ -147,9 +148,13 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
           service_id: service.id,
           vendor_id: formData.vendor_id,
           service_description: formData.service_description,
+          service_type: formData.service_type,
           purchase_amount_original: totalCost,
           purchase_amount_pkr: totalCost, // Will be updated by exchange rate if needed
+          selling_amount_original: totalSellingPrice,
+          selling_amount_pkr: totalSellingPrice,
           currency: vendor.default_currency,
+          exchange_rate_to_pkr: 1.0, // Default to 1.0, will be updated if different currency
           amount_paid: 0,
           payment_status: 'PENDING',
           transaction_type: 'SERVICE_BOOKING',
