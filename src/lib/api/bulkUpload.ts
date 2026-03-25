@@ -3,6 +3,23 @@ import type {
   BulkUploadFile, BulkUploadResult, BulkUploadServiceRecord,
 } from '@/types/finance'
 
+// Map common service type names to the vendor `type` CHECK constraint values
+const VENDOR_TYPE_MAP: Record<string, string> = {
+  'hotel': 'Hotel',
+  'airline': 'Airline',
+  'flight': 'Airline',
+  'transport': 'Transport',
+  'tour': 'Tour Operator',
+  'tour operator': 'Tour Operator',
+  'visa': 'Visa Service',
+  'visa service': 'Visa Service',
+  'insurance': 'Insurance',
+}
+
+function mapVendorType(serviceType: string): string {
+  return VENDOR_TYPE_MAP[serviceType.toLowerCase()] || 'Other'
+}
+
 // ─── Validation ────────────────────────────────────────────────
 
 export function validateBulkUploadFile(data: any): { valid: boolean; errors: string[] } {
@@ -75,14 +92,18 @@ export async function preflightCheck(data: BulkUploadFile): Promise<PreflightRes
   // Check vendor — use array query, take first result
   let existingVendor: { id: string; name: string } | null = null
   try {
-    const { data: vendors } = await supabase
+    const { data: vendors, error: vendorErr } = await supabase
       .from('vendors')
       .select('id, name')
       .ilike('name', data.vendor.name)
       .eq('is_deleted', false)
       .limit(1)
 
-    existingVendor = vendors && vendors.length > 0 ? vendors[0] : null
+    if (vendorErr) {
+      console.error('Vendor lookup error:', vendorErr)
+    } else {
+      existingVendor = vendors && vendors.length > 0 ? vendors[0] : null
+    }
   } catch (err) {
     console.error('Vendor lookup error:', err)
   }
@@ -91,13 +112,14 @@ export async function preflightCheck(data: BulkUploadFile): Promise<PreflightRes
   const passengerChecks: PreflightResult['passengers'] = []
   for (const p of data.passengers) {
     try {
-      const { data: matches } = await supabase
+      const { data: matches, error: matchErr } = await supabase
         .from('passengers')
         .select('id, first_name, last_name')
         .ilike('first_name', p.first_name.trim())
         .ilike('last_name', p.last_name.trim())
         .limit(1)
 
+      if (matchErr) console.error(`Passenger lookup error for ${p.first_name}:`, matchErr)
       const existing = matches && matches.length > 0 ? matches[0] : null
 
       passengerChecks.push({
@@ -198,7 +220,7 @@ export async function executeBulkImport(
         .from('vendors')
         .insert({
           name: data.vendor.name,
-          type: data.vendor.service_types[0] || 'Other',
+          type: mapVendorType(data.vendor.service_types[0] || 'Other'),
           service_types: data.vendor.service_types,
           country: data.vendor.country || null,
           is_active: data.vendor.status === 'active',
@@ -206,7 +228,10 @@ export async function executeBulkImport(
         .select('id')
         .single()
 
-      if (vendorErr) throw new Error(`Failed to create vendor: ${vendorErr.message}`)
+      if (vendorErr) {
+        console.error('Vendor insert error:', vendorErr)
+        throw new Error(`Failed to create vendor: ${vendorErr.message}`)
+      }
       vendorId = newVendor.id
       vendorIsNew = true
     }
@@ -234,7 +259,10 @@ export async function executeBulkImport(
           .select('id')
           .single()
 
-        if (paxErr) throw new Error(`Failed to create passenger ${pax.first_name} ${pax.last_name}: ${paxErr.message}`)
+        if (paxErr) {
+          console.error('Passenger insert error:', paxErr)
+          throw new Error(`Failed to create passenger ${pax.first_name} ${pax.last_name}: ${paxErr.message}`)
+        }
         passengerMap.set(pax.ref, { id: newPax.id, name: `${pax.first_name} ${pax.last_name}`, isNew: true })
       }
     }
@@ -277,7 +305,10 @@ export async function executeBulkImport(
         .select('id, invoice_number')
         .single()
 
-      if (invErr) throw new Error(`Failed to create invoice for ${paxInfo.name}: ${invErr.message}`)
+      if (invErr) {
+        console.error('Invoice insert error:', invErr)
+        throw new Error(`Failed to create invoice for ${paxInfo.name}: ${invErr.message}`)
+      }
 
       invoiceMap.set(paxRef, {
         id: invoice.id,
@@ -314,6 +345,7 @@ export async function executeBulkImport(
         sr.notes || null,
       ].filter(Boolean).join(' | ')
 
+      // Note: `total` is a GENERATED column (quantity * unit_price * (1 + tax/100)) — do NOT insert it
       const { error: itemErr } = await supabase
         .from('invoice_items')
         .insert({
@@ -324,7 +356,6 @@ export async function executeBulkImport(
           quantity: 1,
           unit_price: sr.selling_price_pkr,
           tax_percentage: 0,
-          total: sr.selling_price_pkr,
           purchase_price: sr.purchase_price_pkr,
           selling_price: sr.selling_price_pkr,
           profit: sr.selling_price_pkr - sr.purchase_price_pkr,
