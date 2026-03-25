@@ -14,6 +14,7 @@ import TransactionLedger from '@/pages/TransactionLedger'
 import Invoices from '@/pages/Invoices'
 import InvoiceDetail from '@/pages/InvoiceDetail'
 import FinanceReports from '@/pages/FinanceReports'
+import BulkUpload from '@/pages/BulkUpload'
 import Reports from '@/pages/Reports'
 import Calendar from '@/pages/Calendar'
 import Settings from '@/pages/Settings'
@@ -60,6 +61,7 @@ function App() {
           <Route path="finance/invoices" element={<Invoices />} />
           <Route path="finance/invoices/:id" element={<InvoiceDetail />} />
           <Route path="finance/reports" element={<FinanceReports />} />
+          <Route path="finance/bulk-upload" element={<BulkUpload />} />
 
           {/* Legacy routes redirect to new finance paths */}
           <Route path="invoices" element={<Navigate to="/finance/invoices" replace />} />

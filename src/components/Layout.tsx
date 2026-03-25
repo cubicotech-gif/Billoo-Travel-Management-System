@@ -16,6 +16,7 @@ import {
   FileText,
   TrendingUp,
   ChevronDown,
+  Upload,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -40,6 +41,7 @@ const navigation: NavItem[] = [
       { name: 'Transactions', href: '/finance/transactions', icon: BookOpen },
       { name: 'Invoices', href: '/finance/invoices', icon: FileText },
       { name: 'Reports', href: '/finance/reports', icon: TrendingUp },
+      { name: 'Bulk Import', href: '/finance/bulk-upload', icon: Upload },
     ],
   },
   { name: 'Reports', href: '/reports', icon: BarChart3 },

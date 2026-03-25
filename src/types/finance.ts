@@ -281,3 +281,72 @@ export const SERVICE_TYPES = [
   'Flight', 'Hotel', 'Visa', 'Transport', 'Insurance',
   'Tour Package', 'Umrah', 'Hajj', 'Other',
 ] as const
+
+// ─── Bulk Upload ───────────────────────────────────────────────
+
+export interface BulkUploadVendor {
+  name: string
+  service_types: string[]
+  country?: string
+  status: string
+}
+
+export interface BulkUploadPassenger {
+  ref: string
+  first_name: string
+  last_name: string
+  pax_count?: number
+  gender?: string
+  country?: string
+  status: string
+}
+
+export interface BulkUploadServiceRecord {
+  row: number
+  passenger_ref: string
+  vendor: string
+  service_type: string
+  service_description: string
+  purchase_price_sar: number
+  selling_price_sar: number
+  profit_sar: number
+  conversion_rate_to_vendor: number | null
+  conversion_rate_to_passenger: number | null
+  purchase_price_pkr: number
+  selling_price_pkr: number
+  exchange_rate_profit_pkr: number
+  vendor_payment_amount_pkr: number
+  vendor_payment_date: string
+  notes?: string
+}
+
+export interface BulkUploadSummary {
+  total_vendor_payments_pkr: number
+  total_purchase_cost_sar: number
+  total_selling_price_sar: number
+  total_service_profit_sar: number
+  total_exchange_rate_profit_pkr: number
+  unique_passengers: number
+  total_service_rows: number
+  source_sheet: string
+}
+
+export interface BulkUploadFile {
+  vendor: BulkUploadVendor
+  passengers: BulkUploadPassenger[]
+  service_records: BulkUploadServiceRecord[]
+  summary: BulkUploadSummary
+}
+
+export interface BulkUploadResult {
+  success: boolean
+  vendor: { id: string; name: string; isNew: boolean }
+  passengers: { id: string; name: string; isNew: boolean; ref: string }[]
+  invoices: { id: string; invoice_number: string; passenger_name: string; amount: number }[]
+  invoice_items_count: number
+  transactions_count: number
+  total_imported_pkr: number
+  warnings: string[]
+  errors: string[]
+  import_batch_id: string
+}
