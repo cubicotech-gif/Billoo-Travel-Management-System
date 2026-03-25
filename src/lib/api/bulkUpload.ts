@@ -72,14 +72,14 @@ export interface PreflightResult {
 export async function preflightCheck(data: BulkUploadFile): Promise<PreflightResult> {
   const warnings: string[] = []
 
-  // Check vendor
+  // Check vendor — use maybeSingle() since no match is expected
   const { data: existingVendor } = await supabase
     .from('vendors')
     .select('id, name')
     .ilike('name', data.vendor.name)
     .eq('is_deleted', false)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   // Check passengers
   const passengerChecks = await Promise.all(
@@ -90,7 +90,7 @@ export async function preflightCheck(data: BulkUploadFile): Promise<PreflightRes
         .ilike('first_name', p.first_name.trim())
         .ilike('last_name', p.last_name.trim())
         .limit(1)
-        .single()
+        .maybeSingle()
 
       return {
         ref: p.ref,
