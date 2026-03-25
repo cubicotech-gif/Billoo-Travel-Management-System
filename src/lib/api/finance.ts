@@ -114,13 +114,13 @@ export async function fetchInvoiceItems(invoiceId: string): Promise<InvoiceItem[
 }
 
 export async function createInvoiceItems(invoiceId: string, items: InvoiceItemInput[]): Promise<InvoiceItem[]> {
+  // Note: `total` is a GENERATED column — do NOT insert it
   const rows = items.map(item => ({
     invoice_id: invoiceId,
     description: item.description,
     quantity: item.quantity,
     unit_price: item.unit_price,
     tax_percentage: item.tax_percentage,
-    total: item.quantity * item.unit_price * (1 + item.tax_percentage / 100),
     service_type: item.service_type,
     vendor_id: item.vendor_id,
     purchase_price: item.purchase_price,

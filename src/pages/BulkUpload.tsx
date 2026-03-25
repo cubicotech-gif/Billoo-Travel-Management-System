@@ -157,12 +157,29 @@ export default function BulkUpload() {
       message: 'Starting import...',
     })
 
-    const result = await executeBulkImport(parsedData, preflight, (progress) => {
-      setImportProgress(progress)
-    })
+    try {
+      const result = await executeBulkImport(parsedData, preflight, (progress) => {
+        setImportProgress(progress)
+      })
 
-    setImportResult(result)
-    setPageState('results')
+      setImportResult(result)
+      setPageState('results')
+    } catch (err: any) {
+      console.error('Bulk import error:', err)
+      setImportResult({
+        success: false,
+        vendor: { id: '', name: parsedData.vendor.name, isNew: false },
+        passengers: [],
+        invoices: [],
+        invoice_items_count: 0,
+        transactions_count: 0,
+        total_imported_pkr: 0,
+        warnings: [],
+        errors: [err.message || 'Unknown error during import. Check browser console for details.'],
+        import_batch_id: '',
+      })
+      setPageState('results')
+    }
   }
 
   const downloadSample = () => {
