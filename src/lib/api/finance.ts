@@ -163,31 +163,43 @@ export async function fetchInvoicePayments(invoiceId: string): Promise<Transacti
 // ─── Financial Summary ─────────────────────────────────────────
 
 export async function fetchFinancialSummary(): Promise<FinancialSummary> {
-  const [invoicesRes, vendorsRes, overdueRes] = await Promise.all([
+  // Fetch from multiple sources:
+  // - invoices: revenue, received (paid_amount), profit
+  // - transactions: vendor payments (payment_to_vendor) and client payments (payment_received)
+  // - vendors.total_* fields are populated by vendor_transactions trigger (old system)
+  //   so we also compute vendor stats from the unified transactions table
+  const [invoicesRes, vendorTxnRes, overdueRes] = await Promise.all([
     supabase.from('invoices').select('amount, paid_amount, total_cost, total_profit, status'),
-    supabase.from('vendors').select('id, name, total_business, total_paid, total_pending')
-      .eq('is_active', true).eq('is_deleted', false),
+    supabase.from('transactions').select('type, direction, amount, vendor_id')
+      .in('type', ['payment_to_vendor', 'refund_from_vendor']),
     supabase.from('invoices').select('id', { count: 'exact', head: true })
       .in('status', ['pending', 'partial', 'sent'])
       .lt('due_date', new Date().toISOString().split('T')[0]),
   ])
 
   const invoices = invoicesRes.data || []
-  const vendors = vendorsRes.data || []
+  const vendorTxns = vendorTxnRes.data || []
 
   const totalRevenue = invoices.reduce((s, i) => s + i.amount, 0)
-  const totalReceived = invoices.reduce((s, i) => s + i.paid_amount, 0)
+  const totalReceived = invoices.reduce((s, i) => s + (i.paid_amount || 0), 0)
   const totalProfit = invoices.reduce((s, i) => s + (i.total_profit || 0), 0)
-  const totalVendorPayable = vendors.reduce((s, v) => s + v.total_business, 0)
-  const totalVendorPaid = vendors.reduce((s, v) => s + v.total_paid, 0)
-  const totalVendorPending = vendors.reduce((s, v) => s + v.total_pending, 0)
+
+  // Compute vendor payables from invoice items cost, and vendor paid from transactions
+  const totalVendorCost = invoices.reduce((s, i) => s + (i.total_cost || 0), 0)
+  const totalVendorPaid = vendorTxns
+    .filter(t => t.type === 'payment_to_vendor')
+    .reduce((s, t) => s + t.amount, 0)
+  const vendorRefunds = vendorTxns
+    .filter(t => t.type === 'refund_from_vendor')
+    .reduce((s, t) => s + t.amount, 0)
+  const totalVendorPending = Math.max(0, totalVendorCost - totalVendorPaid + vendorRefunds)
 
   return {
     totalRevenue,
     totalReceived,
     totalPending: totalRevenue - totalReceived,
     totalProfit,
-    totalVendorPayable,
+    totalVendorPayable: totalVendorCost,
     totalVendorPaid,
     totalVendorPending,
     overdueInvoices: overdueRes.count || 0,
@@ -248,17 +260,51 @@ export async function fetchMonthlyRevenue(months = 6): Promise<MonthlyRevenue[]>
 // ─── Top Vendor Balances ───────────────────────────────────────
 
 export async function fetchTopVendorBalances(limit = 10) {
-  const { data, error } = await supabase
-    .from('vendors')
-    .select('id, name, total_business, total_paid, total_pending')
-    .eq('is_active', true)
-    .eq('is_deleted', false)
-    .gt('total_pending', 0)
-    .order('total_pending', { ascending: false })
-    .limit(limit)
+  // Compute vendor balances from invoice_items (cost) and transactions (payments)
+  // since the old vendor_transactions trigger doesn't populate vendors.total_* from bulk imports
+  const [vendorsRes, itemsRes, txnRes] = await Promise.all([
+    supabase.from('vendors').select('id, name').eq('is_active', true).eq('is_deleted', false),
+    supabase.from('invoice_items').select('vendor_id, purchase_price'),
+    supabase.from('transactions').select('vendor_id, amount, type')
+      .in('type', ['payment_to_vendor', 'refund_from_vendor']),
+  ])
 
-  if (error) throw error
-  return data || []
+  const vendors = vendorsRes.data || []
+  const items = itemsRes.data || []
+  const txns = txnRes.data || []
+
+  // Build per-vendor totals
+  const vendorMap = new Map<string, { id: string; name: string; total_business: number; total_paid: number; total_pending: number }>()
+
+  for (const v of vendors) {
+    vendorMap.set(v.id, { id: v.id, name: v.name, total_business: 0, total_paid: 0, total_pending: 0 })
+  }
+
+  // Sum purchase prices from invoice items per vendor
+  for (const item of items) {
+    if (!item.vendor_id) continue
+    const v = vendorMap.get(item.vendor_id)
+    if (v) v.total_business += item.purchase_price || 0
+  }
+
+  // Sum payments from transactions per vendor
+  for (const txn of txns) {
+    if (!txn.vendor_id) continue
+    const v = vendorMap.get(txn.vendor_id)
+    if (!v) continue
+    if (txn.type === 'payment_to_vendor') v.total_paid += txn.amount
+    if (txn.type === 'refund_from_vendor') v.total_paid -= txn.amount
+  }
+
+  // Calculate pending
+  for (const v of vendorMap.values()) {
+    v.total_pending = Math.max(0, v.total_business - v.total_paid)
+  }
+
+  return Array.from(vendorMap.values())
+    .filter(v => v.total_pending > 0)
+    .sort((a, b) => b.total_pending - a.total_pending)
+    .slice(0, limit)
 }
 
 // ─── Reports ───────────────────────────────────────────────────
@@ -346,32 +392,59 @@ export async function fetchReceivablesReport(): Promise<ReceivablesReport> {
 }
 
 export async function fetchPayablesReport(): Promise<PayablesReport> {
-  const { data } = await supabase
-    .from('vendors')
-    .select('id, name, total_business, total_paid, total_pending')
-    .eq('is_active', true)
-    .eq('is_deleted', false)
-    .order('total_pending', { ascending: false })
+  // Compute payables from invoice_items (cost) and transactions (vendor payments)
+  const [vendorsRes, itemsRes, txnRes] = await Promise.all([
+    supabase.from('vendors').select('id, name').eq('is_active', true).eq('is_deleted', false),
+    supabase.from('invoice_items').select('vendor_id, purchase_price'),
+    supabase.from('transactions').select('vendor_id, amount, type')
+      .in('type', ['payment_to_vendor', 'refund_from_vendor']),
+  ])
 
-  const vendors = data || []
-  const totalPayable = vendors.reduce((s, v) => s + v.total_business, 0)
-  const totalPaid = vendors.reduce((s, v) => s + v.total_paid, 0)
-  const totalOutstanding = vendors.reduce((s, v) => s + v.total_pending, 0)
+  const vendors = vendorsRes.data || []
+  const items = itemsRes.data || []
+  const txns = txnRes.data || []
 
-  return {
-    totalPayable,
-    totalPaid,
-    totalOutstanding,
-    vendorBreakdown: vendors
-      .filter(v => v.total_pending > 0)
-      .map(v => ({
+  const vendorMap = new Map<string, { id: string; name: string; business: number; paid: number }>()
+  for (const v of vendors) {
+    vendorMap.set(v.id, { id: v.id, name: v.name, business: 0, paid: 0 })
+  }
+
+  for (const item of items) {
+    if (!item.vendor_id) continue
+    const v = vendorMap.get(item.vendor_id)
+    if (v) v.business += item.purchase_price || 0
+  }
+
+  for (const txn of txns) {
+    if (!txn.vendor_id) continue
+    const v = vendorMap.get(txn.vendor_id)
+    if (!v) continue
+    if (txn.type === 'payment_to_vendor') v.paid += txn.amount
+    if (txn.type === 'refund_from_vendor') v.paid -= txn.amount
+  }
+
+  let totalPayable = 0, totalPaid = 0, totalOutstanding = 0
+  const breakdown: PayablesReport['vendorBreakdown'] = []
+
+  for (const v of vendorMap.values()) {
+    const outstanding = Math.max(0, v.business - v.paid)
+    totalPayable += v.business
+    totalPaid += v.paid
+    totalOutstanding += outstanding
+    if (outstanding > 0) {
+      breakdown.push({
         vendorId: v.id,
         vendorName: v.name,
-        totalBusiness: v.total_business,
-        totalPaid: v.total_paid,
-        outstanding: v.total_pending,
-      })),
+        totalBusiness: v.business,
+        totalPaid: v.paid,
+        outstanding,
+      })
+    }
   }
+
+  breakdown.sort((a, b) => b.outstanding - a.outstanding)
+
+  return { totalPayable, totalPaid, totalOutstanding, vendorBreakdown: breakdown }
 }
 
 export async function fetchTransactionSummary(dateFrom?: string, dateTo?: string): Promise<TransactionSummary> {

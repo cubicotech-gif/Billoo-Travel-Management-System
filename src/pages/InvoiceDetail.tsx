@@ -10,7 +10,7 @@ import { fetchInvoiceById, fetchInvoiceItems, fetchInvoicePayments, updateInvoic
 import StatusBadge from '@/components/shared/StatusBadge'
 import AmountDisplay from '@/components/shared/AmountDisplay'
 import TransactionForm from '@/components/finance/TransactionForm'
-import type { Invoice, InvoiceItem, Transaction, InvoiceStatus } from '@/types/finance'
+import type { Invoice, InvoiceInsert, InvoiceItem, Transaction, InvoiceStatus } from '@/types/finance'
 import { ALL_INVOICE_STATUSES } from '@/types/finance'
 
 export default function InvoiceDetail() {
@@ -48,8 +48,17 @@ export default function InvoiceDetail() {
     if (!invoice) return
     setUpdatingStatus(true)
     try {
-      await updateInvoice(invoice.id, { status: newStatus })
-      setInvoice({ ...invoice, status: newStatus })
+      // When marking as "paid", also set paid_amount = amount so stats reflect correctly
+      // When marking as "pending"/"draft", reset paid_amount to 0
+      const updates: Partial<InvoiceInsert> = { status: newStatus }
+      if (newStatus === 'paid') {
+        updates.paid_amount = invoice.amount
+      } else if (newStatus === 'pending' || newStatus === 'draft') {
+        updates.paid_amount = 0
+      }
+
+      await updateInvoice(invoice.id, updates)
+      setInvoice({ ...invoice, ...updates, status: newStatus })
     } catch (err) {
       console.error('Error updating status:', err)
     } finally {
