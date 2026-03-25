@@ -72,59 +72,79 @@ export interface PreflightResult {
 export async function preflightCheck(data: BulkUploadFile): Promise<PreflightResult> {
   const warnings: string[] = []
 
-  // Check vendor — use maybeSingle() since no match is expected
-  const { data: existingVendor } = await supabase
-    .from('vendors')
-    .select('id, name')
-    .ilike('name', data.vendor.name)
-    .eq('is_deleted', false)
-    .limit(1)
-    .maybeSingle()
+  // Check vendor — use array query, take first result
+  let existingVendor: { id: string; name: string } | null = null
+  try {
+    const { data: vendors } = await supabase
+      .from('vendors')
+      .select('id, name')
+      .ilike('name', data.vendor.name)
+      .eq('is_deleted', false)
+      .limit(1)
 
-  // Check passengers
-  const passengerChecks = await Promise.all(
-    data.passengers.map(async (p) => {
-      const { data: existing } = await supabase
+    existingVendor = vendors && vendors.length > 0 ? vendors[0] : null
+  } catch (err) {
+    console.error('Vendor lookup error:', err)
+  }
+
+  // Check passengers — sequential to avoid overwhelming Supabase
+  const passengerChecks: PreflightResult['passengers'] = []
+  for (const p of data.passengers) {
+    try {
+      const { data: matches } = await supabase
         .from('passengers')
         .select('id, first_name, last_name')
         .ilike('first_name', p.first_name.trim())
         .ilike('last_name', p.last_name.trim())
         .limit(1)
-        .maybeSingle()
 
-      return {
+      const existing = matches && matches.length > 0 ? matches[0] : null
+
+      passengerChecks.push({
         ref: p.ref,
         name: `${p.first_name} ${p.last_name}`,
         existingId: existing?.id,
         isExisting: !!existing,
-      }
-    })
-  )
+      })
+    } catch (err) {
+      console.error(`Passenger lookup error for ${p.first_name} ${p.last_name}:`, err)
+      passengerChecks.push({
+        ref: p.ref,
+        name: `${p.first_name} ${p.last_name}`,
+        existingId: undefined,
+        isExisting: false,
+      })
+    }
+  }
 
-  // Check for possible duplicate imports — look for invoices with same passenger + amount + vendor in notes
+  // Check for possible duplicate imports — only for existing passengers
   for (const pax of passengerChecks) {
     if (!pax.existingId) continue
 
-    const paxServices = data.service_records.filter(s => s.passenger_ref === pax.ref)
-    const totalAmount = paxServices.reduce((s, sr) => s + sr.selling_price_pkr, 0)
+    try {
+      const paxServices = data.service_records.filter(s => s.passenger_ref === pax.ref)
+      const totalAmount = paxServices.reduce((s, sr) => s + sr.selling_price_pkr, 0)
 
-    const { data: existingInvoices } = await supabase
-      .from('invoices')
-      .select('id, invoice_number, amount, notes')
-      .eq('passenger_id', pax.existingId)
-      .gte('amount', totalAmount - 1)
-      .lte('amount', totalAmount + 1)
+      const { data: existingInvoices } = await supabase
+        .from('invoices')
+        .select('id, invoice_number, amount, notes')
+        .eq('passenger_id', pax.existingId)
+        .gte('amount', totalAmount - 1)
+        .lte('amount', totalAmount + 1)
 
-    if (existingInvoices && existingInvoices.length > 0) {
-      const matchingNotes = existingInvoices.filter(inv =>
-        inv.notes && inv.notes.includes(data.vendor.name)
-      )
-      if (matchingNotes.length > 0) {
-        warnings.push(
-          `Possible duplicate: ${pax.name} already has invoice ${matchingNotes[0].invoice_number} ` +
-          `for ${formatPKR(totalAmount)} linked to ${data.vendor.name}`
+      if (existingInvoices && existingInvoices.length > 0) {
+        const matchingNotes = existingInvoices.filter(inv =>
+          inv.notes && inv.notes.includes(data.vendor.name)
         )
+        if (matchingNotes.length > 0) {
+          warnings.push(
+            `Possible duplicate: ${pax.name} already has invoice ${matchingNotes[0].invoice_number} ` +
+            `for ${formatPKR(totalAmount)} linked to ${data.vendor.name}`
+          )
+        }
       }
+    } catch (err) {
+      console.error(`Duplicate check error for ${pax.name}:`, err)
     }
   }
 

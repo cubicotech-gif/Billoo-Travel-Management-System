@@ -123,6 +123,7 @@ export default function BulkUpload() {
       setPreflight(preflightResult)
       setPageState('preview')
     } catch (err: any) {
+      console.error('Bulk upload validation error:', err)
       if (err instanceof SyntaxError) {
         setValidationErrors(['Invalid JSON format — please check the file syntax'])
       } else {
