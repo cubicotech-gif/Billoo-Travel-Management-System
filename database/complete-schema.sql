@@ -165,8 +165,14 @@ CREATE TABLE IF NOT EXISTS public.invoices (
   passenger_id UUID REFERENCES public.passengers(id) ON DELETE SET NULL,
   amount DECIMAL(10, 2) NOT NULL CHECK (amount >= 0),
   paid_amount DECIMAL(10, 2) DEFAULT 0 CHECK (paid_amount >= 0),
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'partial', 'paid')),
+  total_cost DECIMAL(12, 2) DEFAULT 0,
+  total_profit DECIMAL(12, 2) DEFAULT 0,
+  currency TEXT DEFAULT 'PKR',
+  status TEXT DEFAULT 'pending' CHECK (status IN ('draft', 'sent', 'pending', 'partial', 'paid', 'overdue', 'cancelled')),
   due_date DATE,
+  source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'auto')),
+  source_reference_id UUID,
+  source_reference_type TEXT,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -331,13 +337,50 @@ CREATE TABLE IF NOT EXISTS public.vendor_transactions (
 -- 3. SUPPORTING TABLES
 -- =====================================================
 
+-- Transactions table (unified financial ledger)
+CREATE TABLE IF NOT EXISTS public.transactions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  transaction_number TEXT UNIQUE,
+  transaction_date TIMESTAMPTZ DEFAULT NOW(),
+
+  type TEXT NOT NULL CHECK (type IN (
+    'payment_received',
+    'payment_to_vendor',
+    'refund_to_client',
+    'refund_from_vendor',
+    'expense',
+    'adjustment'
+  )),
+  direction TEXT NOT NULL CHECK (direction IN ('in', 'out')),
+
+  amount DECIMAL(12, 2) NOT NULL CHECK (amount > 0),
+  currency TEXT DEFAULT 'PKR' CHECK (currency IN ('PKR', 'SAR', 'USD', 'AED', 'EUR', 'GBP')),
+  payment_method TEXT CHECK (payment_method IN ('cash', 'bank_transfer', 'cheque', 'online', 'other')),
+  reference_number TEXT,
+
+  passenger_id UUID REFERENCES public.passengers(id) ON DELETE SET NULL,
+  vendor_id UUID REFERENCES public.vendors(id) ON DELETE SET NULL,
+  invoice_id UUID REFERENCES public.invoices(id) ON DELETE SET NULL,
+
+  source TEXT DEFAULT 'manual' CHECK (source IN ('manual', 'auto')),
+  source_reference_id UUID,
+  source_reference_type TEXT,
+
+  description TEXT,
+  receipt_url TEXT,
+  notes TEXT,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Activity Log table (audit trail)
 CREATE TABLE IF NOT EXISTS public.activities (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
-  entity_type TEXT NOT NULL CHECK (entity_type IN ('query', 'passenger', 'vendor', 'invoice', 'payment', 'document')),
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('query', 'passenger', 'vendor', 'invoice', 'payment', 'document', 'transaction')),
   entity_id UUID NOT NULL,
-  action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'deleted', 'status_changed', 'email_sent', 'payment_received')),
+  action TEXT NOT NULL CHECK (action IN ('created', 'updated', 'deleted', 'status_changed', 'email_sent', 'payment_received', 'payment_made', 'invoice_created', 'invoice_paid')),
   description TEXT NOT NULL,
   metadata JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -419,6 +462,14 @@ CREATE TABLE IF NOT EXISTS public.invoice_items (
   unit_price DECIMAL(10, 2) NOT NULL CHECK (unit_price >= 0),
   tax_percentage DECIMAL(5, 2) DEFAULT 0 CHECK (tax_percentage >= 0),
   total DECIMAL(10, 2) GENERATED ALWAYS AS (quantity * unit_price * (1 + tax_percentage / 100)) STORED,
+  service_type TEXT,
+  vendor_id UUID REFERENCES public.vendors(id) ON DELETE SET NULL,
+  purchase_price DECIMAL(12, 2) DEFAULT 0,
+  selling_price DECIMAL(12, 2) DEFAULT 0,
+  profit DECIMAL(12, 2) DEFAULT 0,
+  vendor_payment_status TEXT DEFAULT 'unpaid' CHECK (vendor_payment_status IN ('unpaid', 'partially_paid', 'paid')),
+  vendor_amount_paid DECIMAL(12, 2) DEFAULT 0,
+  notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -503,6 +554,15 @@ CREATE INDEX IF NOT EXISTS idx_communications_entity ON public.communications(en
 
 -- Invoice Items
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON public.invoice_items(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_items_vendor ON public.invoice_items(vendor_id);
+
+-- Transactions
+CREATE INDEX IF NOT EXISTS idx_transactions_date ON public.transactions(transaction_date DESC);
+CREATE INDEX IF NOT EXISTS idx_transactions_type ON public.transactions(type);
+CREATE INDEX IF NOT EXISTS idx_transactions_passenger ON public.transactions(passenger_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_vendor ON public.transactions(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_invoice ON public.transactions(invoice_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_direction ON public.transactions(direction);
 
 -- =====================================================
 -- 5. FUNCTIONS
@@ -607,6 +667,59 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql IMMUTABLE;
 
+-- Auto-generate transaction numbers
+CREATE OR REPLACE FUNCTION generate_transaction_number()
+RETURNS TRIGGER AS $$
+DECLARE
+  today_str TEXT;
+  seq_num INTEGER;
+BEGIN
+  today_str := TO_CHAR(NEW.transaction_date, 'YYYYMMDD');
+  SELECT COUNT(*) + 1 INTO seq_num
+  FROM public.transactions
+  WHERE TO_CHAR(transaction_date, 'YYYYMMDD') = today_str;
+  NEW.transaction_number := 'TXN-' || today_str || '-' || LPAD(seq_num::TEXT, 3, '0');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Auto-update invoice totals when transactions are linked
+CREATE OR REPLACE FUNCTION update_invoice_on_transaction()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_invoice_id UUID;
+  v_total_paid DECIMAL(12,2);
+  v_invoice_amount DECIMAL(12,2);
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_invoice_id := OLD.invoice_id;
+  ELSE
+    v_invoice_id := NEW.invoice_id;
+  END IF;
+
+  IF v_invoice_id IS NULL THEN RETURN NULL; END IF;
+
+  SELECT COALESCE(SUM(amount), 0) INTO v_total_paid
+  FROM public.transactions
+  WHERE invoice_id = v_invoice_id AND type = 'payment_received';
+
+  SELECT amount INTO v_invoice_amount FROM public.invoices WHERE id = v_invoice_id;
+
+  UPDATE public.invoices
+  SET
+    paid_amount = v_total_paid,
+    status = CASE
+      WHEN v_total_paid >= v_invoice_amount THEN 'paid'
+      WHEN v_total_paid > 0 THEN 'partial'
+      ELSE 'pending'
+    END,
+    updated_at = NOW()
+  WHERE id = v_invoice_id;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
 -- =====================================================
 -- 6. TRIGGERS
 -- =====================================================
@@ -660,6 +773,23 @@ DROP TRIGGER IF EXISTS update_user_preferences_updated_at ON public.user_prefere
 CREATE TRIGGER update_user_preferences_updated_at BEFORE UPDATE ON public.user_preferences
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Transaction number auto-generate trigger
+DROP TRIGGER IF EXISTS trigger_generate_txn_number ON public.transactions;
+CREATE TRIGGER trigger_generate_txn_number
+  BEFORE INSERT ON public.transactions
+  FOR EACH ROW EXECUTE FUNCTION generate_transaction_number();
+
+DROP TRIGGER IF EXISTS update_transactions_updated_at ON public.transactions;
+CREATE TRIGGER update_transactions_updated_at
+  BEFORE UPDATE ON public.transactions
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Invoice auto-update when transactions change
+DROP TRIGGER IF EXISTS trigger_update_invoice_on_transaction ON public.transactions;
+CREATE TRIGGER trigger_update_invoice_on_transaction
+  AFTER INSERT OR UPDATE OR DELETE ON public.transactions
+  FOR EACH ROW EXECUTE FUNCTION update_invoice_on_transaction();
+
 -- Vendor totals auto-update trigger
 DROP TRIGGER IF EXISTS trigger_update_vendor_totals ON public.vendor_transactions;
 CREATE TRIGGER trigger_update_vendor_totals
@@ -692,6 +822,7 @@ ALTER TABLE public.reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.communications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoice_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
 
 -- =====================================================
@@ -788,6 +919,11 @@ CREATE POLICY "Authenticated users can manage communications" ON public.communic
 -- Invoice Items
 DROP POLICY IF EXISTS "Authenticated users can manage invoice items" ON public.invoice_items;
 CREATE POLICY "Authenticated users can manage invoice items" ON public.invoice_items
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Transactions
+DROP POLICY IF EXISTS "Authenticated users can manage transactions" ON public.transactions;
+CREATE POLICY "Authenticated users can manage transactions" ON public.transactions
   FOR ALL USING (auth.role() = 'authenticated');
 
 -- User Preferences (user-scoped)

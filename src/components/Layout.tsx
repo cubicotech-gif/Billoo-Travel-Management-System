@@ -6,12 +6,14 @@ import {
   Users,
   Building2,
   FileText,
+  DollarSign,
   BarChart3,
   Calendar as CalendarIcon,
   Settings as SettingsIcon,
   LogOut,
   Menu,
   X,
+  BookOpen,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -21,6 +23,8 @@ const navigation = [
   { name: 'Passengers', href: '/passengers', icon: Users },
   { name: 'Vendors', href: '/vendors', icon: Building2 },
   { name: 'Invoices', href: '/invoices', icon: FileText },
+  { name: 'Finance', href: '/finance', icon: DollarSign },
+  { name: 'Transactions', href: '/transactions', icon: BookOpen },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Calendar', href: '/calendar', icon: CalendarIcon },
   { name: 'Settings', href: '/settings', icon: SettingsIcon },

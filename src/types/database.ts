@@ -462,5 +462,189 @@ export interface Database {
         }
       }
     }
+      invoices: {
+        Row: {
+          id: string
+          invoice_number: string
+          query_id: string | null
+          passenger_id: string | null
+          amount: number
+          paid_amount: number
+          total_cost: number
+          total_profit: number
+          currency: string
+          status: 'draft' | 'sent' | 'pending' | 'partial' | 'paid' | 'overdue' | 'cancelled'
+          due_date: string | null
+          source: 'manual' | 'auto'
+          source_reference_id: string | null
+          source_reference_type: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          invoice_number?: string
+          query_id?: string | null
+          passenger_id?: string | null
+          amount: number
+          paid_amount?: number
+          total_cost?: number
+          total_profit?: number
+          currency?: string
+          status?: 'draft' | 'sent' | 'pending' | 'partial' | 'paid' | 'overdue' | 'cancelled'
+          due_date?: string | null
+          source?: 'manual' | 'auto'
+          source_reference_id?: string | null
+          source_reference_type?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          invoice_number?: string
+          query_id?: string | null
+          passenger_id?: string | null
+          amount?: number
+          paid_amount?: number
+          total_cost?: number
+          total_profit?: number
+          currency?: string
+          status?: 'draft' | 'sent' | 'pending' | 'partial' | 'paid' | 'overdue' | 'cancelled'
+          due_date?: string | null
+          source?: 'manual' | 'auto'
+          source_reference_id?: string | null
+          source_reference_type?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      invoice_items: {
+        Row: {
+          id: string
+          invoice_id: string
+          service_id: string | null
+          description: string
+          quantity: number
+          unit_price: number
+          tax_percentage: number
+          total: number
+          service_type: string | null
+          vendor_id: string | null
+          purchase_price: number
+          selling_price: number
+          profit: number
+          vendor_payment_status: 'unpaid' | 'partially_paid' | 'paid'
+          vendor_amount_paid: number
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          invoice_id: string
+          service_id?: string | null
+          description: string
+          quantity?: number
+          unit_price: number
+          tax_percentage?: number
+          service_type?: string | null
+          vendor_id?: string | null
+          purchase_price?: number
+          selling_price?: number
+          profit?: number
+          vendor_payment_status?: 'unpaid' | 'partially_paid' | 'paid'
+          vendor_amount_paid?: number
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          invoice_id?: string
+          service_id?: string | null
+          description?: string
+          quantity?: number
+          unit_price?: number
+          tax_percentage?: number
+          service_type?: string | null
+          vendor_id?: string | null
+          purchase_price?: number
+          selling_price?: number
+          profit?: number
+          vendor_payment_status?: 'unpaid' | 'partially_paid' | 'paid'
+          vendor_amount_paid?: number
+          notes?: string | null
+          created_at?: string
+        }
+      }
+      transactions: {
+        Row: {
+          id: string
+          transaction_number: string
+          transaction_date: string
+          type: 'payment_received' | 'payment_to_vendor' | 'refund_to_client' | 'refund_from_vendor' | 'expense' | 'adjustment'
+          direction: 'in' | 'out'
+          amount: number
+          currency: string
+          payment_method: 'cash' | 'bank_transfer' | 'cheque' | 'online' | 'other' | null
+          reference_number: string | null
+          passenger_id: string | null
+          vendor_id: string | null
+          invoice_id: string | null
+          source: 'manual' | 'auto'
+          source_reference_id: string | null
+          source_reference_type: string | null
+          description: string | null
+          receipt_url: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          transaction_number?: string
+          transaction_date?: string
+          type: 'payment_received' | 'payment_to_vendor' | 'refund_to_client' | 'refund_from_vendor' | 'expense' | 'adjustment'
+          direction: 'in' | 'out'
+          amount: number
+          currency?: string
+          payment_method?: 'cash' | 'bank_transfer' | 'cheque' | 'online' | 'other' | null
+          reference_number?: string | null
+          passenger_id?: string | null
+          vendor_id?: string | null
+          invoice_id?: string | null
+          source?: 'manual' | 'auto'
+          source_reference_id?: string | null
+          source_reference_type?: string | null
+          description?: string | null
+          receipt_url?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          transaction_number?: string
+          transaction_date?: string
+          type?: 'payment_received' | 'payment_to_vendor' | 'refund_to_client' | 'refund_from_vendor' | 'expense' | 'adjustment'
+          direction?: 'in' | 'out'
+          amount?: number
+          currency?: string
+          payment_method?: 'cash' | 'bank_transfer' | 'cheque' | 'online' | 'other' | null
+          reference_number?: string | null
+          passenger_id?: string | null
+          vendor_id?: string | null
+          invoice_id?: string | null
+          source?: 'manual' | 'auto'
+          source_reference_id?: string | null
+          source_reference_type?: string | null
+          description?: string | null
+          receipt_url?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
   }
 }
