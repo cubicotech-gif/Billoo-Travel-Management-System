@@ -8,6 +8,7 @@ import QueryWorkspace from '@/components/queries/QueryWorkspace'
 import Passengers from '@/pages/Passengers'
 import PassengerProfile from '@/pages/PassengerProfile'
 import Vendors from '@/pages/Vendors'
+import VendorProfile360 from '@/pages/VendorProfile360'
 import Invoices from '@/pages/Invoices'
 import Reports from '@/pages/Reports'
 import Calendar from '@/pages/Calendar'
@@ -47,6 +48,7 @@ function App() {
           <Route path="passengers" element={<Passengers />} />
           <Route path="passengers/:id" element={<PassengerProfile />} />
           <Route path="vendors" element={<Vendors />} />
+          <Route path="vendors/:id" element={<VendorProfile360 />} />
           <Route path="invoices" element={<Invoices />} />
           <Route path="reports" element={<Reports />} />
           <Route path="calendar" element={<Calendar />} />

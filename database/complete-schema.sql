@@ -137,6 +137,12 @@ CREATE TABLE IF NOT EXISTS public.vendors (
   total_pending DECIMAL(12, 2) DEFAULT 0,
   total_profit DECIMAL(12, 2) DEFAULT 0,
 
+  -- Multi-type support & location
+  service_types TEXT[] DEFAULT '{}',
+  location TEXT,
+  country TEXT,
+  tags TEXT[] DEFAULT '{}',
+
   -- Status
   is_active BOOLEAN DEFAULT TRUE,
   is_deleted BOOLEAN DEFAULT FALSE,
@@ -145,6 +151,11 @@ CREATE TABLE IF NOT EXISTS public.vendors (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Vendor indexes
+CREATE INDEX IF NOT EXISTS idx_vendors_service_types ON public.vendors USING GIN (service_types);
+CREATE INDEX IF NOT EXISTS idx_vendors_tags ON public.vendors USING GIN (tags);
+CREATE INDEX IF NOT EXISTS idx_vendors_is_active ON public.vendors (is_active);
 
 -- Invoices table
 CREATE TABLE IF NOT EXISTS public.invoices (

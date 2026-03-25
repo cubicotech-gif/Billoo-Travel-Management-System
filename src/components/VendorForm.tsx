@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { X, AlertCircle } from 'lucide-react'
+import { X, AlertCircle, Plus, Tag } from 'lucide-react'
 import { Database } from '@/types/database'
 
 type Vendor = Database['public']['Tables']['vendors']['Row']
@@ -33,19 +33,25 @@ const PAYMENT_METHODS = [
 export default function VendorForm({ vendor, onSuccess, onCancel }: VendorFormProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [tagInput, setTagInput] = useState('')
   const [formData, setFormData] = useState<VendorInsert>({
     name: '',
     type: 'Hotel',
+    service_types: [],
     contact_person: '',
     phone: '',
     whatsapp_number: '',
     email: '',
     address: '',
+    location: '',
+    country: '',
+    tags: [],
     bank_name: '',
     account_number: '',
     iban: '',
     swift_code: '',
     credit_days: 0,
+    credit_limit: 0,
     payment_method_preference: '',
     notes: '',
     is_active: true,
@@ -57,22 +63,55 @@ export default function VendorForm({ vendor, onSuccess, onCancel }: VendorFormPr
       setFormData({
         name: vendor.name,
         type: vendor.type,
+        service_types: vendor.service_types?.length ? vendor.service_types : [vendor.type],
         contact_person: vendor.contact_person || '',
         phone: vendor.phone || '',
         whatsapp_number: vendor.whatsapp_number || '',
         email: vendor.email || '',
         address: vendor.address || '',
+        location: vendor.location || '',
+        country: vendor.country || '',
+        tags: vendor.tags || [],
         bank_name: vendor.bank_name || '',
         account_number: vendor.account_number || '',
         iban: vendor.iban || '',
         swift_code: vendor.swift_code || '',
         credit_days: vendor.credit_days,
+        credit_limit: vendor.credit_limit,
         payment_method_preference: vendor.payment_method_preference || '',
         notes: vendor.notes || '',
         is_active: vendor.is_active
       })
     }
   }, [vendor])
+
+  const handleServiceTypeToggle = (type: string) => {
+    const current = formData.service_types || []
+    if (current.includes(type)) {
+      setFormData({ ...formData, service_types: current.filter(t => t !== type) })
+    } else {
+      setFormData({ ...formData, service_types: [...current, type] })
+    }
+  }
+
+  const handleAddTag = () => {
+    const tag = tagInput.trim()
+    if (tag && !(formData.tags || []).includes(tag)) {
+      setFormData({ ...formData, tags: [...(formData.tags || []), tag] })
+    }
+    setTagInput('')
+  }
+
+  const handleRemoveTag = (tag: string) => {
+    setFormData({ ...formData, tags: (formData.tags || []).filter(t => t !== tag) })
+  }
+
+  const handleTagKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      handleAddTag()
+    }
+  }
 
   const validateForm = (): boolean => {
     if (!formData.name || formData.name.trim().length < 2) {
@@ -124,33 +163,39 @@ export default function VendorForm({ vendor, onSuccess, onCancel }: VendorFormPr
     setLoading(true)
 
     try {
-      // Clean up the data - convert empty strings to null for optional fields
+      const serviceTypes = (formData.service_types || []).length > 0
+        ? formData.service_types
+        : [formData.type]
+
       const cleanedData: VendorInsert = {
         ...formData,
+        service_types: serviceTypes,
         contact_person: formData.contact_person?.trim() || null,
         phone: formData.phone?.trim() || null,
         whatsapp_number: formData.whatsapp_number?.trim() || null,
         email: formData.email?.trim() || null,
         address: formData.address?.trim() || null,
+        location: (formData.location as string)?.trim() || null,
+        country: (formData.country as string)?.trim() || null,
+        tags: formData.tags || [],
         bank_name: formData.bank_name?.trim() || null,
         account_number: formData.account_number?.trim() || null,
         iban: formData.iban?.trim() || null,
         swift_code: formData.swift_code?.trim() || null,
         payment_method_preference: formData.payment_method_preference?.trim() || null,
         notes: formData.notes?.trim() || null,
-        credit_days: Number(formData.credit_days) || 0
+        credit_days: Number(formData.credit_days) || 0,
+        credit_limit: Number(formData.credit_limit) || 0
       }
 
       let result
 
       if (vendor) {
-        // Update existing vendor
         result = await supabase
           .from('vendors')
           .update(cleanedData)
           .eq('id', vendor.id)
       } else {
-        // Insert new vendor
         result = await supabase
           .from('vendors')
           .insert([cleanedData])
@@ -223,7 +268,7 @@ export default function VendorForm({ vendor, onSuccess, onCancel }: VendorFormPr
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Vendor Type <span className="text-red-500">*</span>
+                      Primary Type <span className="text-red-500">*</span>
                     </label>
                     <select
                       required
@@ -250,6 +295,33 @@ export default function VendorForm({ vendor, onSuccess, onCancel }: VendorFormPr
                       className="input"
                       placeholder="e.g., John Doe"
                     />
+                  </div>
+
+                  {/* Service Types Multi-Select */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Service Types
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {VENDOR_TYPES.map(type => {
+                        const isSelected = (formData.service_types || []).includes(type)
+                        return (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => handleServiceTypeToggle(type)}
+                            className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                              isSelected
+                                ? 'bg-purple-100 text-purple-800 border-purple-300'
+                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                            }`}
+                          >
+                            {type}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">Select all service types this vendor provides</p>
                   </div>
 
                   <div>
@@ -294,6 +366,32 @@ export default function VendorForm({ vendor, onSuccess, onCancel }: VendorFormPr
                     />
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Location / City
+                    </label>
+                    <input
+                      type="text"
+                      value={(formData.location as string) || ''}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      className="input"
+                      placeholder="e.g., Lahore, Makkah, Dubai"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Country
+                    </label>
+                    <input
+                      type="text"
+                      value={(formData.country as string) || ''}
+                      onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                      className="input"
+                      placeholder="e.g., Pakistan, Saudi Arabia, UAE"
+                    />
+                  </div>
+
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Address
@@ -303,8 +401,48 @@ export default function VendorForm({ vendor, onSuccess, onCancel }: VendorFormPr
                       value={formData.address || ''}
                       onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                       className="input"
-                      placeholder="Full address including city and country"
+                      placeholder="Full address"
                     />
+                  </div>
+
+                  {/* Tags */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Tags</label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {(formData.tags || []).map(tag => (
+                        <span
+                          key={tag}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-sm bg-purple-100 text-purple-800"
+                        >
+                          <Tag className="w-3 h-3 mr-1" />
+                          {tag}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveTag(tag)}
+                            className="ml-1 text-purple-600 hover:text-purple-800"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={handleTagKeyDown}
+                        className="input flex-1"
+                        placeholder="Add a tag and press Enter"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddTag}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -395,6 +533,23 @@ export default function VendorForm({ vendor, onSuccess, onCancel }: VendorFormPr
                     />
                     <p className="mt-1 text-xs text-gray-500">
                       Payment credit period (days). e.g., 30 means payment due in 30 days
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Credit Limit (PKR)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.credit_limit}
+                      onChange={(e) => setFormData({ ...formData, credit_limit: parseFloat(e.target.value) || 0 })}
+                      className="input"
+                      placeholder="0"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      Maximum outstanding amount allowed. 0 = no limit
                     </p>
                   </div>
 

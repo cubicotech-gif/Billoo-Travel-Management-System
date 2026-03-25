@@ -288,6 +288,10 @@ export interface Database {
           payment_method_preference: string | null
           credit_limit: number
           payment_terms: number
+          service_types: string[]
+          location: string | null
+          country: string | null
+          tags: string[]
           is_active: boolean
           is_deleted: boolean
           total_business: number
@@ -320,6 +324,10 @@ export interface Database {
           payment_method_preference?: string | null
           credit_limit?: number
           payment_terms?: number
+          service_types?: string[]
+          location?: string | null
+          country?: string | null
+          tags?: string[]
           is_active?: boolean
           is_deleted?: boolean
           total_business?: number
@@ -352,6 +360,10 @@ export interface Database {
           payment_method_preference?: string | null
           credit_limit?: number
           payment_terms?: number
+          service_types?: string[]
+          location?: string | null
+          country?: string | null
+          tags?: string[]
           is_active?: boolean
           is_deleted?: boolean
           total_business?: number
