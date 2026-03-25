@@ -1,11 +1,10 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import {
   LayoutDashboard,
   Search,
   Users,
   Building2,
-  FileText,
   DollarSign,
   BarChart3,
   Calendar as CalendarIcon,
@@ -14,17 +13,35 @@ import {
   Menu,
   X,
   BookOpen,
+  FileText,
+  TrendingUp,
+  ChevronDown,
 } from 'lucide-react'
 import { useState } from 'react'
 
-const navigation = [
+interface NavItem {
+  name: string
+  href: string
+  icon: any
+  children?: { name: string; href: string; icon: any }[]
+}
+
+const navigation: NavItem[] = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Queries', href: '/queries', icon: Search },
   { name: 'Passengers', href: '/passengers', icon: Users },
   { name: 'Vendors', href: '/vendors', icon: Building2 },
-  { name: 'Invoices', href: '/invoices', icon: FileText },
-  { name: 'Finance', href: '/finance', icon: DollarSign },
-  { name: 'Transactions', href: '/transactions', icon: BookOpen },
+  {
+    name: 'Finance',
+    href: '/finance',
+    icon: DollarSign,
+    children: [
+      { name: 'Overview', href: '/finance', icon: DollarSign },
+      { name: 'Transactions', href: '/finance/transactions', icon: BookOpen },
+      { name: 'Invoices', href: '/finance/invoices', icon: FileText },
+      { name: 'Reports', href: '/finance/reports', icon: TrendingUp },
+    ],
+  },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Calendar', href: '/calendar', icon: CalendarIcon },
   { name: 'Settings', href: '/settings', icon: SettingsIcon },
@@ -33,11 +50,83 @@ const navigation = [
 export default function Layout() {
   const { user, signOut } = useAuthStore()
   const navigate = useNavigate()
+  const location = useLocation()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [expandedSections, setExpandedSections] = useState<string[]>(['Finance'])
 
   const handleSignOut = async () => {
     await signOut()
     navigate('/login')
+  }
+
+  const toggleSection = (name: string) => {
+    setExpandedSections(prev =>
+      prev.includes(name) ? prev.filter(n => n !== name) : [...prev, name]
+    )
+  }
+
+  const isFinanceActive = location.pathname.startsWith('/finance')
+
+  const renderNavItem = (item: NavItem, mobile = false) => {
+    if (item.children) {
+      const isExpanded = expandedSections.includes(item.name) || isFinanceActive
+      return (
+        <div key={item.name}>
+          <button
+            onClick={() => toggleSection(item.name)}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+              isFinanceActive
+                ? 'text-primary-700 bg-primary-50'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <div className="flex items-center">
+              <item.icon className="w-5 h-5 flex-shrink-0 mr-3" />
+              <span>{item.name}</span>
+            </div>
+            <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+          </button>
+          {isExpanded && (
+            <div className="ml-4 mt-1 space-y-0.5">
+              {item.children.map(child => (
+                <NavLink
+                  key={child.href}
+                  to={child.href}
+                  end={child.href === '/finance'}
+                  onClick={mobile ? () => setSidebarOpen(false) : undefined}
+                  className={({ isActive }) =>
+                    `flex items-center px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                      isActive
+                        ? 'text-primary-700 bg-primary-50 font-medium'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+                    }`
+                  }
+                >
+                  <child.icon className="w-4 h-4 flex-shrink-0 mr-2.5" />
+                  <span>{child.name}</span>
+                </NavLink>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <NavLink
+        key={item.name}
+        to={item.href}
+        onClick={mobile ? () => setSidebarOpen(false) : undefined}
+        className={({ isActive }) =>
+          isActive
+            ? 'nav-item-active'
+            : 'nav-item-inactive'
+        }
+      >
+        <item.icon className="w-5 h-5 flex-shrink-0" />
+        <span>{item.name}</span>
+      </NavLink>
+    )
   }
 
   return (
@@ -73,21 +162,7 @@ export default function Layout() {
 
           {/* Mobile Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  isActive
-                    ? 'nav-item-active'
-                    : 'nav-item-inactive'
-                }
-              >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
-                <span>{item.name}</span>
-              </NavLink>
-            ))}
+            {navigation.map(item => renderNavItem(item, true))}
           </nav>
 
           {/* Mobile User Section */}
@@ -125,20 +200,7 @@ export default function Layout() {
 
           {/* Desktop Navigation */}
           <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-            {navigation.map((item) => (
-              <NavLink
-                key={item.name}
-                to={item.href}
-                className={({ isActive }) =>
-                  isActive
-                    ? 'nav-item-active'
-                    : 'nav-item-inactive'
-                }
-              >
-                <item.icon className="w-5 h-5 flex-shrink-0" />
-                <span>{item.name}</span>
-              </NavLink>
-            ))}
+            {navigation.map(item => renderNavItem(item))}
           </nav>
 
           {/* Desktop User Section */}

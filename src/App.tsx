@@ -9,9 +9,11 @@ import Passengers from '@/pages/Passengers'
 import PassengerProfile from '@/pages/PassengerProfile'
 import Vendors from '@/pages/Vendors'
 import VendorProfile360 from '@/pages/VendorProfile360'
-import Invoices from '@/pages/Invoices'
 import FinancialDashboard from '@/pages/FinancialDashboard'
 import TransactionLedger from '@/pages/TransactionLedger'
+import Invoices from '@/pages/Invoices'
+import InvoiceDetail from '@/pages/InvoiceDetail'
+import FinanceReports from '@/pages/FinanceReports'
 import Reports from '@/pages/Reports'
 import Calendar from '@/pages/Calendar'
 import Settings from '@/pages/Settings'
@@ -51,9 +53,18 @@ function App() {
           <Route path="passengers/:id" element={<PassengerProfile />} />
           <Route path="vendors" element={<Vendors />} />
           <Route path="vendors/:id" element={<VendorProfile360 />} />
-          <Route path="invoices" element={<Invoices />} />
+
+          {/* Finance Module — nested under /finance */}
           <Route path="finance" element={<FinancialDashboard />} />
-          <Route path="transactions" element={<TransactionLedger />} />
+          <Route path="finance/transactions" element={<TransactionLedger />} />
+          <Route path="finance/invoices" element={<Invoices />} />
+          <Route path="finance/invoices/:id" element={<InvoiceDetail />} />
+          <Route path="finance/reports" element={<FinanceReports />} />
+
+          {/* Legacy routes redirect to new finance paths */}
+          <Route path="invoices" element={<Navigate to="/finance/invoices" replace />} />
+          <Route path="transactions" element={<Navigate to="/finance/transactions" replace />} />
+
           <Route path="reports" element={<Reports />} />
           <Route path="calendar" element={<Calendar />} />
           <Route path="settings" element={<Settings />} />

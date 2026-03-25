@@ -1,60 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
-import { formatCurrency } from '@/lib/formatCurrency'
 import {
   Plus, Search, X, Filter, DollarSign, ArrowDownLeft, ArrowUpRight,
-  FileText, Loader, Calendar
+  FileText, Loader
 } from 'lucide-react'
-import { format } from 'date-fns'
-import RecordTransaction from '@/components/RecordTransaction'
-
-interface Transaction {
-  id: string
-  transaction_number: string
-  transaction_date: string
-  type: string
-  direction: 'in' | 'out'
-  amount: number
-  currency: string
-  payment_method: string | null
-  reference_number: string | null
-  passenger_id: string | null
-  vendor_id: string | null
-  invoice_id: string | null
-  description: string | null
-  notes: string | null
-  created_at: string
-  passengers?: any
-  vendors?: any
-  invoices?: any
-}
-
-const TYPE_LABELS: Record<string, string> = {
-  payment_received: 'Payment Received',
-  payment_to_vendor: 'Payment to Vendor',
-  refund_to_client: 'Refund to Client',
-  refund_from_vendor: 'Refund from Vendor',
-  expense: 'Expense',
-  adjustment: 'Adjustment',
-}
-
-const TYPE_COLORS: Record<string, string> = {
-  payment_received: 'bg-green-100 text-green-800',
-  payment_to_vendor: 'bg-red-100 text-red-800',
-  refund_to_client: 'bg-orange-100 text-orange-800',
-  refund_from_vendor: 'bg-blue-100 text-blue-800',
-  expense: 'bg-gray-100 text-gray-800',
-  adjustment: 'bg-purple-100 text-purple-800',
-}
-
-const METHOD_LABELS: Record<string, string> = {
-  cash: 'Cash',
-  bank_transfer: 'Bank Transfer',
-  cheque: 'Cheque',
-  online: 'Online',
-  other: 'Other',
-}
+import { formatCurrency } from '@/lib/formatCurrency'
+import { fetchTransactions } from '@/lib/api/finance'
+import LedgerTable from '@/components/finance/LedgerTable'
+import TransactionForm from '@/components/finance/TransactionForm'
+import type { Transaction } from '@/types/finance'
+import { TRANSACTION_TYPE_CONFIG } from '@/types/finance'
 
 export default function TransactionLedger() {
   const [transactions, setTransactions] = useState<Transaction[]>([])
@@ -75,19 +29,8 @@ export default function TransactionLedger() {
 
   const loadTransactions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select(`
-          *,
-          passengers:passenger_id (first_name, last_name),
-          vendors:vendor_id (name),
-          invoices:invoice_id (invoice_number)
-        `)
-        .order('transaction_date', { ascending: false })
-        .limit(500)
-
-      if (error) throw error
-      setTransactions(data || [])
+      const data = await fetchTransactions(500)
+      setTransactions(data)
     } catch (error) {
       console.error('Error loading transactions:', error)
     } finally {
@@ -120,17 +63,6 @@ export default function TransactionLedger() {
 
   const hasActiveFilters = filterType || filterDirection || filterDateFrom || filterDateTo
   const clearFilters = () => { setFilterType(''); setFilterDirection(''); setFilterDateFrom(''); setFilterDateTo('') }
-
-  // Running balance calculation (chronological order)
-  const sortedForBalance = [...filtered].sort((a, b) =>
-    new Date(a.transaction_date).getTime() - new Date(b.transaction_date).getTime()
-  )
-  const balanceMap = new Map<string, number>()
-  let runBal = 0
-  sortedForBalance.forEach(txn => {
-    runBal += txn.direction === 'in' ? txn.amount : -txn.amount
-    balanceMap.set(txn.id, runBal)
-  })
 
   if (loading) {
     return (
@@ -218,7 +150,9 @@ export default function TransactionLedger() {
               <label className="block text-xs font-medium text-gray-600 mb-1">Type</label>
               <select value={filterType} onChange={e => setFilterType(e.target.value)} className="input text-sm">
                 <option value="">All Types</option>
-                {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                {Object.entries(TRANSACTION_TYPE_CONFIG).map(([k, v]) => (
+                  <option key={k} value={k}>{v.label}</option>
+                ))}
               </select>
             </div>
             <div>
@@ -254,90 +188,13 @@ export default function TransactionLedger() {
             <p className="text-gray-600">No transactions found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Txn #</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Party</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">In</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Out</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Balance</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {filtered.map(txn => (
-                  <tr key={txn.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Calendar className="w-3 h-3 text-gray-400 mr-1" />
-                        {format(new Date(txn.transaction_date), 'MMM d, yyyy')}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm font-mono text-gray-600">{txn.transaction_number}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[txn.type] || 'bg-gray-100 text-gray-800'}`}>
-                        {TYPE_LABELS[txn.type] || txn.type}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">
-                      {txn.description || '—'}
-                      {txn.payment_method && (
-                        <span className="text-xs text-gray-500 ml-1">({METHOD_LABELS[txn.payment_method] || txn.payment_method})</span>
-                      )}
-                      {txn.reference_number && (
-                        <span className="text-xs text-gray-400 ml-1">Ref: {txn.reference_number}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {txn.passengers && (
-                        <Link to={`/passengers/${txn.passenger_id}`} className="text-primary-600 hover:text-primary-800">
-                          {txn.passengers.first_name} {txn.passengers.last_name}
-                        </Link>
-                      )}
-                      {txn.vendors && (
-                        <Link to={`/vendors/${txn.vendor_id}`} className="text-purple-600 hover:text-purple-800">
-                          {txn.vendors.name}
-                        </Link>
-                      )}
-                      {!txn.passengers && !txn.vendors && <span className="text-gray-400">—</span>}
-                      {txn.invoices && (
-                        <span className="block text-xs text-gray-400">Invoice: {txn.invoices.invoice_number}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-medium">
-                      {txn.direction === 'in' ? (
-                        <span className="text-green-600">{formatCurrency(txn.amount)}</span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-medium">
-                      {txn.direction === 'out' ? (
-                        <span className="text-red-600">{formatCurrency(txn.amount)}</span>
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-medium">
-                      <span className={(balanceMap.get(txn.id) || 0) >= 0 ? 'text-blue-700' : 'text-orange-700'}>
-                        {formatCurrency(Math.abs(balanceMap.get(txn.id) || 0))}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <LedgerTable transactions={filtered} showBalance />
         )}
       </div>
 
       {/* Record Transaction Modal */}
       {showRecordModal && (
-        <RecordTransaction
+        <TransactionForm
           onSuccess={() => {
             setShowRecordModal(false)
             loadTransactions()

@@ -1,144 +1,38 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { supabase } from '@/lib/supabase'
-import { formatCurrency } from '@/lib/formatCurrency'
+import { useNavigate } from 'react-router-dom'
 import {
   Plus, Search, FileText, Calendar, DollarSign, X, Filter,
-  AlertCircle, Loader, TrendingUp
+  Loader, TrendingUp
 } from 'lucide-react'
 import { format } from 'date-fns'
-
-interface Invoice {
-  id: string
-  invoice_number: string
-  query_id: string | null
-  passenger_id: string | null
-  amount: number
-  paid_amount: number
-  total_cost: number
-  total_profit: number
-  currency: string
-  status: string
-  due_date: string | null
-  notes: string | null
-  created_at: string
-  queries?: any
-  passengers?: any
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-800',
-  sent: 'bg-blue-100 text-blue-800',
-  pending: 'bg-yellow-100 text-yellow-800',
-  partial: 'bg-orange-100 text-orange-800',
-  paid: 'bg-green-100 text-green-800',
-  overdue: 'bg-red-100 text-red-800',
-  cancelled: 'bg-gray-100 text-gray-500',
-}
-
-const ALL_STATUSES = ['draft', 'sent', 'pending', 'partial', 'paid', 'overdue', 'cancelled']
+import { formatCurrency } from '@/lib/formatCurrency'
+import { fetchInvoices } from '@/lib/api/finance'
+import StatusBadge from '@/components/shared/StatusBadge'
+import InvoiceForm from '@/components/finance/InvoiceForm'
+import type { Invoice } from '@/types/finance'
+import { ALL_INVOICE_STATUSES } from '@/types/finance'
 
 export default function Invoices() {
+  const navigate = useNavigate()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [filterStatus, setFilterStatus] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  // Passenger & query options for create form
-  const [passengerOptions, setPassengerOptions] = useState<{ id: string; first_name: string; last_name: string }[]>([])
-  const [queryOptions, setQueryOptions] = useState<{ id: string; query_number: string; client_name: string }[]>([])
-
-  const [formData, setFormData] = useState({
-    amount: '',
-    paid_amount: '0',
-    total_cost: '0',
-    status: 'pending' as string,
-    due_date: '',
-    currency: 'PKR',
-    passenger_id: '',
-    query_id: '',
-    notes: '',
-  })
 
   useEffect(() => {
     loadInvoices()
-    loadOptions()
   }, [])
 
   const loadInvoices = async () => {
     try {
-      const { data, error } = await supabase
-        .from('invoices')
-        .select(`
-          *,
-          queries:query_id (query_number, client_name),
-          passengers:passenger_id (first_name, last_name)
-        `)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-      setInvoices(data || [])
+      const data = await fetchInvoices()
+      setInvoices(data)
     } catch (error) {
       console.error('Error loading invoices:', error)
     } finally {
       setLoading(false)
-    }
-  }
-
-  const loadOptions = async () => {
-    const [pRes, qRes] = await Promise.all([
-      supabase.from('passengers').select('id, first_name, last_name').eq('status', 'active').order('first_name'),
-      supabase.from('queries').select('id, query_number, client_name').order('created_at', { ascending: false }).limit(100),
-    ])
-    setPassengerOptions(pRes.data || [])
-    setQueryOptions(qRes.data || [])
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-
-    const amount = parseFloat(formData.amount)
-    if (isNaN(amount) || amount <= 0) {
-      setError('Amount must be greater than 0')
-      return
-    }
-
-    setSaving(true)
-    try {
-      const totalCost = parseFloat(formData.total_cost) || 0
-      const totalProfit = amount - totalCost
-
-      const { error: insertErr } = await supabase.from('invoices').insert({
-        amount,
-        paid_amount: parseFloat(formData.paid_amount) || 0,
-        total_cost: totalCost,
-        total_profit: totalProfit,
-        currency: formData.currency,
-        status: formData.status,
-        due_date: formData.due_date || null,
-        passenger_id: formData.passenger_id || null,
-        query_id: formData.query_id || null,
-        notes: formData.notes.trim() || null,
-      })
-
-      if (insertErr) throw insertErr
-
-      setShowModal(false)
-      setFormData({
-        amount: '', paid_amount: '0', total_cost: '0', status: 'pending',
-        due_date: '', currency: 'PKR', passenger_id: '', query_id: '', notes: '',
-      })
-      loadInvoices()
-    } catch (err: any) {
-      console.error('Error creating invoice:', err)
-      setError(err.message || 'Failed to create invoice')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -255,11 +149,11 @@ export default function Invoices() {
                 !filterStatus ? 'bg-primary-100 text-primary-800 border-primary-300' : 'bg-white text-gray-600 border-gray-300'
               }`}
             >All</button>
-            {ALL_STATUSES.map(s => (
+            {ALL_INVOICE_STATUSES.map(s => (
               <button
                 key={s}
                 onClick={() => setFilterStatus(s)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors capitalize ${
                   filterStatus === s ? 'bg-primary-100 text-primary-800 border-primary-300' : 'bg-white text-gray-600 border-gray-300'
                 }`}
               >{s}</button>
@@ -295,23 +189,27 @@ export default function Invoices() {
                   const balance = inv.amount - inv.paid_amount
                   const isOverdue = inv.due_date && new Date(inv.due_date) < new Date() && inv.status !== 'paid' && inv.status !== 'cancelled'
                   return (
-                    <tr key={inv.id} className="hover:bg-gray-50">
+                    <tr
+                      key={inv.id}
+                      className="hover:bg-gray-50 cursor-pointer"
+                      onClick={() => navigate(`/finance/invoices/${inv.id}`)}
+                    >
                       <td className="px-4 py-3">
                         <div className="flex items-center">
                           <FileText className="w-4 h-4 text-gray-400 mr-2" />
-                          <span className="font-medium text-gray-900">{inv.invoice_number}</span>
+                          <span className="font-medium text-primary-600 hover:text-primary-800">{inv.invoice_number}</span>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-sm">
                         {inv.passengers && (
-                          <Link to={`/passengers/${inv.passenger_id}`} className="text-primary-600 hover:text-primary-800 font-medium">
+                          <span className="text-gray-900 font-medium">
                             {inv.passengers.first_name} {inv.passengers.last_name}
-                          </Link>
+                          </span>
                         )}
                         {inv.queries && (
-                          <Link to={`/queries/${inv.query_id}`} className="block text-xs text-gray-500 hover:text-gray-700">
+                          <span className="block text-xs text-gray-500">
                             {inv.queries.query_number}
-                          </Link>
+                          </span>
                         )}
                         {!inv.passengers && !inv.queries && <span className="text-gray-400">—</span>}
                       </td>
@@ -326,11 +224,7 @@ export default function Invoices() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          isOverdue ? 'bg-red-100 text-red-800' : STATUS_COLORS[inv.status] || STATUS_COLORS.pending
-                        }`}>
-                          {isOverdue ? 'overdue' : inv.status}
-                        </span>
+                        <StatusBadge status={isOverdue ? 'overdue' : inv.status} type="invoice" />
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
                         {inv.due_date ? (
@@ -351,111 +245,13 @@ export default function Invoices() {
 
       {/* Create Invoice Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowModal(false)} />
-
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-              <form onSubmit={handleSubmit}>
-                <div className="bg-primary-600 px-6 py-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-semibold text-white">Create New Invoice</h3>
-                    <button type="button" onClick={() => setShowModal(false)} className="text-white hover:text-gray-200"><X className="w-6 h-6" /></button>
-                  </div>
-                </div>
-
-                {error && (
-                  <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-start">
-                    <AlertCircle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0" />
-                    <p className="text-sm text-red-800">{error}</p>
-                  </div>
-                )}
-
-                <div className="px-6 py-4 max-h-[calc(100vh-250px)] overflow-y-auto space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Selling Amount (Revenue) *</label>
-                      <input
-                        type="number" required min="0" step="0.01"
-                        value={formData.amount}
-                        onChange={e => setFormData({ ...formData, amount: e.target.value })}
-                        className="input" placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Cost Amount</label>
-                      <input
-                        type="number" min="0" step="0.01"
-                        value={formData.total_cost}
-                        onChange={e => setFormData({ ...formData, total_cost: e.target.value })}
-                        className="input" placeholder="0.00"
-                      />
-                      {formData.amount && formData.total_cost && (
-                        <p className="text-xs text-purple-600 mt-1">
-                          Profit: {formatCurrency((parseFloat(formData.amount) || 0) - (parseFloat(formData.total_cost) || 0))}
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Paid Amount</label>
-                      <input
-                        type="number" min="0" step="0.01"
-                        value={formData.paid_amount}
-                        onChange={e => setFormData({ ...formData, paid_amount: e.target.value })}
-                        className="input" placeholder="0.00"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                      <select value={formData.currency} onChange={e => setFormData({ ...formData, currency: e.target.value })} className="input">
-                        {['PKR', 'SAR', 'USD', 'AED', 'EUR', 'GBP'].map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                      <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })} className="input">
-                        {ALL_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
-                      <input type="date" value={formData.due_date} onChange={e => setFormData({ ...formData, due_date: e.target.value })} className="input" />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Passenger</label>
-                      <select value={formData.passenger_id} onChange={e => setFormData({ ...formData, passenger_id: e.target.value })} className="input">
-                        <option value="">None</option>
-                        {passengerOptions.map(p => (
-                          <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Query</label>
-                      <select value={formData.query_id} onChange={e => setFormData({ ...formData, query_id: e.target.value })} className="input">
-                        <option value="">None</option>
-                        {queryOptions.map(q => (
-                          <option key={q.id} value={q.id}>{q.query_number} — {q.client_name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                    <textarea rows={2} value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} className="input" />
-                  </div>
-                </div>
-
-                <div className="bg-gray-50 px-6 py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                  <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary" disabled={saving}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" disabled={saving}>
-                    {saving ? <><Loader className="w-4 h-4 mr-2 animate-spin" /> Creating...</> : 'Create Invoice'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
+        <InvoiceForm
+          onSuccess={() => {
+            setShowModal(false)
+            loadInvoices()
+          }}
+          onCancel={() => setShowModal(false)}
+        />
       )}
     </div>
   )
