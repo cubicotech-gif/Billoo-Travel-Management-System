@@ -3,7 +3,7 @@ import { CreditCard, Upload, ExternalLink, Building2 } from 'lucide-react';
 import { QueryService } from '../../types/query-workflow';
 import { supabase } from '../../lib/supabase';
 import BookingStatusBadge from './BookingStatusBadge';
-import VoucherUploadModal from './VoucherUploadModal';
+import VoucherUploadModal from './booking/VoucherUploadModal';
 import RecordPaymentModal from './RecordPaymentModal';
 
 interface Props {
@@ -77,28 +77,9 @@ export default function ServiceCardBooking({ service, index, onRefresh }: Props)
     onRefresh();
   };
 
-  const handleVoucherUploaded = async (voucherUrl: string, confirmationNumber: string) => {
-    try {
-      // Update service with voucher and mark as confirmed
-      const { error } = await supabase
-        .from('query_services')
-        .update({
-          booking_status: 'confirmed',
-          booked_date: new Date().toISOString(),
-          booking_confirmation: confirmationNumber,
-          voucher_url: voucherUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', service.id);
-
-      if (error) throw error;
-
-      await loadData();
-      onRefresh();
-    } catch (error: any) {
-      console.error('Error updating service:', error);
-      throw error;
-    }
+  const handleVoucherUploaded = async () => {
+    await loadData();
+    onRefresh();
   };
 
   const isBooked = service.booking_status === 'confirmed';
@@ -333,7 +314,10 @@ export default function ServiceCardBooking({ service, index, onRefresh }: Props)
 
       {showVoucherModal && (
         <VoucherUploadModal
-          service={service}
+          isOpen={showVoucherModal}
+          serviceId={service.id}
+          serviceName={service.service_description || ''}
+          queryId={service.query_id}
           onClose={() => setShowVoucherModal(false)}
           onSuccess={handleVoucherUploaded}
         />

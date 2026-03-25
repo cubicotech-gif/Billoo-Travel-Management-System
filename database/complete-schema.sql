@@ -1,12 +1,17 @@
--- Billoo Travel Management System - Complete Supabase Schema
--- This is the complete, corrected schema with all enhancements
--- Safe to run multiple times (idempotent)
+-- =====================================================
+-- Billoo Travel Management System - Complete Database Schema
+-- =====================================================
+-- This is the single authoritative schema for the entire system.
+-- Safe to run multiple times (idempotent).
+-- Includes all tables, indexes, triggers, RLS policies, and functions.
+-- Last updated: 2026-03-25
+-- =====================================================
 
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- =====================================================
--- CORE TABLES
+-- 1. CORE TABLES
 -- =====================================================
 
 -- Users table (extends auth.users)
@@ -19,7 +24,7 @@ CREATE TABLE IF NOT EXISTS public.users (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Queries table
+-- Queries table (10-stage workflow)
 CREATE TABLE IF NOT EXISTS public.queries (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   query_number TEXT UNIQUE DEFAULT ('QRY-' || TO_CHAR(NOW(), 'YYYYMMDD') || '-' || LPAD(FLOOR(RANDOM() * 10000)::TEXT, 4, '0')),
@@ -32,20 +37,43 @@ CREATE TABLE IF NOT EXISTS public.queries (
   adults INTEGER DEFAULT 1 CHECK (adults >= 1),
   children INTEGER DEFAULT 0 CHECK (children >= 0),
   infants INTEGER DEFAULT 0 CHECK (infants >= 0),
-  status TEXT DEFAULT 'New' CHECK (status IN ('New', 'Working', 'Quoted', 'Finalized', 'Booking', 'Issued', 'Completed')),
+  status TEXT DEFAULT 'New Query - Not Responded' CHECK (status IN (
+    'New Query - Not Responded',
+    'Responded - Awaiting Reply',
+    'Working on Proposal',
+    'Proposal Sent',
+    'Revisions Requested',
+    'Finalized & Booking',
+    'Services Booked',
+    'In Delivery',
+    'Completed',
+    'Cancelled'
+  )),
   assigned_to UUID REFERENCES public.users(id) ON DELETE SET NULL,
   notes TEXT,
+
+  -- Pricing
+  cost_price DECIMAL(10, 2) DEFAULT 0,
+  selling_price DECIMAL(10, 2) DEFAULT 0,
+  profit DECIMAL(10, 2) GENERATED ALWAYS AS (selling_price - cost_price) STORED,
+  profit_margin DECIMAL(5, 2) GENERATED ALWAYS AS (
+    CASE WHEN selling_price > 0 THEN ((selling_price - cost_price) / selling_price * 100) ELSE 0 END
+  ) STORED,
+
+  -- Proposal tracking
+  proposal_sent_date TIMESTAMPTZ,
+  finalized_date TIMESTAMPTZ,
+  completed_date TIMESTAMPTZ,
+  current_proposal_version INTEGER,
+  advance_payment_amount DECIMAL(12, 2),
+  advance_payment_date TIMESTAMPTZ,
+  customer_feedback TEXT,
+  stage_notes JSONB DEFAULT '{}'::jsonb,
+
+  -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
--- Add enhanced pricing columns to queries table
-ALTER TABLE public.queries ADD COLUMN IF NOT EXISTS cost_price DECIMAL(10, 2) DEFAULT 0;
-ALTER TABLE public.queries ADD COLUMN IF NOT EXISTS selling_price DECIMAL(10, 2) DEFAULT 0;
-ALTER TABLE public.queries ADD COLUMN IF NOT EXISTS profit DECIMAL(10, 2) GENERATED ALWAYS AS (selling_price - cost_price) STORED;
-ALTER TABLE public.queries ADD COLUMN IF NOT EXISTS profit_margin DECIMAL(5, 2) GENERATED ALWAYS AS (
-  CASE WHEN selling_price > 0 THEN ((selling_price - cost_price) / selling_price * 100) ELSE 0 END
-) STORED;
 
 -- Passengers table
 CREATE TABLE IF NOT EXISTS public.passengers (
@@ -71,22 +99,41 @@ CREATE TABLE IF NOT EXISTS public.vendors (
   contact_person TEXT,
   email TEXT,
   phone TEXT,
+  whatsapp_number TEXT,
   address TEXT,
   balance DECIMAL(10, 2) DEFAULT 0,
   rating DECIMAL(2, 1) CHECK (rating >= 0 AND rating <= 5),
   notes TEXT,
+
+  -- Banking details
+  bank_name TEXT,
+  account_number TEXT,
+  ifsc_code TEXT,
+  swift_code TEXT,
+  iban TEXT,
+  pan_number TEXT,
+  gst_number TEXT,
+
+  -- Credit & payment terms
+  credit_limit DECIMAL(10, 2) DEFAULT 0,
+  credit_days INTEGER DEFAULT 0,
+  payment_terms INTEGER DEFAULT 30,
+  payment_method_preference TEXT,
+
+  -- Accounting totals (auto-updated via trigger)
+  total_business DECIMAL(12, 2) DEFAULT 0,
+  total_paid DECIMAL(12, 2) DEFAULT 0,
+  total_pending DECIMAL(12, 2) DEFAULT 0,
+  total_profit DECIMAL(12, 2) DEFAULT 0,
+
+  -- Status
+  is_active BOOLEAN DEFAULT TRUE,
+  is_deleted BOOLEAN DEFAULT FALSE,
+
+  -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
--- Add enhanced vendor columns
-ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS bank_name TEXT;
-ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS account_number TEXT;
-ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS ifsc_code TEXT;
-ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS pan_number TEXT;
-ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS gst_number TEXT;
-ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS credit_limit DECIMAL(10, 2) DEFAULT 0;
-ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS payment_terms INTEGER DEFAULT 30;
 
 -- Invoices table
 CREATE TABLE IF NOT EXISTS public.invoices (
@@ -117,28 +164,152 @@ CREATE TABLE IF NOT EXISTS public.payments (
 );
 
 -- =====================================================
--- ENHANCED FEATURE TABLES
+-- 2. QUERY SERVICE & WORKFLOW TABLES
 -- =====================================================
 
--- Query Services table (for detailed service breakdown)
+-- Query Services table (detailed service breakdown per query)
 CREATE TABLE IF NOT EXISTS public.query_services (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   query_id UUID NOT NULL REFERENCES public.queries(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('Flight', 'Hotel', 'Visa', 'Transport', 'Tour', 'Insurance', 'Other')),
-  description TEXT NOT NULL,
-  vendor TEXT NOT NULL,
+  service_type TEXT NOT NULL CHECK (service_type IN ('Flight', 'Hotel', 'Visa', 'Transport', 'Tour', 'Insurance', 'Other')),
+  service_description TEXT NOT NULL,
+  vendor TEXT,
+  vendor_id UUID REFERENCES public.vendors(id) ON DELETE SET NULL,
+  quantity INTEGER DEFAULT 1 CHECK (quantity > 0),
+
+  -- Pricing
   cost_price DECIMAL(10, 2) DEFAULT 0 CHECK (cost_price >= 0),
   selling_price DECIMAL(10, 2) DEFAULT 0 CHECK (selling_price >= 0),
+
+  -- Booking details
   pnr TEXT,
   booking_reference TEXT,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed', 'cancelled')),
+  booking_status TEXT DEFAULT 'pending' CHECK (booking_status IN ('pending', 'payment_sent', 'confirmed', 'cancelled')),
+  booked_date DATE,
+  booking_confirmation TEXT,
+  voucher_url TEXT,
+  booking_notes TEXT,
+  payment_skipped BOOLEAN DEFAULT FALSE,
+  skip_payment_reason TEXT,
+
+  -- Delivery tracking
+  delivery_status TEXT DEFAULT 'not_started' CHECK (delivery_status IN ('not_started', 'in_progress', 'delivered', 'issue')),
+
+  -- Service-type-specific details (JSON)
+  service_details JSONB DEFAULT '{}'::jsonb,
   service_date DATE,
   notes TEXT,
+
+  -- Timestamps
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Activity Log table (for tracking all actions)
+COMMENT ON COLUMN public.query_services.service_details IS 'Service-specific details stored as JSON. Hotel: {check_in, check_out, hotel_name, room_type, rooms, meal_plan, star_rating}. Flight: {departure_date, return_date, airline, flight_number, class, from_city, to_city, baggage}. Transport: {pickup_datetime, dropoff_datetime, pickup_location, dropoff_location, vehicle_type}. Visa: {visa_type, nationality, processing_time, validity}';
+
+-- Query Proposals table (tracks all proposal versions)
+CREATE TABLE IF NOT EXISTS public.query_proposals (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  query_id UUID NOT NULL REFERENCES public.queries(id) ON DELETE CASCADE,
+  version_number INTEGER NOT NULL,
+  proposal_text TEXT NOT NULL,
+  services_snapshot JSONB NOT NULL,
+
+  -- Pricing
+  total_amount DECIMAL(12, 2) NOT NULL,
+  cost_amount DECIMAL(12, 2),
+  profit_amount DECIMAL(12, 2),
+  profit_percentage DECIMAL(5, 2),
+
+  -- Delivery
+  sent_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_via TEXT[] DEFAULT '{}',
+  validity_days INTEGER DEFAULT 7,
+  valid_until DATE,
+
+  -- Status
+  status TEXT DEFAULT 'sent' CHECK (status IN ('sent', 'accepted', 'rejected', 'revised', 'expired')),
+
+  -- Customer response
+  customer_response TEXT,
+  customer_feedback TEXT,
+  response_date TIMESTAMPTZ,
+
+  -- Metadata
+  created_by UUID REFERENCES public.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+  UNIQUE(query_id, version_number)
+);
+
+COMMENT ON TABLE public.query_proposals IS 'Tracks all proposal versions sent to customers with complete history';
+
+-- Query-Passenger junction table (many-to-many)
+CREATE TABLE IF NOT EXISTS public.query_passengers (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  query_id UUID NOT NULL REFERENCES public.queries(id) ON DELETE CASCADE,
+  passenger_id UUID NOT NULL REFERENCES public.passengers(id) ON DELETE CASCADE,
+  is_primary BOOLEAN DEFAULT FALSE,
+  passenger_type VARCHAR(20) DEFAULT 'adult' CHECK (passenger_type IN ('adult', 'child', 'infant')),
+  seat_preference VARCHAR(50),
+  meal_preference VARCHAR(50),
+  special_requirements TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(query_id, passenger_id)
+);
+
+COMMENT ON TABLE public.query_passengers IS 'Junction table linking queries to passengers with booking preferences';
+
+-- Vendor Transactions table (financial tracking)
+CREATE TABLE IF NOT EXISTS public.vendor_transactions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE RESTRICT,
+  query_id UUID NOT NULL REFERENCES public.queries(id) ON DELETE RESTRICT,
+  service_id UUID NOT NULL REFERENCES public.query_services(id) ON DELETE RESTRICT,
+  passenger_id UUID REFERENCES public.passengers(id) ON DELETE SET NULL,
+
+  -- Transaction details
+  transaction_type TEXT DEFAULT 'SERVICE_BOOKING' CHECK (transaction_type IN ('SERVICE_BOOKING', 'PAYMENT', 'REFUND', 'ADJUSTMENT')),
+  transaction_date DATE DEFAULT CURRENT_DATE NOT NULL,
+  service_description TEXT NOT NULL,
+  service_type TEXT NOT NULL,
+  city TEXT,
+
+  -- Currency & amounts
+  currency TEXT DEFAULT 'PKR' NOT NULL CHECK (currency IN ('PKR', 'SAR', 'USD', 'AED', 'EUR', 'GBP')),
+  exchange_rate_to_pkr DECIMAL(10, 4) DEFAULT 1.0 NOT NULL,
+  purchase_amount_original DECIMAL(12, 2) NOT NULL CHECK (purchase_amount_original >= 0),
+  purchase_amount_pkr DECIMAL(12, 2) NOT NULL CHECK (purchase_amount_pkr >= 0),
+  selling_amount_original DECIMAL(12, 2) NOT NULL CHECK (selling_amount_original >= 0),
+  selling_amount_pkr DECIMAL(12, 2) NOT NULL CHECK (selling_amount_pkr >= 0),
+  profit_pkr DECIMAL(12, 2) GENERATED ALWAYS AS (selling_amount_pkr - purchase_amount_pkr) STORED,
+
+  -- Payment tracking
+  payment_status TEXT DEFAULT 'PENDING' NOT NULL CHECK (payment_status IN ('PENDING', 'PAID', 'PARTIAL', 'OVERPAID', 'REFUNDED')),
+  amount_paid DECIMAL(12, 2) DEFAULT 0 CHECK (amount_paid >= 0),
+  payment_date DATE,
+  payment_method TEXT,
+  payment_reference TEXT,
+  payment_notes TEXT,
+  receipt_url TEXT,
+
+  -- Other
+  booking_reference TEXT,
+  notes TEXT,
+
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- =====================================================
+-- 3. SUPPORTING TABLES
+-- =====================================================
+
+-- Activity Log table (audit trail)
 CREATE TABLE IF NOT EXISTS public.activities (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
@@ -150,7 +321,7 @@ CREATE TABLE IF NOT EXISTS public.activities (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Documents table (for file attachments)
+-- Documents table (file attachments)
 CREATE TABLE IF NOT EXISTS public.documents (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   entity_type TEXT NOT NULL CHECK (entity_type IN ('query', 'passenger', 'vendor', 'invoice')),
@@ -166,7 +337,9 @@ CREATE TABLE IF NOT EXISTS public.documents (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Reminders table (for follow-ups and notifications)
+COMMENT ON TABLE public.documents IS 'File metadata. Files stored in Supabase Storage "documents" bucket: entity_type/entity_id/timestamp.extension';
+
+-- Reminders table
 CREATE TABLE IF NOT EXISTS public.reminders (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -214,7 +387,7 @@ CREATE TABLE IF NOT EXISTS public.communications (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Invoice Items table (for detailed line items)
+-- Invoice Items table
 CREATE TABLE IF NOT EXISTS public.invoice_items (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   invoice_id UUID NOT NULL REFERENCES public.invoices(id) ON DELETE CASCADE,
@@ -227,7 +400,7 @@ CREATE TABLE IF NOT EXISTS public.invoice_items (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- User Preferences table (CORRECTED: PRIMARY KEY before REFERENCES)
+-- User Preferences table
 CREATE TABLE IF NOT EXISTS public.user_preferences (
   user_id UUID PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
   theme TEXT DEFAULT 'light' CHECK (theme IN ('light', 'dark', 'auto')),
@@ -244,35 +417,70 @@ CREATE TABLE IF NOT EXISTS public.user_preferences (
 );
 
 -- =====================================================
--- INDEXES FOR PERFORMANCE
+-- 4. INDEXES
 -- =====================================================
 
--- Core table indexes
+-- Queries
 CREATE INDEX IF NOT EXISTS idx_queries_status ON public.queries(status);
 CREATE INDEX IF NOT EXISTS idx_queries_assigned_to ON public.queries(assigned_to);
 CREATE INDEX IF NOT EXISTS idx_queries_created_at ON public.queries(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_queries_proposal_sent_date ON public.queries(proposal_sent_date);
+CREATE INDEX IF NOT EXISTS idx_queries_completed_date ON public.queries(completed_date);
+
+-- Invoices & Payments
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices(status);
 CREATE INDEX IF NOT EXISTS idx_invoices_query_id ON public.invoices(query_id);
 CREATE INDEX IF NOT EXISTS idx_payments_invoice_id ON public.payments(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_payments_vendor_id ON public.payments(vendor_id);
 
--- Enhanced table indexes
+-- Query Services
 CREATE INDEX IF NOT EXISTS idx_query_services_query_id ON public.query_services(query_id);
+CREATE INDEX IF NOT EXISTS idx_query_services_vendor_id ON public.query_services(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_services_booking_status ON public.query_services(booking_status);
+CREATE INDEX IF NOT EXISTS idx_services_delivery_status ON public.query_services(delivery_status);
+CREATE INDEX IF NOT EXISTS idx_query_services_details ON public.query_services USING gin(service_details);
+
+-- Query Proposals
+CREATE INDEX IF NOT EXISTS idx_proposals_query ON public.query_proposals(query_id);
+CREATE INDEX IF NOT EXISTS idx_proposals_status ON public.query_proposals(status);
+CREATE INDEX IF NOT EXISTS idx_proposals_sent_date ON public.query_proposals(sent_date DESC);
+
+-- Query Passengers
+CREATE INDEX IF NOT EXISTS idx_query_passengers_query ON public.query_passengers(query_id);
+CREATE INDEX IF NOT EXISTS idx_query_passengers_passenger ON public.query_passengers(passenger_id);
+
+-- Vendor Transactions
+CREATE INDEX IF NOT EXISTS idx_vendor_trans_vendor_id ON public.vendor_transactions(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_trans_query_id ON public.vendor_transactions(query_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_trans_service_id ON public.vendor_transactions(service_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_trans_status ON public.vendor_transactions(payment_status);
+CREATE INDEX IF NOT EXISTS idx_vendor_trans_date ON public.vendor_transactions(transaction_date);
+
+-- Activities
 CREATE INDEX IF NOT EXISTS idx_activities_entity ON public.activities(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_activities_user_id ON public.activities(user_id);
 CREATE INDEX IF NOT EXISTS idx_activities_created_at ON public.activities(created_at DESC);
+
+-- Documents
 CREATE INDEX IF NOT EXISTS idx_documents_entity ON public.documents(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_documents_expiry ON public.documents(expiry_date) WHERE expiry_date IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_documents_type ON public.documents(document_type);
+
+-- Reminders
 CREATE INDEX IF NOT EXISTS idx_reminders_user ON public.reminders(user_id, due_date);
 CREATE INDEX IF NOT EXISTS idx_reminders_completed ON public.reminders(is_completed, due_date);
+
+-- Communications
 CREATE INDEX IF NOT EXISTS idx_communications_entity ON public.communications(entity_type, entity_id);
+
+-- Invoice Items
 CREATE INDEX IF NOT EXISTS idx_invoice_items_invoice ON public.invoice_items(invoice_id);
 
 -- =====================================================
--- TRIGGER FUNCTION
+-- 5. FUNCTIONS
 -- =====================================================
 
--- Updated_at trigger function
+-- Generic updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -281,11 +489,101 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Get next proposal version number for a query
+CREATE OR REPLACE FUNCTION get_next_proposal_version(p_query_id UUID)
+RETURNS INTEGER AS $$
+DECLARE
+  next_version INTEGER;
+BEGIN
+  SELECT COALESCE(MAX(version_number), 0) + 1
+  INTO next_version
+  FROM public.query_proposals
+  WHERE query_id = p_query_id;
+  RETURN next_version;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Auto-update vendor totals when transactions change
+CREATE OR REPLACE FUNCTION update_vendor_totals()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_vendor_id UUID;
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    v_vendor_id := OLD.vendor_id;
+  ELSE
+    v_vendor_id := NEW.vendor_id;
+  END IF;
+
+  UPDATE public.vendors
+  SET
+    total_business = COALESCE((
+      SELECT SUM(purchase_amount_pkr) FROM public.vendor_transactions WHERE vendor_id = v_vendor_id
+    ), 0),
+    total_paid = COALESCE((
+      SELECT SUM(amount_paid) FROM public.vendor_transactions WHERE vendor_id = v_vendor_id
+    ), 0),
+    total_pending = COALESCE((
+      SELECT SUM(purchase_amount_pkr - amount_paid)
+      FROM public.vendor_transactions
+      WHERE vendor_id = v_vendor_id AND payment_status != 'PAID'
+    ), 0),
+    total_profit = COALESCE((
+      SELECT SUM(profit_pkr) FROM public.vendor_transactions WHERE vendor_id = v_vendor_id
+    ), 0),
+    updated_at = NOW()
+  WHERE id = v_vendor_id;
+
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Sync service booking status when vendor payment is made
+CREATE OR REPLACE FUNCTION sync_service_booking_status()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.payment_status IN ('PAID', 'PARTIAL') AND (OLD.payment_status IS NULL OR OLD.payment_status NOT IN ('PAID', 'PARTIAL')) THEN
+    UPDATE public.query_services
+    SET booking_status = 'payment_sent', updated_at = NOW()
+    WHERE id = NEW.service_id;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Helper: extract readable text from service_details JSON
+CREATE OR REPLACE FUNCTION get_service_detail_text(service_details JSONB, service_type TEXT)
+RETURNS TEXT AS $$
+BEGIN
+  CASE service_type
+    WHEN 'Hotel' THEN
+      RETURN CONCAT(
+        COALESCE(service_details->>'hotel_name', ''),
+        CASE WHEN service_details->>'room_type' IS NOT NULL THEN ' - ' || service_details->>'room_type' ELSE '' END,
+        CASE WHEN service_details->>'meal_plan' IS NOT NULL THEN ' (' || service_details->>'meal_plan' || ')' ELSE '' END
+      );
+    WHEN 'Flight' THEN
+      RETURN CONCAT(
+        COALESCE(service_details->>'airline', 'Flight'),
+        CASE WHEN service_details->>'from_city' IS NOT NULL THEN ': ' || service_details->>'from_city' ELSE '' END,
+        CASE WHEN service_details->>'to_city' IS NOT NULL THEN ' → ' || service_details->>'to_city' ELSE '' END
+      );
+    WHEN 'Transport' THEN
+      RETURN CONCAT(
+        COALESCE(service_details->>'vehicle_type', 'Transport'),
+        CASE WHEN service_details->>'pickup_location' IS NOT NULL THEN ': ' || service_details->>'pickup_location' ELSE '' END
+      );
+    ELSE
+      RETURN '';
+  END CASE;
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
 -- =====================================================
--- TRIGGERS (with DROP IF EXISTS to avoid conflicts)
+-- 6. TRIGGERS
 -- =====================================================
 
--- Core table triggers
+-- Core table updated_at triggers
 DROP TRIGGER IF EXISTS update_users_updated_at ON public.users;
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -306,9 +604,20 @@ DROP TRIGGER IF EXISTS update_invoices_updated_at ON public.invoices;
 CREATE TRIGGER update_invoices_updated_at BEFORE UPDATE ON public.invoices
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Enhanced table triggers
 DROP TRIGGER IF EXISTS update_query_services_updated_at ON public.query_services;
 CREATE TRIGGER update_query_services_updated_at BEFORE UPDATE ON public.query_services
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_query_proposals_updated_at ON public.query_proposals;
+CREATE TRIGGER update_query_proposals_updated_at BEFORE UPDATE ON public.query_proposals
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_query_passengers_updated_at ON public.query_passengers;
+CREATE TRIGGER update_query_passengers_updated_at BEFORE UPDATE ON public.query_passengers
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_vendor_transactions_updated_at ON public.vendor_transactions;
+CREATE TRIGGER update_vendor_transactions_updated_at BEFORE UPDATE ON public.vendor_transactions
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 DROP TRIGGER IF EXISTS update_reminders_updated_at ON public.reminders;
@@ -323,11 +632,22 @@ DROP TRIGGER IF EXISTS update_user_preferences_updated_at ON public.user_prefere
 CREATE TRIGGER update_user_preferences_updated_at BEFORE UPDATE ON public.user_preferences
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Vendor totals auto-update trigger
+DROP TRIGGER IF EXISTS trigger_update_vendor_totals ON public.vendor_transactions;
+CREATE TRIGGER trigger_update_vendor_totals
+  AFTER INSERT OR UPDATE OR DELETE ON public.vendor_transactions
+  FOR EACH ROW EXECUTE FUNCTION update_vendor_totals();
+
+-- Sync service booking status when vendor payment changes
+DROP TRIGGER IF EXISTS trigger_sync_booking_status ON public.vendor_transactions;
+CREATE TRIGGER trigger_sync_booking_status
+  AFTER UPDATE OF payment_status ON public.vendor_transactions
+  FOR EACH ROW EXECUTE FUNCTION sync_service_booking_status();
+
 -- =====================================================
--- ROW LEVEL SECURITY (RLS)
+-- 7. ROW LEVEL SECURITY (RLS)
 -- =====================================================
 
--- Enable RLS on all tables
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.queries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.passengers ENABLE ROW LEVEL SECURITY;
@@ -335,6 +655,9 @@ ALTER TABLE public.vendors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.query_services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.query_proposals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.query_passengers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.vendor_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.reminders ENABLE ROW LEVEL SECURITY;
@@ -344,225 +667,174 @@ ALTER TABLE public.invoice_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_preferences ENABLE ROW LEVEL SECURITY;
 
 -- =====================================================
--- RLS POLICIES (with DROP IF EXISTS to avoid conflicts)
+-- 8. RLS POLICIES
 -- =====================================================
 
--- Users policies
+-- Helper macro: authenticated CRUD for most tables
+-- Users
 DROP POLICY IF EXISTS "Users can view all users" ON public.users;
 CREATE POLICY "Users can view all users" ON public.users
   FOR SELECT USING (auth.role() = 'authenticated');
-
 DROP POLICY IF EXISTS "Users can update own profile" ON public.users;
 CREATE POLICY "Users can update own profile" ON public.users
   FOR UPDATE USING (auth.uid() = id);
 
--- Queries policies
-DROP POLICY IF EXISTS "All authenticated users can view queries" ON public.queries;
-CREATE POLICY "All authenticated users can view queries" ON public.queries
-  FOR SELECT USING (auth.role() = 'authenticated');
+-- Queries
+DROP POLICY IF EXISTS "Authenticated users can manage queries" ON public.queries;
+CREATE POLICY "Authenticated users can manage queries" ON public.queries
+  FOR ALL USING (auth.role() = 'authenticated');
 
-DROP POLICY IF EXISTS "All authenticated users can insert queries" ON public.queries;
-CREATE POLICY "All authenticated users can insert queries" ON public.queries
+-- Passengers
+DROP POLICY IF EXISTS "Authenticated users can manage passengers" ON public.passengers;
+CREATE POLICY "Authenticated users can manage passengers" ON public.passengers
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Vendors
+DROP POLICY IF EXISTS "Authenticated users can manage vendors" ON public.vendors;
+CREATE POLICY "Authenticated users can manage vendors" ON public.vendors
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Invoices
+DROP POLICY IF EXISTS "Authenticated users can manage invoices" ON public.invoices;
+CREATE POLICY "Authenticated users can manage invoices" ON public.invoices
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Payments
+DROP POLICY IF EXISTS "Authenticated users can manage payments" ON public.payments;
+CREATE POLICY "Authenticated users can manage payments" ON public.payments
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Query Services
+DROP POLICY IF EXISTS "Authenticated users can manage query services" ON public.query_services;
+CREATE POLICY "Authenticated users can manage query services" ON public.query_services
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Query Proposals
+DROP POLICY IF EXISTS "Authenticated users can manage proposals" ON public.query_proposals;
+CREATE POLICY "Authenticated users can manage proposals" ON public.query_proposals
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Query Passengers
+DROP POLICY IF EXISTS "Authenticated users can manage query passengers" ON public.query_passengers;
+CREATE POLICY "Authenticated users can manage query passengers" ON public.query_passengers
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Vendor Transactions
+DROP POLICY IF EXISTS "Authenticated users can manage vendor transactions" ON public.vendor_transactions;
+CREATE POLICY "Authenticated users can manage vendor transactions" ON public.vendor_transactions
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Activities
+DROP POLICY IF EXISTS "Authenticated users can view activities" ON public.activities;
+CREATE POLICY "Authenticated users can view activities" ON public.activities
+  FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "Authenticated users can insert activities" ON public.activities;
+CREATE POLICY "Authenticated users can insert activities" ON public.activities
   FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
-DROP POLICY IF EXISTS "All authenticated users can update queries" ON public.queries;
-CREATE POLICY "All authenticated users can update queries" ON public.queries
-  FOR UPDATE USING (auth.role() = 'authenticated');
+-- Documents
+DROP POLICY IF EXISTS "Authenticated users can manage documents" ON public.documents;
+CREATE POLICY "Authenticated users can manage documents" ON public.documents
+  FOR ALL USING (auth.role() = 'authenticated');
 
-DROP POLICY IF EXISTS "All authenticated users can delete queries" ON public.queries;
-CREATE POLICY "All authenticated users can delete queries" ON public.queries
-  FOR DELETE USING (auth.role() = 'authenticated');
+-- Reminders (user-scoped)
+DROP POLICY IF EXISTS "Users can manage their own reminders" ON public.reminders;
+CREATE POLICY "Users can manage their own reminders" ON public.reminders
+  FOR ALL USING (auth.uid() = user_id);
 
--- Passengers policies
-DROP POLICY IF EXISTS "All authenticated users can view passengers" ON public.passengers;
-CREATE POLICY "All authenticated users can view passengers" ON public.passengers
+-- Email Templates
+DROP POLICY IF EXISTS "Authenticated users can view email templates" ON public.email_templates;
+CREATE POLICY "Authenticated users can view email templates" ON public.email_templates
   FOR SELECT USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can insert passengers" ON public.passengers;
-CREATE POLICY "All authenticated users can insert passengers" ON public.passengers
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can update passengers" ON public.passengers;
-CREATE POLICY "All authenticated users can update passengers" ON public.passengers
-  FOR UPDATE USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can delete passengers" ON public.passengers;
-CREATE POLICY "All authenticated users can delete passengers" ON public.passengers
-  FOR DELETE USING (auth.role() = 'authenticated');
-
--- Vendors policies
-DROP POLICY IF EXISTS "All authenticated users can view vendors" ON public.vendors;
-CREATE POLICY "All authenticated users can view vendors" ON public.vendors
-  FOR SELECT USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can insert vendors" ON public.vendors;
-CREATE POLICY "All authenticated users can insert vendors" ON public.vendors
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can update vendors" ON public.vendors;
-CREATE POLICY "All authenticated users can update vendors" ON public.vendors
-  FOR UPDATE USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can delete vendors" ON public.vendors;
-CREATE POLICY "All authenticated users can delete vendors" ON public.vendors
-  FOR DELETE USING (auth.role() = 'authenticated');
-
--- Invoices policies
-DROP POLICY IF EXISTS "All authenticated users can view invoices" ON public.invoices;
-CREATE POLICY "All authenticated users can view invoices" ON public.invoices
-  FOR SELECT USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can insert invoices" ON public.invoices;
-CREATE POLICY "All authenticated users can insert invoices" ON public.invoices
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can update invoices" ON public.invoices;
-CREATE POLICY "All authenticated users can update invoices" ON public.invoices
-  FOR UPDATE USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can delete invoices" ON public.invoices;
-CREATE POLICY "All authenticated users can delete invoices" ON public.invoices
-  FOR DELETE USING (auth.role() = 'authenticated');
-
--- Payments policies
-DROP POLICY IF EXISTS "All authenticated users can view payments" ON public.payments;
-CREATE POLICY "All authenticated users can view payments" ON public.payments
-  FOR SELECT USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can insert payments" ON public.payments;
-CREATE POLICY "All authenticated users can insert payments" ON public.payments
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can update payments" ON public.payments;
-CREATE POLICY "All authenticated users can update payments" ON public.payments
-  FOR UPDATE USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can delete payments" ON public.payments;
-CREATE POLICY "All authenticated users can delete payments" ON public.payments
-  FOR DELETE USING (auth.role() = 'authenticated');
-
--- Query Services policies
-DROP POLICY IF EXISTS "All authenticated users can view query services" ON public.query_services;
-CREATE POLICY "All authenticated users can view query services" ON public.query_services
-  FOR SELECT USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can insert query services" ON public.query_services;
-CREATE POLICY "All authenticated users can insert query services" ON public.query_services
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can update query services" ON public.query_services;
-CREATE POLICY "All authenticated users can update query services" ON public.query_services
-  FOR UPDATE USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can delete query services" ON public.query_services;
-CREATE POLICY "All authenticated users can delete query services" ON public.query_services
-  FOR DELETE USING (auth.role() = 'authenticated');
-
--- Activities policies
-DROP POLICY IF EXISTS "All authenticated users can view activities" ON public.activities;
-CREATE POLICY "All authenticated users can view activities" ON public.activities
-  FOR SELECT USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can insert activities" ON public.activities;
-CREATE POLICY "All authenticated users can insert activities" ON public.activities
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
--- Documents policies
-DROP POLICY IF EXISTS "All authenticated users can view documents" ON public.documents;
-CREATE POLICY "All authenticated users can view documents" ON public.documents
-  FOR SELECT USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can insert documents" ON public.documents;
-CREATE POLICY "All authenticated users can insert documents" ON public.documents
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can update documents" ON public.documents;
-CREATE POLICY "All authenticated users can update documents" ON public.documents
-  FOR UPDATE USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can delete documents" ON public.documents;
-CREATE POLICY "All authenticated users can delete documents" ON public.documents
-  FOR DELETE USING (auth.role() = 'authenticated');
-
--- Reminders policies
-DROP POLICY IF EXISTS "Users can view their own reminders" ON public.reminders;
-CREATE POLICY "Users can view their own reminders" ON public.reminders
-  FOR SELECT USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can insert their own reminders" ON public.reminders;
-CREATE POLICY "Users can insert their own reminders" ON public.reminders
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can update their own reminders" ON public.reminders;
-CREATE POLICY "Users can update their own reminders" ON public.reminders
-  FOR UPDATE USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can delete their own reminders" ON public.reminders;
-CREATE POLICY "Users can delete their own reminders" ON public.reminders
-  FOR DELETE USING (auth.uid() = user_id);
-
--- Email Templates policies
-DROP POLICY IF EXISTS "All authenticated users can view email templates" ON public.email_templates;
-CREATE POLICY "All authenticated users can view email templates" ON public.email_templates
-  FOR SELECT USING (auth.role() = 'authenticated');
-
 DROP POLICY IF EXISTS "Admins can manage email templates" ON public.email_templates;
 CREATE POLICY "Admins can manage email templates" ON public.email_templates
   FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.users
-      WHERE id = auth.uid() AND role IN ('admin', 'manager')
-    )
+    EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('admin', 'manager'))
   );
 
--- Communications policies
-DROP POLICY IF EXISTS "All authenticated users can view communications" ON public.communications;
-CREATE POLICY "All authenticated users can view communications" ON public.communications
-  FOR SELECT USING (auth.role() = 'authenticated');
+-- Communications
+DROP POLICY IF EXISTS "Authenticated users can manage communications" ON public.communications;
+CREATE POLICY "Authenticated users can manage communications" ON public.communications
+  FOR ALL USING (auth.role() = 'authenticated');
 
-DROP POLICY IF EXISTS "All authenticated users can insert communications" ON public.communications;
-CREATE POLICY "All authenticated users can insert communications" ON public.communications
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+-- Invoice Items
+DROP POLICY IF EXISTS "Authenticated users can manage invoice items" ON public.invoice_items;
+CREATE POLICY "Authenticated users can manage invoice items" ON public.invoice_items
+  FOR ALL USING (auth.role() = 'authenticated');
 
-DROP POLICY IF EXISTS "All authenticated users can update communications" ON public.communications;
-CREATE POLICY "All authenticated users can update communications" ON public.communications
-  FOR UPDATE USING (auth.role() = 'authenticated');
-
--- Invoice Items policies
-DROP POLICY IF EXISTS "All authenticated users can view invoice items" ON public.invoice_items;
-CREATE POLICY "All authenticated users can view invoice items" ON public.invoice_items
-  FOR SELECT USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can insert invoice items" ON public.invoice_items;
-CREATE POLICY "All authenticated users can insert invoice items" ON public.invoice_items
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can update invoice items" ON public.invoice_items;
-CREATE POLICY "All authenticated users can update invoice items" ON public.invoice_items
-  FOR UPDATE USING (auth.role() = 'authenticated');
-
-DROP POLICY IF EXISTS "All authenticated users can delete invoice items" ON public.invoice_items;
-CREATE POLICY "All authenticated users can delete invoice items" ON public.invoice_items
-  FOR DELETE USING (auth.role() = 'authenticated');
-
--- User Preferences policies
-DROP POLICY IF EXISTS "Users can view their own preferences" ON public.user_preferences;
-CREATE POLICY "Users can view their own preferences" ON public.user_preferences
-  FOR SELECT USING (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can insert their own preferences" ON public.user_preferences;
-CREATE POLICY "Users can insert their own preferences" ON public.user_preferences
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-DROP POLICY IF EXISTS "Users can update their own preferences" ON public.user_preferences;
-CREATE POLICY "Users can update their own preferences" ON public.user_preferences
-  FOR UPDATE USING (auth.uid() = user_id);
+-- User Preferences (user-scoped)
+DROP POLICY IF EXISTS "Users can manage their own preferences" ON public.user_preferences;
+CREATE POLICY "Users can manage their own preferences" ON public.user_preferences
+  FOR ALL USING (auth.uid() = user_id);
 
 -- =====================================================
--- SAMPLE DATA (Email Templates)
+-- 9. VIEWS
 -- =====================================================
 
--- Insert sample email templates
+-- Detailed query passengers view
+CREATE OR REPLACE VIEW public.query_passengers_detailed AS
+SELECT
+  qp.id,
+  qp.query_id,
+  qp.passenger_id,
+  qp.is_primary,
+  qp.passenger_type,
+  qp.seat_preference,
+  qp.meal_preference,
+  qp.special_requirements,
+  qp.created_at,
+  qp.updated_at,
+  p.first_name,
+  p.last_name,
+  p.email,
+  p.phone,
+  p.passport_number,
+  p.passport_expiry,
+  p.date_of_birth,
+  p.nationality,
+  q.query_number,
+  q.destination,
+  q.travel_date,
+  q.return_date,
+  q.status
+FROM public.query_passengers qp
+JOIN public.passengers p ON qp.passenger_id = p.id
+JOIN public.queries q ON qp.query_id = q.id;
+
+-- =====================================================
+-- 10. STORAGE SETUP
+-- =====================================================
+
+-- Create storage bucket for documents
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('documents', 'documents', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage policies
+DROP POLICY IF EXISTS "Authenticated users can upload documents" ON storage.objects;
+CREATE POLICY "Authenticated users can upload documents"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'documents');
+
+DROP POLICY IF EXISTS "Authenticated users can view documents" ON storage.objects;
+CREATE POLICY "Authenticated users can view documents"
+  ON storage.objects FOR SELECT TO authenticated
+  USING (bucket_id = 'documents');
+
+DROP POLICY IF EXISTS "Authenticated users can delete documents" ON storage.objects;
+CREATE POLICY "Authenticated users can delete documents"
+  ON storage.objects FOR DELETE TO authenticated
+  USING (bucket_id = 'documents');
+
+DROP POLICY IF EXISTS "Authenticated users can update documents" ON storage.objects;
+CREATE POLICY "Authenticated users can update documents"
+  ON storage.objects FOR UPDATE TO authenticated
+  USING (bucket_id = 'documents');
+
+-- =====================================================
+-- 11. SAMPLE DATA
+-- =====================================================
+
 INSERT INTO public.email_templates (name, subject, body, category, variables) VALUES
 ('query_confirmation', 'Query Received - {{query_number}}',
 'Dear {{client_name}},
@@ -582,7 +854,7 @@ Billoo Travel',
 
 Please find below the quotation for your trip to {{destination}}:
 
-Total Amount: ₹{{amount}}
+Total Amount: {{amount}}
 
 This quotation is valid for 7 days.
 
@@ -610,7 +882,7 @@ Billoo Travel',
 
 This is a friendly reminder that payment for invoice {{invoice_number}} is due on {{due_date}}.
 
-Amount Due: ₹{{amount}}
+Amount Due: {{amount}}
 
 Please make the payment at your earliest convenience.
 
@@ -619,22 +891,3 @@ Billoo Travel',
 'payment', '["client_name", "invoice_number", "due_date", "amount"]'::jsonb)
 
 ON CONFLICT (name) DO NOTHING;
-
--- =====================================================
--- SUCCESS MESSAGE
--- =====================================================
-
-DO $$
-BEGIN
-  RAISE NOTICE '========================================';
-  RAISE NOTICE '✅ Schema created successfully!';
-  RAISE NOTICE '========================================';
-  RAISE NOTICE '📊 Core Tables: users, queries, passengers, vendors, invoices, payments';
-  RAISE NOTICE '🚀 Enhanced Tables: query_services, activities, documents, reminders, email_templates, communications, invoice_items, user_preferences';
-  RAISE NOTICE '🔒 Row Level Security (RLS) enabled on all tables';
-  RAISE NOTICE '⚡ Performance indexes created';
-  RAISE NOTICE '📧 Sample email templates inserted';
-  RAISE NOTICE '========================================';
-  RAISE NOTICE '✨ Your Billoo Travel Management System database is ready!';
-  RAISE NOTICE '========================================';
-END $$;
