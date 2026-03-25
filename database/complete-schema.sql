@@ -82,10 +82,21 @@ CREATE TABLE IF NOT EXISTS public.passengers (
   last_name TEXT NOT NULL,
   email TEXT,
   phone TEXT NOT NULL,
+  whatsapp TEXT,
+  cnic TEXT,
+  gender TEXT CHECK (gender IN ('male', 'female')),
+  city TEXT,
+  address TEXT,
+  country TEXT DEFAULT 'Pakistan',
   passport_number TEXT,
   passport_expiry DATE,
   date_of_birth DATE,
   nationality TEXT,
+  emergency_contact_name TEXT,
+  emergency_contact_phone TEXT,
+  referred_by TEXT,
+  tags TEXT[] DEFAULT '{}',
+  status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -426,6 +437,12 @@ CREATE INDEX IF NOT EXISTS idx_queries_assigned_to ON public.queries(assigned_to
 CREATE INDEX IF NOT EXISTS idx_queries_created_at ON public.queries(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_queries_proposal_sent_date ON public.queries(proposal_sent_date);
 CREATE INDEX IF NOT EXISTS idx_queries_completed_date ON public.queries(completed_date);
+
+-- Passengers
+CREATE INDEX IF NOT EXISTS idx_passengers_status ON public.passengers(status);
+CREATE INDEX IF NOT EXISTS idx_passengers_city ON public.passengers(city);
+CREATE INDEX IF NOT EXISTS idx_passengers_tags ON public.passengers USING gin(tags);
+CREATE INDEX IF NOT EXISTS idx_passengers_cnic ON public.passengers(cnic);
 
 -- Invoices & Payments
 CREATE INDEX IF NOT EXISTS idx_invoices_status ON public.invoices(status);

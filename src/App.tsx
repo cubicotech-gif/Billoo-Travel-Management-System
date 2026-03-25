@@ -6,6 +6,7 @@ import EnhancedDashboard from '@/pages/EnhancedDashboard'
 import EnhancedQueries from '@/pages/EnhancedQueries'
 import QueryWorkspace from '@/components/queries/QueryWorkspace'
 import Passengers from '@/pages/Passengers'
+import PassengerProfile from '@/pages/PassengerProfile'
 import Vendors from '@/pages/Vendors'
 import Invoices from '@/pages/Invoices'
 import Reports from '@/pages/Reports'
@@ -44,6 +45,7 @@ function App() {
           <Route path="queries" element={<EnhancedQueries />} />
           <Route path="queries/:queryId" element={<QueryWorkspace />} />
           <Route path="passengers" element={<Passengers />} />
+          <Route path="passengers/:id" element={<PassengerProfile />} />
           <Route path="vendors" element={<Vendors />} />
           <Route path="invoices" element={<Invoices />} />
           <Route path="reports" element={<Reports />} />

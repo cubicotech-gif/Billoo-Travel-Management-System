@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { User, X, Star, Plus, Search, Check } from 'lucide-react'
+import { User, X, Star, Plus, Search, Check, Loader } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
 interface Passenger {
@@ -36,6 +36,11 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
   const [loading, setLoading] = useState(true)
   const [, setSaving] = useState(false)
 
+  // Quick-create state
+  const [showQuickCreate, setShowQuickCreate] = useState(false)
+  const [quickCreateData, setQuickCreateData] = useState({ first_name: '', last_name: '', phone: '' })
+  const [quickCreateSaving, setQuickCreateSaving] = useState(false)
+
   useEffect(() => {
     loadLinkedPassengers()
     loadAllPassengers()
@@ -67,7 +72,6 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
 
       if (error) throw error
 
-      // Transform the data
       const transformed = (data || []).map((item: any) => ({
         id: item.id,
         passenger_id: item.passenger_id,
@@ -104,7 +108,6 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
   const handleAddPassenger = async (passenger: Passenger, type: 'adult' | 'child' | 'infant' = 'adult') => {
     setSaving(true)
     try {
-      // Check if passenger is already linked
       const alreadyLinked = linkedPassengers.some((lp) => lp.passenger_id === passenger.id)
       if (alreadyLinked) {
         alert('This passenger is already added to this query')
@@ -115,7 +118,7 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
       const { error } = await supabase.from('query_passengers').insert({
         query_id: queryId,
         passenger_id: passenger.id,
-        is_primary: linkedPassengers.length === 0, // First passenger is primary by default
+        is_primary: linkedPassengers.length === 0,
         passenger_type: type,
       })
 
@@ -157,13 +160,11 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
 
   const handleSetPrimary = async (linkId: string) => {
     try {
-      // First, set all to non-primary
       await supabase
         .from('query_passengers')
         .update({ is_primary: false })
         .eq('query_id', queryId)
 
-      // Then set the selected one as primary
       const { error } = await supabase
         .from('query_passengers')
         .update({ is_primary: true })
@@ -194,6 +195,43 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
       await loadLinkedPassengers()
     } catch (error) {
       console.error('Error updating passenger details:', error)
+    }
+  }
+
+  const handleQuickCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!quickCreateData.first_name.trim() || !quickCreateData.last_name.trim() || !quickCreateData.phone.trim()) return
+
+    setQuickCreateSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('passengers')
+        .insert([{
+          first_name: quickCreateData.first_name.trim(),
+          last_name: quickCreateData.last_name.trim(),
+          phone: quickCreateData.phone.trim(),
+        }])
+        .select('id, first_name, last_name, email, phone, passport_number, nationality')
+        .single()
+
+      if (error) throw error
+
+      // Refresh the all-passengers list
+      await loadAllPassengers()
+
+      // Auto-add to the query
+      if (data) {
+        await handleAddPassenger(data)
+      }
+
+      // Reset quick-create
+      setShowQuickCreate(false)
+      setQuickCreateData({ first_name: '', last_name: '', phone: '' })
+    } catch (error) {
+      console.error('Error quick-creating passenger:', error)
+      alert('Failed to create passenger')
+    } finally {
+      setQuickCreateSaving(false)
     }
   }
 
@@ -281,13 +319,13 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
                       <span>{lp.passenger?.phone}</span>
                       {lp.passenger?.email && (
                         <>
-                          <span>•</span>
+                          <span>&middot;</span>
                           <span>{lp.passenger.email}</span>
                         </>
                       )}
                       {lp.passenger?.passport_number && (
                         <>
-                          <span>•</span>
+                          <span>&middot;</span>
                           <span>Passport: {lp.passenger.passport_number}</span>
                         </>
                       )}
@@ -369,20 +407,83 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
             <div
               className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-              onClick={() => setShowSearchModal(false)}
+              onClick={() => { setShowSearchModal(false); setShowQuickCreate(false) }}
             />
 
             <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
               <div className="bg-white px-4 pt-5 pb-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900">Select Passenger</h3>
-                  <button
-                    onClick={() => setShowSearchModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowQuickCreate(!showQuickCreate)}
+                      className={`btn btn-sm ${showQuickCreate ? 'btn-primary' : 'btn-secondary'}`}
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Quick Create
+                    </button>
+                    <button
+                      onClick={() => { setShowSearchModal(false); setShowQuickCreate(false) }}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
                 </div>
+
+                {/* Quick Create Inline Form */}
+                {showQuickCreate && (
+                  <form onSubmit={handleQuickCreate} className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm font-medium text-blue-800 mb-3">Create & Add New Passenger</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      <input
+                        type="text"
+                        required
+                        placeholder="First Name *"
+                        value={quickCreateData.first_name}
+                        onChange={(e) => setQuickCreateData({ ...quickCreateData, first_name: e.target.value })}
+                        className="text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        autoFocus
+                      />
+                      <input
+                        type="text"
+                        required
+                        placeholder="Last Name *"
+                        value={quickCreateData.last_name}
+                        onChange={(e) => setQuickCreateData({ ...quickCreateData, last_name: e.target.value })}
+                        className="text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                      <input
+                        type="tel"
+                        required
+                        placeholder="Phone *"
+                        value={quickCreateData.phone}
+                        onChange={(e) => setQuickCreateData({ ...quickCreateData, phone: e.target.value })}
+                        className="text-sm px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                    </div>
+                    <div className="flex justify-end mt-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickCreate(false)}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={quickCreateSaving}
+                        className="btn btn-primary btn-sm"
+                      >
+                        {quickCreateSaving ? (
+                          <><Loader className="w-4 h-4 animate-spin mr-1" /> Creating...</>
+                        ) : (
+                          <><Plus className="w-4 h-4 mr-1" /> Create & Add</>
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                )}
 
                 <div className="mb-4">
                   <div className="relative">
@@ -393,7 +494,7 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      autoFocus
+                      autoFocus={!showQuickCreate}
                     />
                   </div>
                 </div>
@@ -403,6 +504,15 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
                     <div className="text-center py-8">
                       <User className="mx-auto h-12 w-12 text-gray-400" />
                       <p className="mt-2 text-sm text-gray-500">No passengers found</p>
+                      {!showQuickCreate && (
+                        <button
+                          onClick={() => setShowQuickCreate(true)}
+                          className="mt-3 btn btn-secondary btn-sm"
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Create New Passenger
+                        </button>
+                      )}
                     </div>
                   ) : (
                     filteredPassengers.map((passenger) => {
@@ -433,7 +543,7 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
                                   <span>{passenger.phone}</span>
                                   {passenger.email && (
                                     <>
-                                      <span>•</span>
+                                      <span>&middot;</span>
                                       <span>{passenger.email}</span>
                                     </>
                                   )}
@@ -455,7 +565,7 @@ export default function PassengerSelector({ queryId, onPassengersChange }: Passe
               </div>
 
               <div className="bg-gray-50 px-4 py-3 sm:px-6 flex justify-end">
-                <button onClick={() => setShowSearchModal(false)} className="btn btn-secondary">
+                <button onClick={() => { setShowSearchModal(false); setShowQuickCreate(false) }} className="btn btn-secondary">
                   Close
                 </button>
               </div>

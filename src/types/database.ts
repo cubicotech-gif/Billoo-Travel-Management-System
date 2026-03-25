@@ -19,21 +19,21 @@ export interface Database {
           last_name: string
           email: string | null
           phone: string
-          whatsapp_number: string | null
-          alternate_phone: string | null
+          whatsapp: string | null
           cnic: string | null
+          gender: 'male' | 'female' | null
+          city: string | null
+          address: string | null
+          country: string | null
           passport_number: string | null
           passport_expiry: string | null
           date_of_birth: string | null
           nationality: string | null
-          address: string | null
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
-          is_vip: boolean
-          is_active: boolean
-          total_trips: number
-          total_revenue: number
-          outstanding_balance: number
+          referred_by: string | null
+          tags: string[]
+          status: 'active' | 'inactive'
           notes: string | null
           created_at: string
           updated_at: string
@@ -44,21 +44,21 @@ export interface Database {
           last_name: string
           email?: string | null
           phone: string
-          whatsapp_number?: string | null
-          alternate_phone?: string | null
+          whatsapp?: string | null
           cnic?: string | null
+          gender?: 'male' | 'female' | null
+          city?: string | null
+          address?: string | null
+          country?: string | null
           passport_number?: string | null
           passport_expiry?: string | null
           date_of_birth?: string | null
           nationality?: string | null
-          address?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
-          is_vip?: boolean
-          is_active?: boolean
-          total_trips?: number
-          total_revenue?: number
-          outstanding_balance?: number
+          referred_by?: string | null
+          tags?: string[]
+          status?: 'active' | 'inactive'
           notes?: string | null
           created_at?: string
           updated_at?: string
@@ -69,21 +69,21 @@ export interface Database {
           last_name?: string
           email?: string | null
           phone?: string
-          whatsapp_number?: string | null
-          alternate_phone?: string | null
+          whatsapp?: string | null
           cnic?: string | null
+          gender?: 'male' | 'female' | null
+          city?: string | null
+          address?: string | null
+          country?: string | null
           passport_number?: string | null
           passport_expiry?: string | null
           date_of_birth?: string | null
           nationality?: string | null
-          address?: string | null
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
-          is_vip?: boolean
-          is_active?: boolean
-          total_trips?: number
-          total_revenue?: number
-          outstanding_balance?: number
+          referred_by?: string | null
+          tags?: string[]
+          status?: 'active' | 'inactive'
           notes?: string | null
           created_at?: string
           updated_at?: string
