@@ -18,6 +18,7 @@ import StageServicesBooked from './stages/StageServicesBooked';
 import StageDelivery from './stages/StageDelivery';
 import StageCompleted from './stages/StageCompleted';
 import StageCancelled from './stages/StageCancelled';
+import QueryDocumentSection from './QueryDocumentSection';
 
 export default function QueryWorkspace() {
   const { queryId } = useParams<{ queryId: string }>();
@@ -320,6 +321,11 @@ export default function QueryWorkspace() {
         <div className="stage-content">
           {renderStageContent()}
         </div>
+
+        {/* Documents & Checklist Section — visible at all stages */}
+        {query.status !== 'Cancelled' && (
+          <QueryDocumentSection query={query} onRefresh={loadQueryData} />
+        )}
       </div>
     </div>
   );
