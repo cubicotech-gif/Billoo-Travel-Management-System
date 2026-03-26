@@ -22,6 +22,9 @@ import QueryDocumentSection from './QueryDocumentSection';
 import PackageCalculator from './PackageCalculator';
 import RecordAdvancePaymentModal from './RecordAdvancePaymentModal';
 import QueryPaymentSummary from './QueryPaymentSummary';
+import GenerateInvoiceModal from './GenerateInvoiceModal';
+import QueryInvoiceStatus from './QueryInvoiceStatus';
+import GenerateItinerary from './GenerateItinerary';
 
 export default function QueryWorkspace() {
   const { queryId } = useParams<{ queryId: string }>();
@@ -32,6 +35,7 @@ export default function QueryWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [showCalculator, setShowCalculator] = useState(false);
   const [showAdvancePayment, setShowAdvancePayment] = useState(false);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
 
   useEffect(() => {
     if (queryId) {
@@ -138,6 +142,11 @@ export default function QueryWorkspace() {
       // Reload query data to refresh UI
       await loadQueryData();
 
+      // Auto-prompt invoice generation when finalized
+      if (newStatus === 'Finalized & Booking') {
+        setShowInvoiceModal(true);
+      }
+
       console.log('✅ Status changed to:', newStatus);
     } catch (err: any) {
       console.error('Error updating status:', err);
@@ -240,6 +249,18 @@ export default function QueryWorkspace() {
               >
                 <Calculator className="w-5 h-5" />
               </button>
+
+              {/* Itinerary — available at all stages */}
+              <GenerateItinerary queryId={query.id} />
+
+              {/* Invoice Status / Generate — visible at stages 4+ */}
+              {!['New Query - Not Responded', 'Responded - Awaiting Reply', 'Working on Proposal', 'Cancelled'].includes(query.status) && (
+                <QueryInvoiceStatus
+                  queryId={query.id}
+                  onGenerateInvoice={() => setShowInvoiceModal(true)}
+                />
+              )}
+
               {['Proposal Sent', 'Revisions Requested', 'Finalized & Booking'].includes(query.status) && (
                 <button
                   onClick={() => setShowAdvancePayment(true)}
@@ -376,6 +397,15 @@ export default function QueryWorkspace() {
           destination={query.destination}
           onClose={() => setShowAdvancePayment(false)}
           onSuccess={() => { setShowAdvancePayment(false); loadQueryData(); }}
+        />
+      )}
+
+      {showInvoiceModal && (
+        <GenerateInvoiceModal
+          query={query}
+          services={services}
+          onClose={() => setShowInvoiceModal(false)}
+          onSuccess={() => { setShowInvoiceModal(false); loadQueryData(); }}
         />
       )}
     </div>
