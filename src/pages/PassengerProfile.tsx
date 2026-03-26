@@ -5,14 +5,21 @@ import { formatCurrency } from '@/lib/formatCurrency'
 import {
   ArrowLeft, User, Phone, Mail, MessageCircle, CreditCard, Calendar,
   MapPin, Shield, Tag, Edit2, Save, X, FileText, DollarSign,
-  ClipboardList, Activity, ChevronRight, ExternalLink, Loader
+  ClipboardList, Activity, ChevronRight, ExternalLink, Loader, ArrowRightLeft
 } from 'lucide-react'
 import { format } from 'date-fns'
 import DocumentUpload from '@/components/DocumentUpload'
 import DocumentList from '@/components/DocumentList'
-// TravelHistory available for future use
 import CommunicationLog from '@/components/CommunicationLog'
 import AddCommunication from '@/components/AddCommunication'
+import OutstandingBalance from '@/components/passengers/OutstandingBalance'
+import PassengerQuickActions from '@/components/passengers/PassengerQuickActions'
+import RecordPaymentModal from '@/components/passengers/RecordPaymentModal'
+import RecordRefundModal from '@/components/passengers/RecordRefundModal'
+import PaymentReminderModal from '@/components/passengers/PaymentReminderModal'
+import PassengerStatement from '@/components/passengers/PassengerStatement'
+import { fetchPassengerTransactions } from '@/lib/api/passengers'
+import { TRANSACTION_TYPE_CONFIG, PAYMENT_METHOD_LABELS } from '@/types/finance'
 
 interface Passenger {
   id: string
@@ -36,6 +43,7 @@ interface Passenger {
   tags: string[]
   status: 'active' | 'inactive'
   notes: string | null
+  credit_balance: number
   created_at: string
   updated_at: string
 }
@@ -87,8 +95,15 @@ export default function PassengerProfile() {
 
   // Financial data
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [transactions, setTransactions] = useState<any[]>([])
   const [queryLinks, setQueryLinks] = useState<QueryLink[]>([])
   const [activities, setActivities] = useState<ActivityItem[]>([])
+
+  // Modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showRefundModal, setShowRefundModal] = useState(false)
+  const [showReminderModal, setShowReminderModal] = useState(false)
+  const [showStatement, setShowStatement] = useState(false)
 
   // Notes editing
   const [editingNotes, setEditingNotes] = useState(false)
@@ -105,7 +120,7 @@ export default function PassengerProfile() {
         .single()
 
       if (error) throw error
-      setPassenger({ ...data, tags: data.tags || [], status: data.status || 'active' })
+      setPassenger({ ...data, tags: data.tags || [], status: data.status || 'active', credit_balance: Number(data.credit_balance || 0) })
       setNotesValue(data.notes || '')
     } catch (error) {
       console.error('Error loading passenger:', error)
@@ -146,6 +161,10 @@ export default function PassengerProfile() {
           query: item.queries,
         }))
       setQueryLinks(transformed)
+
+      // Transactions for this passenger
+      const txnData = await fetchPassengerTransactions(id)
+      setTransactions(txnData)
 
       // Activities
       const { data: actData } = await supabase
@@ -188,10 +207,25 @@ export default function PassengerProfile() {
     }
   }
 
-  // Financial calculations
+  // Financial calculations — totalPaid from actual transactions, not invoice.paid_amount
   const totalBilled = invoices.reduce((s, i) => s + Number(i.amount), 0)
-  const totalPaid = invoices.reduce((s, i) => s + Number(i.paid_amount), 0)
-  const totalPending = totalBilled - totalPaid
+  const totalPaidFromTxns = transactions
+    .filter(t => t.type === 'payment_received')
+    .reduce((s, t) => s + Number(t.amount), 0)
+  const totalRefunds = transactions
+    .filter(t => t.type === 'refund_to_client')
+    .reduce((s, t) => s + Number(t.amount), 0)
+  const totalPaid = totalPaidFromTxns - totalRefunds
+  const totalPending = Math.max(0, totalBilled - totalPaid)
+  const creditBalance = passenger?.credit_balance || 0
+
+  // Modal callback: reload all data after action
+  const handleActionSuccess = async () => {
+    setShowPaymentModal(false)
+    setShowRefundModal(false)
+    setShowReminderModal(false)
+    await Promise.all([loadPassenger(), loadFinancials()])
+  }
 
   if (loading || !passenger) {
     return (
@@ -269,38 +303,47 @@ export default function PassengerProfile() {
                 )}
               </div>
 
-              {/* Tags */}
-              {passenger.tags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {passenger.tags.map(tag => (
-                    <span key={tag} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                      <Tag className="w-3 h-3 mr-1" />{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
+              {/* Tags + Outstanding Badge */}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <OutstandingBalance totalBilled={totalBilled} totalPaid={totalPaid} creditBalance={creditBalance} />
+                {passenger.tags.map(tag => (
+                  <span key={tag} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                    <Tag className="w-3 h-3 mr-1" />{tag}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-4 gap-4 flex-shrink-0">
-            <div className="text-center px-4">
-              <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalBilled)}</p>
-              <p className="text-xs text-gray-500">Total Billed</p>
-            </div>
-            <div className="text-center px-4">
-              <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
-              <p className="text-xs text-gray-500">Total Paid</p>
-            </div>
-            <div className="text-center px-4">
-              <p className={`text-2xl font-bold ${totalPending > 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                {formatCurrency(totalPending)}
-              </p>
-              <p className="text-xs text-gray-500">Pending</p>
-            </div>
-            <div className="text-center px-4">
-              <p className="text-2xl font-bold text-primary-600">{queryLinks.length}</p>
-              <p className="text-xs text-gray-500">Queries</p>
+          {/* Quick Stats + Actions */}
+          <div className="flex flex-col items-end gap-4 flex-shrink-0">
+            <PassengerQuickActions
+              onRecordPayment={() => setShowPaymentModal(true)}
+              onRecordRefund={() => setShowRefundModal(true)}
+              onSendReminder={() => setShowReminderModal(true)}
+              onDownloadStatement={() => setShowStatement(true)}
+              onCreateInvoice={() => navigate(`/finance/invoices/new?passenger_id=${passenger.id}`)}
+              hasOutstanding={totalPending > 0}
+            />
+            <div className="grid grid-cols-4 gap-4">
+              <div className="text-center px-4">
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalBilled)}</p>
+                <p className="text-xs text-gray-500">Total Billed</p>
+              </div>
+              <div className="text-center px-4">
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+                <p className="text-xs text-gray-500">Total Paid</p>
+              </div>
+              <div className="text-center px-4">
+                <p className={`text-2xl font-bold ${totalPending > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                  {formatCurrency(totalPending)}
+                </p>
+                <p className="text-xs text-gray-500">Pending</p>
+              </div>
+              <div className="text-center px-4">
+                <p className="text-2xl font-bold text-primary-600">{queryLinks.length}</p>
+                <p className="text-xs text-gray-500">Queries</p>
+              </div>
             </div>
           </div>
         </div>
@@ -462,7 +505,7 @@ export default function PassengerProfile() {
         {activeTab === 'financial' && (
           <div className="space-y-6">
             {/* Summary bar */}
-            <div className="card grid grid-cols-3 gap-6">
+            <div className="card grid grid-cols-4 gap-6">
               <div>
                 <p className="text-sm text-gray-500">Total Billed</p>
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalBilled)}</p>
@@ -475,6 +518,12 @@ export default function PassengerProfile() {
                 <p className="text-sm text-gray-500">Outstanding</p>
                 <p className={`text-2xl font-bold ${totalPending > 0 ? 'text-red-600' : 'text-gray-400'}`}>
                   {formatCurrency(totalPending)}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Credit Balance</p>
+                <p className={`text-2xl font-bold ${creditBalance > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                  {formatCurrency(creditBalance)}
                 </p>
               </div>
             </div>
@@ -529,13 +578,67 @@ export default function PassengerProfile() {
               )}
             </div>
 
+            {/* Payment History Timeline */}
+            <div className="card">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment History</h3>
+              {transactions.length === 0 ? (
+                <p className="text-sm text-gray-500 py-8 text-center">No transactions recorded yet</p>
+              ) : (
+                <div className="space-y-3">
+                  {transactions.map(txn => {
+                    const config = TRANSACTION_TYPE_CONFIG[txn.type as keyof typeof TRANSACTION_TYPE_CONFIG]
+                    const isIn = txn.direction === 'in'
+                    const hasROE = txn.original_currency && txn.original_currency !== 'PKR'
+                    return (
+                      <div key={txn.id} className="flex items-start gap-4 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                          isIn ? 'bg-green-100' : 'bg-red-100'
+                        }`}>
+                          <DollarSign className={`w-5 h-5 ${isIn ? 'text-green-600' : 'text-red-600'}`} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config?.color || 'bg-gray-100 text-gray-800'}`}>
+                              {config?.label || txn.type}
+                            </span>
+                            <span className="text-xs text-gray-500 font-mono">{txn.transaction_number}</span>
+                            {txn.invoices?.invoice_number && (
+                              <span className="text-xs text-blue-600">
+                                {txn.invoices.invoice_number}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-700 mt-1">{txn.description || '—'}</p>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                            <span>{format(new Date(txn.transaction_date), 'dd MMM yyyy')}</span>
+                            {txn.payment_method && (
+                              <span>{PAYMENT_METHOD_LABELS[txn.payment_method] || txn.payment_method}</span>
+                            )}
+                            {hasROE && (
+                              <span className="flex items-center gap-1 text-blue-600">
+                                <ArrowRightLeft className="w-3 h-3" />
+                                {txn.original_currency} {Number(txn.original_amount).toLocaleString()} @ {txn.exchange_rate}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className={`text-right flex-shrink-0 ${isIn ? 'text-green-600' : 'text-red-600'}`}>
+                          <p className="text-lg font-semibold">{isIn ? '+' : '-'}{formatCurrency(txn.amount)}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* Ledger View */}
             <div className="card">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Ledger View</h3>
-              {invoices.length === 0 ? (
+              {(invoices.length === 0 && transactions.length === 0) ? (
                 <p className="text-sm text-gray-500 py-8 text-center">No transactions to display</p>
               ) : (
-                <LedgerTable invoices={invoices} />
+                <TransactionLedgerTable invoices={invoices} transactions={transactions} />
               )}
             </div>
           </div>
@@ -708,36 +811,98 @@ export default function PassengerProfile() {
           </div>
         )}
       </div>
+
+      {/* ===== MODALS ===== */}
+      {showPaymentModal && (
+        <RecordPaymentModal
+          passengerId={passenger.id}
+          passengerName={`${passenger.first_name} ${passenger.last_name}`}
+          onSuccess={handleActionSuccess}
+          onCancel={() => setShowPaymentModal(false)}
+        />
+      )}
+
+      {showRefundModal && (
+        <RecordRefundModal
+          passengerId={passenger.id}
+          passengerName={`${passenger.first_name} ${passenger.last_name}`}
+          onSuccess={handleActionSuccess}
+          onCancel={() => setShowRefundModal(false)}
+        />
+      )}
+
+      {showReminderModal && (
+        <PaymentReminderModal
+          passengerId={passenger.id}
+          passengerName={`${passenger.first_name} ${passenger.last_name}`}
+          passengerPhone={passenger.phone}
+          passengerWhatsapp={passenger.whatsapp}
+          outstandingAmount={totalPending}
+          onSuccess={handleActionSuccess}
+          onCancel={() => setShowReminderModal(false)}
+        />
+      )}
+
+      {showStatement && (
+        <PassengerStatement
+          passengerName={`${passenger.first_name} ${passenger.last_name}`}
+          passengerPhone={passenger.phone}
+          passengerEmail={passenger.email}
+          transactions={transactions}
+          invoices={invoices}
+          totalBilled={totalBilled}
+          totalPaid={totalPaid}
+          creditBalance={creditBalance}
+          onClose={() => setShowStatement(false)}
+        />
+      )}
     </div>
   )
 }
 
-// Ledger table: chronological running balance from invoices
-function LedgerTable({ invoices }: { invoices: Invoice[] }) {
-  // Build ledger entries: each invoice is a debit (billed), each payment portion is a credit (paid)
-  const entries: { date: string; description: string; debit: number; credit: number }[] = []
+// Transaction-based ledger: invoices as debits, actual transactions as credits
+function TransactionLedgerTable({ invoices, transactions }: { invoices: Invoice[]; transactions: any[] }) {
+  const entries: { date: string; description: string; debit: number; credit: number; ref: string }[] = []
 
-  // Sort by date ascending for running balance
+  // Invoices as debits
   const sorted = [...invoices].sort((a, b) =>
     new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   )
-
   for (const inv of sorted) {
     entries.push({
       date: inv.created_at,
       description: `Invoice ${inv.invoice_number}`,
       debit: Number(inv.amount),
       credit: 0,
+      ref: inv.invoice_number,
     })
-    if (Number(inv.paid_amount) > 0) {
-      entries.push({
-        date: inv.created_at,
-        description: `Payment for ${inv.invoice_number}`,
-        debit: 0,
-        credit: Number(inv.paid_amount),
-      })
-    }
   }
+
+  // Payment transactions as credits
+  const paymentTxns = transactions.filter(t => t.type === 'payment_received')
+  for (const txn of paymentTxns) {
+    entries.push({
+      date: txn.transaction_date,
+      description: txn.description || 'Payment Received',
+      debit: 0,
+      credit: Number(txn.amount),
+      ref: txn.transaction_number,
+    })
+  }
+
+  // Refund transactions reduce credits
+  const refundTxns = transactions.filter(t => t.type === 'refund_to_client')
+  for (const txn of refundTxns) {
+    entries.push({
+      date: txn.transaction_date,
+      description: txn.description || 'Refund Issued',
+      debit: Number(txn.amount),
+      credit: 0,
+      ref: txn.transaction_number,
+    })
+  }
+
+  entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   let runningBalance = 0
 
@@ -747,6 +912,7 @@ function LedgerTable({ invoices }: { invoices: Invoice[] }) {
         <thead className="bg-gray-50">
           <tr>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ref</th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Debit</th>
             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Credit</th>
@@ -759,6 +925,7 @@ function LedgerTable({ invoices }: { invoices: Invoice[] }) {
             return (
               <tr key={i} className="hover:bg-gray-50">
                 <td className="px-4 py-3 text-gray-600">{format(new Date(entry.date), 'dd MMM yyyy')}</td>
+                <td className="px-4 py-3 text-gray-500 font-mono text-xs">{entry.ref}</td>
                 <td className="px-4 py-3 text-gray-900">{entry.description}</td>
                 <td className="px-4 py-3 text-right text-red-600">
                   {entry.debit > 0 ? formatCurrency(entry.debit) : '—'}
@@ -766,8 +933,9 @@ function LedgerTable({ invoices }: { invoices: Invoice[] }) {
                 <td className="px-4 py-3 text-right text-green-600">
                   {entry.credit > 0 ? formatCurrency(entry.credit) : '—'}
                 </td>
-                <td className={`px-4 py-3 text-right font-medium ${runningBalance > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                  {formatCurrency(runningBalance)}
+                <td className={`px-4 py-3 text-right font-medium ${runningBalance > 0 ? 'text-red-600' : runningBalance < 0 ? 'text-blue-600' : 'text-gray-900'}`}>
+                  {formatCurrency(Math.abs(runningBalance))}
+                  {runningBalance < 0 ? ' CR' : runningBalance > 0 ? ' DR' : ''}
                 </td>
               </tr>
             )
