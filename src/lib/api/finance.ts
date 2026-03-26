@@ -539,3 +539,315 @@ export async function updatePassengerCreditBalance(passengerId: string): Promise
     .update({ credit_balance: creditBalance })
     .eq('id', passengerId)
 }
+
+// ─── Phase 4: Dashboard + Invoice Upgrade Functions ─────────────
+
+export async function getPassengersWithPendingInvoices() {
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('passenger_id, amount, paid_amount, status, passengers:passenger_id (id, first_name, last_name)')
+    .in('status', ['pending', 'partial', 'sent', 'overdue'])
+
+  if (error) throw error
+
+  const passengerMap = new Map<string, { id: string; firstName: string; lastName: string; pendingAmount: number; invoiceCount: number }>()
+
+  for (const inv of data || []) {
+    if (!inv.passenger_id) continue
+    const passenger = inv.passengers as any
+    if (!passenger) continue
+    const pending = Number(inv.amount) - Number(inv.paid_amount)
+    if (pending <= 0) continue
+
+    if (!passengerMap.has(inv.passenger_id)) {
+      passengerMap.set(inv.passenger_id, {
+        id: passenger.id,
+        firstName: passenger.first_name,
+        lastName: passenger.last_name,
+        pendingAmount: 0,
+        invoiceCount: 0,
+      })
+    }
+    const entry = passengerMap.get(inv.passenger_id)!
+    entry.pendingAmount += pending
+    entry.invoiceCount++
+  }
+
+  return Array.from(passengerMap.values()).sort((a, b) => b.pendingAmount - a.pendingAmount)
+}
+
+export async function getVendorsWithPendingBalance() {
+  const [itemsRes, txnRes, vendorsRes] = await Promise.all([
+    supabase.from('invoice_items').select('vendor_id, purchase_price'),
+    supabase.from('transactions').select('vendor_id, amount, type')
+      .in('type', ['payment_to_vendor', 'refund_from_vendor']),
+    supabase.from('vendors').select('id, name').eq('is_active', true).eq('is_deleted', false),
+  ])
+
+  const vendorMap = new Map<string, { id: string; name: string; totalOwed: number; totalPaid: number; pendingBalance: number }>()
+
+  for (const v of vendorsRes.data || []) {
+    vendorMap.set(v.id, { id: v.id, name: v.name, totalOwed: 0, totalPaid: 0, pendingBalance: 0 })
+  }
+
+  for (const item of itemsRes.data || []) {
+    if (!item.vendor_id) continue
+    const v = vendorMap.get(item.vendor_id)
+    if (v) v.totalOwed += Number(item.purchase_price || 0)
+  }
+
+  for (const txn of txnRes.data || []) {
+    if (!txn.vendor_id) continue
+    const v = vendorMap.get(txn.vendor_id)
+    if (!v) continue
+    if (txn.type === 'payment_to_vendor') v.totalPaid += Number(txn.amount)
+    if (txn.type === 'refund_from_vendor') v.totalPaid -= Number(txn.amount)
+  }
+
+  for (const v of vendorMap.values()) {
+    v.pendingBalance = Math.max(0, v.totalOwed - v.totalPaid)
+  }
+
+  return Array.from(vendorMap.values())
+    .filter(v => v.pendingBalance > 0)
+    .sort((a, b) => b.pendingBalance - a.pendingBalance)
+}
+
+export async function getPassengerPendingInvoices(passengerId: string) {
+  const { data, error } = await supabase
+    .from('invoices')
+    .select('id, invoice_number, amount, paid_amount, status, due_date, created_at')
+    .eq('passenger_id', passengerId)
+    .in('status', ['pending', 'partial', 'sent', 'overdue'])
+    .order('created_at')
+
+  if (error) throw error
+  return (data || []).map(inv => ({
+    ...inv,
+    pending: Number(inv.amount) - Number(inv.paid_amount),
+  }))
+}
+
+export interface PaymentAllocation {
+  invoiceId: string
+  amount: number
+}
+
+export async function allocatePaymentToInvoices(
+  passengerId: string,
+  totalAmount: number,
+  allocations: PaymentAllocation[],
+  paymentData: {
+    paymentMethod: string
+    transactionDate: string
+    referenceNumber?: string
+    description?: string
+    originalAmount?: number | null
+    originalCurrency?: string | null
+    exchangeRate?: number | null
+  }
+) {
+  const results = []
+
+  for (const alloc of allocations) {
+    if (alloc.amount <= 0) continue
+    const txn = await createTransaction({
+      type: 'payment_received',
+      direction: 'in',
+      amount: alloc.amount,
+      currency: 'PKR',
+      payment_method: paymentData.paymentMethod as any,
+      reference_number: paymentData.referenceNumber || null,
+      passenger_id: passengerId,
+      invoice_id: alloc.invoiceId,
+      transaction_date: paymentData.transactionDate,
+      description: paymentData.description || 'Payment received',
+      original_amount: paymentData.originalAmount || null,
+      original_currency: paymentData.originalCurrency as any || null,
+      exchange_rate: paymentData.exchangeRate || null,
+      payment_mode: 'specific',
+    })
+    results.push(txn)
+  }
+
+  // If total exceeds all allocations, the remainder goes to credit balance
+  const totalAllocated = allocations.reduce((s, a) => s + a.amount, 0)
+  if (totalAmount > totalAllocated) {
+    // Record the excess as a general payment (no invoice)
+    await createTransaction({
+      type: 'payment_received',
+      direction: 'in',
+      amount: totalAmount - totalAllocated,
+      currency: 'PKR',
+      payment_method: paymentData.paymentMethod as any,
+      reference_number: paymentData.referenceNumber || null,
+      passenger_id: passengerId,
+      invoice_id: null,
+      transaction_date: paymentData.transactionDate,
+      description: 'Advance payment (credit)',
+      payment_mode: 'specific',
+    })
+  }
+
+  await updatePassengerCreditBalance(passengerId)
+  return results
+}
+
+export async function applyPassengerCredit(passengerId: string, invoiceId: string, amount: number) {
+  const txn = await createTransaction({
+    type: 'payment_received',
+    direction: 'in',
+    amount,
+    currency: 'PKR',
+    passenger_id: passengerId,
+    invoice_id: invoiceId,
+    transaction_date: new Date().toISOString().split('T')[0],
+    description: 'Credit applied from advance balance',
+    payment_mode: 'specific',
+  })
+
+  await updatePassengerCreditBalance(passengerId)
+  return txn
+}
+
+export async function recalculateInvoiceTotals(invoiceId: string) {
+  const { data: items } = await supabase
+    .from('invoice_items')
+    .select('selling_price, purchase_price, profit, total')
+    .eq('invoice_id', invoiceId)
+
+  if (!items) return
+
+  const amount = items.reduce((s, i) => s + Number(i.selling_price || 0), 0)
+  const totalCost = items.reduce((s, i) => s + Number(i.purchase_price || 0), 0)
+  const totalProfit = items.reduce((s, i) => s + Number(i.profit || 0), 0)
+
+  await supabase
+    .from('invoices')
+    .update({ amount, total_cost: totalCost, total_profit: totalProfit })
+    .eq('id', invoiceId)
+}
+
+export async function addInvoiceItem(invoiceId: string, item: InvoiceItemInput) {
+  const row = {
+    invoice_id: invoiceId,
+    description: item.description,
+    quantity: item.quantity,
+    unit_price: item.unit_price,
+    tax_percentage: item.tax_percentage,
+    service_type: item.service_type,
+    vendor_id: item.vendor_id,
+    purchase_price: item.purchase_price,
+    selling_price: item.selling_price,
+    profit: item.selling_price - item.purchase_price,
+    notes: item.notes || null,
+    original_currency: item.original_currency || null,
+    exchange_rate: item.exchange_rate || null,
+    purchase_price_original: item.purchase_price_original || null,
+    selling_price_original: item.selling_price_original || null,
+  }
+
+  const { data, error } = await supabase
+    .from('invoice_items')
+    .insert(row)
+    .select('*, vendors:vendor_id (name)')
+    .single()
+
+  if (error) throw error
+
+  await recalculateInvoiceTotals(invoiceId)
+  return data
+}
+
+export async function updateInvoiceItem(itemId: string, invoiceId: string, updates: Partial<{
+  description: string; quantity: number; unit_price: number; tax_percentage: number;
+  service_type: string | null; vendor_id: string | null;
+  purchase_price: number; selling_price: number; notes: string | null;
+  original_currency: string | null; exchange_rate: number | null;
+  purchase_price_original: number | null; selling_price_original: number | null;
+}>) {
+  if (updates.selling_price !== undefined && updates.purchase_price !== undefined) {
+    (updates as any).profit = updates.selling_price - updates.purchase_price
+  }
+
+  const { data, error } = await supabase
+    .from('invoice_items')
+    .update(updates)
+    .eq('id', itemId)
+    .select('*, vendors:vendor_id (name)')
+    .single()
+
+  if (error) throw error
+
+  await recalculateInvoiceTotals(invoiceId)
+  return data
+}
+
+export async function deleteInvoiceItem(itemId: string, invoiceId: string) {
+  const { error } = await supabase
+    .from('invoice_items')
+    .delete()
+    .eq('id', itemId)
+
+  if (error) throw error
+
+  await recalculateInvoiceTotals(invoiceId)
+}
+
+export async function getDashboardAlerts() {
+  const today = new Date().toISOString().split('T')[0]
+
+  const [overdueRes, vendorsRes] = await Promise.all([
+    supabase.from('invoices')
+      .select('id, invoice_number, amount, paid_amount')
+      .in('status', ['pending', 'partial', 'sent'])
+      .lt('due_date', today),
+    supabase.from('vendors')
+      .select('id, name, total_pending, credit_limit')
+      .eq('is_active', true)
+      .eq('is_deleted', false)
+      .gt('credit_limit', 0),
+  ])
+
+  const overdueInvoices = (overdueRes.data || []).map(inv => ({
+    ...inv,
+    outstanding: Number(inv.amount) - Number(inv.paid_amount),
+  }))
+  const overdueTotal = overdueInvoices.reduce((s, i) => s + i.outstanding, 0)
+
+  const vendorsOverLimit = (vendorsRes.data || []).filter(v => v.total_pending > v.credit_limit)
+
+  return {
+    overdueInvoices: { count: overdueInvoices.length, total: overdueTotal },
+    vendorsOverLimit: vendorsOverLimit.map(v => ({
+      id: v.id, name: v.name,
+      overBy: v.total_pending - v.credit_limit,
+    })),
+  }
+}
+
+export async function getDashboardFinancialSummary() {
+  const [invoicesRes, itemsRes, vendorTxnRes] = await Promise.all([
+    supabase.from('invoices').select('amount, paid_amount, total_cost, total_profit, status'),
+    supabase.from('invoice_items').select('purchase_price'),
+    supabase.from('transactions').select('amount, type')
+      .in('type', ['payment_to_vendor', 'refund_from_vendor']),
+  ])
+
+  const invoices = invoicesRes.data || []
+  const totalRevenue = invoices.reduce((s, i) => s + Number(i.amount), 0)
+  const totalCosts = (itemsRes.data || []).reduce((s, i) => s + Number(i.purchase_price || 0), 0)
+  const totalProfit = totalRevenue - totalCosts
+  const profitMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0
+
+  const pendingIn = invoices
+    .filter(i => !['paid', 'cancelled'].includes(i.status))
+    .reduce((s, i) => s + (Number(i.amount) - Number(i.paid_amount)), 0)
+
+  const totalVendorOwed = totalCosts
+  const totalVendorPaid = (vendorTxnRes.data || [])
+    .reduce((s, t) => s + (t.type === 'payment_to_vendor' ? Number(t.amount) : -Number(t.amount)), 0)
+  const pendingOut = Math.max(0, totalVendorOwed - totalVendorPaid)
+
+  return { totalRevenue, totalCosts, totalProfit, profitMargin, pendingIn, pendingOut }
+}
