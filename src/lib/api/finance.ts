@@ -127,6 +127,11 @@ export async function createInvoiceItems(invoiceId: string, items: InvoiceItemIn
     selling_price: item.selling_price,
     profit: item.selling_price - item.purchase_price,
     notes: item.notes || null,
+    // ROE fields
+    original_currency: item.original_currency || null,
+    exchange_rate: item.exchange_rate || null,
+    purchase_price_original: item.purchase_price_original || null,
+    selling_price_original: item.selling_price_original || null,
   }))
 
   const { data, error } = await supabase
@@ -504,4 +509,33 @@ export async function fetchTransactionSummary(dateFrom?: string, dateTo?: string
   }))
 
   return { totalIn, totalOut, netBalance: totalIn - totalOut, byType, byMethod }
+}
+
+// ─── Passenger Credit Balance ───────────────────────────────────
+
+export async function updatePassengerCreditBalance(passengerId: string): Promise<void> {
+  // Total invoiced to this passenger
+  const { data: invoices } = await supabase
+    .from('invoices')
+    .select('amount')
+    .eq('passenger_id', passengerId)
+
+  const totalInvoiced = (invoices || []).reduce((s, i) => s + i.amount, 0)
+
+  // Total payments received from this passenger
+  const { data: payments } = await supabase
+    .from('transactions')
+    .select('amount')
+    .eq('passenger_id', passengerId)
+    .eq('type', 'payment_received')
+
+  const totalPaid = (payments || []).reduce((s, t) => s + t.amount, 0)
+
+  // Credit balance = overpayment (paid more than invoiced)
+  const creditBalance = Math.max(0, totalPaid - totalInvoiced)
+
+  await supabase
+    .from('passengers')
+    .update({ credit_balance: creditBalance })
+    .eq('id', passengerId)
 }
