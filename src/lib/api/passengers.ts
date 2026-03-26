@@ -146,6 +146,15 @@ export async function createPassengerFromQuery(
     description: `Auto-created from Query ${queryNumber}`,
   }).then(() => {}) // fire and forget
 
+  // Auto-create document checklist for this passenger in the query
+  try {
+    const { createDefaultChecklist } = await import('./documents')
+    await createDefaultChecklist(queryId, passenger.id)
+  } catch (err) {
+    console.error('Failed to create document checklist:', err)
+    // Non-blocking — checklist will be created on first view
+  }
+
   return { passenger, isPrimary }
 }
 
