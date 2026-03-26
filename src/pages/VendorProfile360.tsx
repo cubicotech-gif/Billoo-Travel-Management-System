@@ -4,15 +4,25 @@ import { supabase } from '@/lib/supabase'
 import { formatCurrency } from '@/lib/formatCurrency'
 import {
   ArrowLeft, Building2, Phone, Mail, MessageCircle, MapPin,
-  Star, Tag, Edit2, Save, X, DollarSign, CreditCard,
+  Star, Tag, Edit2, Save, DollarSign, CreditCard,
   FileText, Activity, Loader, AlertTriangle,
-  TrendingUp, Wallet, ExternalLink
+  TrendingUp, Wallet, ExternalLink, ArrowRightLeft
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { Database } from '@/types/database'
-import VendorLedger from '@/components/VendorLedger'
-import VendorPayment from '@/components/VendorPayment'
 import VendorForm from '@/components/VendorForm'
+import VendorQuickActions from '@/components/vendors/VendorQuickActions'
+import RecordVendorPaymentModal from '@/components/vendors/RecordVendorPaymentModal'
+import RecordVendorRefundModal from '@/components/vendors/RecordVendorRefundModal'
+import VendorStatement from '@/components/vendors/VendorStatement'
+import VendorRunningLedger from '@/components/vendors/VendorRunningLedger'
+import VendorPayablesBreakdown from '@/components/vendors/VendorPayablesBreakdown'
+import {
+  getVendorRunningAccount, getVendorLedgerEntries,
+  getVendorServicesHistory, fetchVendorTransactions,
+  type VendorRunningAccount, type VendorLedgerEntry,
+} from '@/lib/api/vendors'
+import { TRANSACTION_TYPE_CONFIG, PAYMENT_METHOD_LABELS } from '@/types/finance'
 
 type Vendor = Database['public']['Tables']['vendors']['Row']
 
@@ -87,13 +97,22 @@ export default function VendorProfile360() {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [showEditForm, setShowEditForm] = useState(false)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [showRefundModal, setShowRefundModal] = useState(false)
+  const [showStatement, setShowStatement] = useState(false)
 
   // Tab data
   const [transactions, setTransactions] = useState<VendorTransaction[]>([])
+  const [vendorTxns, setVendorTxns] = useState<any[]>([])
   const [queryServices, setQueryServices] = useState<QueryService[]>([])
+  const [invoiceServices, setInvoiceServices] = useState<any[]>([])
   const [activities, setActivities] = useState<ActivityEntry[]>([])
   const [notes, setNotes] = useState('')
   const [savingNotes, setSavingNotes] = useState(false)
+
+  // Running account (computed from invoice_items + transactions)
+  const [runningAccount, setRunningAccount] = useState<VendorRunningAccount | null>(null)
+  const [ledgerEntries, setLedgerEntries] = useState<VendorLedgerEntry[]>([])
+  const [financialSubTab, setFinancialSubTab] = useState<'ledger' | 'payments' | 'payables'>('ledger')
 
   const loadVendor = useCallback(async () => {
     if (!id) return
@@ -173,20 +192,57 @@ export default function VendorProfile360() {
     }
   }, [id])
 
+  const loadRunningAccount = useCallback(async () => {
+    if (!id) return
+    try {
+      const [account, ledger, txns] = await Promise.all([
+        getVendorRunningAccount(id),
+        getVendorLedgerEntries(id),
+        fetchVendorTransactions(id),
+      ])
+      setRunningAccount(account)
+      setLedgerEntries(ledger)
+      setVendorTxns(txns)
+    } catch (err) {
+      console.error('Error loading running account:', err)
+    }
+  }, [id])
+
+  const loadInvoiceServices = useCallback(async () => {
+    if (!id) return
+    try {
+      const data = await getVendorServicesHistory(id)
+      setInvoiceServices(data)
+    } catch (err) {
+      console.error('Error loading invoice services:', err)
+    }
+  }, [id])
+
   useEffect(() => {
     loadVendor()
   }, [loadVendor])
 
   useEffect(() => {
     if (!vendor) return
-    if (activeTab === 'financial') {
+    if (activeTab === 'overview') {
+      loadActivities()
+      loadRunningAccount()
+    } else if (activeTab === 'financial') {
       loadTransactions()
+      loadRunningAccount()
     } else if (activeTab === 'services') {
       loadQueryServices()
-    } else if (activeTab === 'notes' || activeTab === 'overview') {
+      loadInvoiceServices()
+    } else if (activeTab === 'notes') {
       loadActivities()
     }
-  }, [activeTab, vendor, loadTransactions, loadQueryServices, loadActivities])
+  }, [activeTab, vendor, loadTransactions, loadQueryServices, loadActivities, loadRunningAccount, loadInvoiceServices])
+
+  const handleActionSuccess = async () => {
+    setShowPaymentModal(false)
+    setShowRefundModal(false)
+    await Promise.all([loadVendor(), loadRunningAccount()])
+  }
 
   const handleSaveNotes = async () => {
     if (!id) return
@@ -224,10 +280,16 @@ export default function VendorProfile360() {
   }
 
   const serviceTypes = vendor.service_types?.length ? vendor.service_types : [vendor.type]
-  const creditUsagePercent = vendor.credit_limit > 0
-    ? Math.min(100, (vendor.total_pending / vendor.credit_limit) * 100)
+
+  // Use running account if available (computed from actual data), fallback to vendor fields
+  const totalOwed = runningAccount?.totalOwed ?? vendor.total_business
+  const totalPaid = runningAccount?.totalPaid ?? vendor.total_paid
+  const balanceDue = runningAccount?.balanceDue ?? vendor.total_pending
+  const creditLimit = runningAccount?.creditLimit ?? vendor.credit_limit
+  const creditUsagePercent = creditLimit > 0
+    ? Math.min(100, (balanceDue / creditLimit) * 100)
     : 0
-  const isOverCreditLimit = vendor.credit_limit > 0 && vendor.total_pending > vendor.credit_limit
+  const isOverCreditLimit = creditLimit > 0 && balanceDue > creditLimit
 
   return (
     <div className="space-y-6">
@@ -294,7 +356,13 @@ export default function VendorProfile360() {
               )}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-start">
+            <VendorQuickActions
+              onRecordPayment={() => setShowPaymentModal(true)}
+              onRecordRefund={() => setShowRefundModal(true)}
+              onDownloadStatement={() => setShowStatement(true)}
+              hasBalance={balanceDue > 0}
+            />
             <button
               onClick={() => setShowEditForm(true)}
               className="px-3 py-2 bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg text-white text-sm transition-colors"
@@ -307,30 +375,33 @@ export default function VendorProfile360() {
         {/* Quick Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
           <div className="bg-white bg-opacity-10 rounded-lg p-3">
-            <p className="text-xs text-purple-200">Total Business</p>
-            <p className="text-xl font-bold">{formatCurrency(vendor.total_business)}</p>
+            <p className="text-xs text-purple-200">Total Owed</p>
+            <p className="text-xl font-bold">{formatCurrency(totalOwed)}</p>
           </div>
           <div className="bg-white bg-opacity-10 rounded-lg p-3">
             <p className="text-xs text-purple-200">Total Paid</p>
-            <p className="text-xl font-bold">{formatCurrency(vendor.total_paid)}</p>
+            <p className="text-xl font-bold">{formatCurrency(totalPaid)}</p>
           </div>
           <div className="bg-white bg-opacity-10 rounded-lg p-3">
-            <p className="text-xs text-purple-200">Total Pending</p>
-            <p className={`text-xl font-bold ${vendor.total_pending > 0 ? 'text-red-300' : ''}`}>
-              {formatCurrency(vendor.total_pending)}
+            <p className="text-xs text-purple-200">Balance Due</p>
+            <p className={`text-xl font-bold ${balanceDue > 0 ? 'text-red-300' : ''}`}>
+              {formatCurrency(balanceDue)}
             </p>
           </div>
           <div className="bg-white bg-opacity-10 rounded-lg p-3">
             <p className="text-xs text-purple-200">Credit Limit</p>
             <p className="text-xl font-bold">
-              {vendor.credit_limit > 0 ? formatCurrency(vendor.credit_limit) : '—'}
+              {creditLimit > 0 ? formatCurrency(creditLimit) : '—'}
             </p>
-            {vendor.credit_limit > 0 && (
-              <div className="mt-1 bg-white bg-opacity-20 rounded-full h-1.5">
-                <div
-                  className={`h-1.5 rounded-full ${isOverCreditLimit ? 'bg-red-400' : 'bg-green-400'}`}
-                  style={{ width: `${Math.min(100, creditUsagePercent)}%` }}
-                />
+            {creditLimit > 0 && (
+              <div className="mt-1">
+                <div className="bg-white bg-opacity-20 rounded-full h-1.5">
+                  <div
+                    className={`h-1.5 rounded-full ${isOverCreditLimit ? 'bg-red-400' : 'bg-green-400'}`}
+                    style={{ width: `${Math.min(100, creditUsagePercent)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-purple-200 mt-1">{creditUsagePercent.toFixed(0)}% used</p>
               </div>
             )}
           </div>
@@ -344,7 +415,7 @@ export default function VendorProfile360() {
           <div>
             <p className="font-medium text-red-800">Credit Limit Exceeded</p>
             <p className="text-sm text-red-700">
-              Pending amount ({formatCurrency(vendor.total_pending)}) exceeds credit limit ({formatCurrency(vendor.credit_limit)}) by {formatCurrency(vendor.total_pending - vendor.credit_limit)}
+              Balance due ({formatCurrency(balanceDue)}) exceeds credit limit ({formatCurrency(creditLimit)}) by {formatCurrency(balanceDue - creditLimit)}
             </p>
           </div>
         </div>
@@ -375,9 +446,19 @@ export default function VendorProfile360() {
 
       {/* Tab Content */}
       <div>
-        {activeTab === 'overview' && <OverviewTab vendor={vendor} activities={activities} onRecordPayment={() => setShowPaymentModal(true)} />}
-        {activeTab === 'financial' && <FinancialTab vendor={vendor} transactions={transactions} />}
-        {activeTab === 'services' && <ServicesTab services={queryServices} />}
+        {activeTab === 'overview' && (
+          <OverviewTab vendor={vendor} activities={activities}
+            totalOwed={totalOwed} totalPaid={totalPaid} balanceDue={balanceDue} creditLimit={creditLimit}
+            onRecordPayment={() => setShowPaymentModal(true)} />
+        )}
+        {activeTab === 'financial' && (
+          <FinancialTab vendor={vendor} vendorId={vendor.id}
+            totalOwed={totalOwed} totalPaid={totalPaid} balanceDue={balanceDue}
+            transactions={transactions} vendorTxns={vendorTxns}
+            financialSubTab={financialSubTab} setFinancialSubTab={setFinancialSubTab}
+            onRecordPayment={() => setShowPaymentModal(true)} />
+        )}
+        {activeTab === 'services' && <ServicesTab services={queryServices} invoiceServices={invoiceServices} />}
         {activeTab === 'bank' && <BankTab vendor={vendor} />}
         {activeTab === 'notes' && (
           <NotesTab
@@ -404,45 +485,51 @@ export default function VendorProfile360() {
 
       {/* Payment Modal */}
       {showPaymentModal && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowPaymentModal(false)} />
-            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
-              <div className="bg-purple-600 px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-semibold text-white">Record Payment</h3>
-                    <p className="text-sm text-purple-100 mt-1">{vendor.name}</p>
-                  </div>
-                  <button onClick={() => setShowPaymentModal(false)} className="text-white hover:text-gray-200">
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-              </div>
-              <div className="px-6 py-4">
-                <VendorPayment
-                  vendorId={vendor.id}
-                  vendorName={vendor.name}
-                  outstandingBalance={vendor.total_pending}
-                  onSuccess={() => {
-                    setShowPaymentModal(false)
-                    loadVendor()
-                  }}
-                  onCancel={() => setShowPaymentModal(false)}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        <RecordVendorPaymentModal
+          vendorId={vendor.id}
+          vendorName={vendor.name}
+          balanceDue={balanceDue}
+          onSuccess={handleActionSuccess}
+          onCancel={() => setShowPaymentModal(false)}
+        />
+      )}
+
+      {/* Refund Modal */}
+      {showRefundModal && (
+        <RecordVendorRefundModal
+          vendorId={vendor.id}
+          vendorName={vendor.name}
+          onSuccess={handleActionSuccess}
+          onCancel={() => setShowRefundModal(false)}
+        />
+      )}
+
+      {/* Statement */}
+      {showStatement && (
+        <VendorStatement
+          vendorName={vendor.name}
+          vendorPhone={vendor.phone}
+          vendorEmail={vendor.email}
+          vendorContact={vendor.contact_person}
+          ledgerEntries={ledgerEntries}
+          totalOwed={totalOwed}
+          totalPaid={totalPaid}
+          balanceDue={balanceDue}
+          onClose={() => setShowStatement(false)}
+        />
       )}
     </div>
   )
 }
 
 // ─── Tab 1: Overview ────────────────────────────────────────────────
-function OverviewTab({ vendor, activities, onRecordPayment }: { vendor: Vendor; activities: ActivityEntry[]; onRecordPayment: () => void }) {
-  const creditUsagePercent = vendor.credit_limit > 0
-    ? Math.min(100, (vendor.total_pending / vendor.credit_limit) * 100)
+function OverviewTab({ activities, totalOwed, totalPaid, balanceDue, creditLimit, onRecordPayment }: {
+  vendor?: Vendor; activities: ActivityEntry[];
+  totalOwed: number; totalPaid: number; balanceDue: number; creditLimit: number;
+  onRecordPayment: () => void
+}) {
+  const creditUsagePercent = creditLimit > 0
+    ? Math.min(100, (balanceDue / creditLimit) * 100)
     : 0
 
   return (
@@ -451,10 +538,10 @@ function OverviewTab({ vendor, activities, onRecordPayment }: { vendor: Vendor; 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-blue-800">Total Payable</span>
+            <span className="text-sm font-medium text-blue-800">Total Owed</span>
             <Wallet className="w-5 h-5 text-blue-600" />
           </div>
-          <p className="text-2xl font-bold text-blue-900">{formatCurrency(vendor.total_business)}</p>
+          <p className="text-2xl font-bold text-blue-900">{formatCurrency(totalOwed)}</p>
         </div>
 
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -462,21 +549,21 @@ function OverviewTab({ vendor, activities, onRecordPayment }: { vendor: Vendor; 
             <span className="text-sm font-medium text-green-800">Total Paid</span>
             <DollarSign className="w-5 h-5 text-green-600" />
           </div>
-          <p className="text-2xl font-bold text-green-900">{formatCurrency(vendor.total_paid)}</p>
+          <p className="text-2xl font-bold text-green-900">{formatCurrency(totalPaid)}</p>
           <p className="text-xs text-green-700 mt-1">
-            {vendor.total_business > 0
-              ? `${((vendor.total_paid / vendor.total_business) * 100).toFixed(1)}% of total`
+            {totalOwed > 0
+              ? `${((totalPaid / totalOwed) * 100).toFixed(1)}% of total`
               : 'No business yet'}
           </p>
         </div>
 
-        <div className={`border rounded-lg p-4 ${vendor.total_pending > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+        <div className={`border rounded-lg p-4 ${balanceDue > 0 ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-sm font-medium ${vendor.total_pending > 0 ? 'text-red-800' : 'text-gray-800'}`}>Pending</span>
-            <CreditCard className={`w-5 h-5 ${vendor.total_pending > 0 ? 'text-red-600' : 'text-gray-600'}`} />
+            <span className={`text-sm font-medium ${balanceDue > 0 ? 'text-red-800' : 'text-gray-800'}`}>Balance Due</span>
+            <CreditCard className={`w-5 h-5 ${balanceDue > 0 ? 'text-red-600' : 'text-gray-600'}`} />
           </div>
-          <p className={`text-2xl font-bold ${vendor.total_pending > 0 ? 'text-red-900' : 'text-gray-900'}`}>
-            {formatCurrency(vendor.total_pending)}
+          <p className={`text-2xl font-bold ${balanceDue > 0 ? 'text-red-900' : 'text-gray-900'}`}>
+            {formatCurrency(balanceDue)}
           </p>
         </div>
 
@@ -485,7 +572,7 @@ function OverviewTab({ vendor, activities, onRecordPayment }: { vendor: Vendor; 
             <span className="text-sm font-medium text-purple-800">Credit Limit Usage</span>
             <TrendingUp className="w-5 h-5 text-purple-600" />
           </div>
-          {vendor.credit_limit > 0 ? (
+          {creditLimit > 0 ? (
             <>
               <p className="text-2xl font-bold text-purple-900">{creditUsagePercent.toFixed(0)}%</p>
               <div className="mt-2 bg-purple-200 rounded-full h-2">
@@ -495,7 +582,7 @@ function OverviewTab({ vendor, activities, onRecordPayment }: { vendor: Vendor; 
                 />
               </div>
               <p className="text-xs text-purple-700 mt-1">
-                {formatCurrency(vendor.total_pending)} / {formatCurrency(vendor.credit_limit)}
+                {formatCurrency(balanceDue)} / {formatCurrency(creditLimit)}
               </p>
             </>
           ) : (
@@ -505,7 +592,7 @@ function OverviewTab({ vendor, activities, onRecordPayment }: { vendor: Vendor; 
       </div>
 
       {/* Quick Action */}
-      {vendor.total_pending > 0 && (
+      {balanceDue > 0 && (
         <div className="flex justify-end">
           <button onClick={onRecordPayment} className="btn btn-primary">
             <DollarSign className="w-4 h-4 mr-2" />
@@ -543,111 +630,218 @@ function OverviewTab({ vendor, activities, onRecordPayment }: { vendor: Vendor; 
 }
 
 // ─── Tab 2: Financial History ───────────────────────────────────────
-function FinancialTab({ vendor, transactions }: { vendor: Vendor; transactions: VendorTransaction[] }) {
+function FinancialTab({ vendorId, totalOwed, totalPaid, balanceDue, vendorTxns, financialSubTab, setFinancialSubTab, onRecordPayment }: {
+  vendor?: Vendor; vendorId: string;
+  totalOwed: number; totalPaid: number; balanceDue: number;
+  transactions?: VendorTransaction[]; vendorTxns: any[];
+  financialSubTab: string; setFinancialSubTab: (v: any) => void;
+  onRecordPayment: () => void;
+}) {
   return (
     <div className="space-y-6">
       {/* Summary Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <p className="text-sm font-medium text-blue-700">Total Payable</p>
-          <p className="text-2xl font-bold text-blue-900">{formatCurrency(vendor.total_business)}</p>
+          <p className="text-sm font-medium text-blue-700">Total Owed</p>
+          <p className="text-2xl font-bold text-blue-900">{formatCurrency(totalOwed)}</p>
         </div>
         <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <p className="text-sm font-medium text-green-700">Total Paid</p>
-          <p className="text-2xl font-bold text-green-900">{formatCurrency(vendor.total_paid)}</p>
+          <p className="text-2xl font-bold text-green-900">{formatCurrency(totalPaid)}</p>
         </div>
-        <div className={`border rounded-lg p-4 ${vendor.total_pending > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-          <p className={`text-sm font-medium ${vendor.total_pending > 0 ? 'text-red-700' : 'text-green-700'}`}>Outstanding</p>
-          <p className={`text-2xl font-bold ${vendor.total_pending > 0 ? 'text-red-900' : 'text-green-900'}`}>
-            {formatCurrency(vendor.total_pending)}
+        <div className={`border rounded-lg p-4 ${balanceDue > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+          <p className={`text-sm font-medium ${balanceDue > 0 ? 'text-red-700' : 'text-green-700'}`}>Balance Due</p>
+          <p className={`text-2xl font-bold ${balanceDue > 0 ? 'text-red-900' : 'text-green-900'}`}>
+            {formatCurrency(balanceDue)}
           </p>
         </div>
       </div>
 
-      {/* Vendor Ledger (existing component) */}
-      <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Ledger (Payments & Purchases)</h3>
-        <VendorLedger
-          vendorId={vendor.id}
-          vendorName={vendor.name}
-        />
+      {/* Record Payment button */}
+      {balanceDue > 0 && (
+        <div className="flex justify-end">
+          <button onClick={onRecordPayment} className="btn btn-primary bg-purple-600 hover:bg-purple-700">
+            <DollarSign className="w-4 h-4 mr-2" /> Record Payment
+          </button>
+        </div>
+      )}
+
+      {/* Sub-tabs */}
+      <div className="border-b border-gray-200">
+        <div className="flex gap-1">
+          {[
+            { key: 'ledger', label: 'Ledger View' },
+            { key: 'payments', label: 'Payment History' },
+            { key: 'payables', label: 'Payables Breakdown' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setFinancialSubTab(tab.key)}
+              className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                financialSubTab === tab.key
+                  ? 'bg-white border border-b-white border-gray-200 text-purple-600 -mb-px'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Vendor Transactions from vendor_transactions table */}
-      <div className="card">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Transaction History</h3>
-        {transactions.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-6">No transactions recorded</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Query</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Passenger</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cost</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Paid</th>
-                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {transactions.map(txn => (
-                  <tr key={txn.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                      {format(new Date(txn.transaction_date), 'MMM d, yyyy')}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      {txn.queries ? (
-                        <Link
-                          to={`/queries/${txn.query_id}`}
-                          className="text-purple-600 hover:text-purple-800 font-medium"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          {txn.queries.query_number}
-                        </Link>
-                      ) : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-600">
-                      {txn.passengers ? `${txn.passengers.first_name} ${txn.passengers.last_name}` : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-sm">
-                      <p className="font-medium text-gray-900">{txn.service_description}</p>
-                      <p className="text-xs text-gray-500">{txn.service_type}{txn.city ? ` · ${txn.city}` : ''}</p>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">
-                      {formatCurrency(txn.purchase_amount_pkr)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-right font-medium text-green-700">
-                      {formatCurrency(txn.amount_paid)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        txn.payment_status === 'paid' ? 'bg-green-100 text-green-800' :
-                        txn.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
-                      }`}>
-                        {txn.payment_status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      {/* Sub-tab content */}
+      {financialSubTab === 'ledger' && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Running Account Ledger</h3>
+          <VendorRunningLedger vendorId={vendorId} />
+        </div>
+      )}
+
+      {financialSubTab === 'payments' && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Payment History</h3>
+          {vendorTxns.length === 0 ? (
+            <p className="text-sm text-gray-500 text-center py-6">No payment transactions recorded</p>
+          ) : (
+            <div className="space-y-3">
+              {vendorTxns.map((txn: any) => {
+                const config = TRANSACTION_TYPE_CONFIG[txn.type as keyof typeof TRANSACTION_TYPE_CONFIG]
+                const isRefund = txn.type === 'refund_from_vendor'
+                const hasROE = txn.original_currency && txn.original_currency !== 'PKR'
+                return (
+                  <div key={txn.id} className="flex items-start gap-4 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      isRefund ? 'bg-blue-100' : 'bg-red-100'
+                    }`}>
+                      <DollarSign className={`w-5 h-5 ${isRefund ? 'text-blue-600' : 'text-red-600'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${config?.color || 'bg-gray-100 text-gray-800'}`}>
+                          {config?.label || txn.type}
+                        </span>
+                        <span className="text-xs text-gray-500 font-mono">{txn.transaction_number}</span>
+                        {txn.payment_mode && (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            txn.payment_mode === 'collective' ? 'bg-gray-100 text-gray-700' : 'bg-blue-100 text-blue-700'
+                          }`}>
+                            {txn.payment_mode === 'collective' ? 'Collective' : 'Specific'}
+                          </span>
+                        )}
+                        {txn.passengers && (
+                          <span className="text-xs text-purple-600">{txn.passengers.first_name} {txn.passengers.last_name}</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-700 mt-1">{txn.description || '—'}</p>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                        <span>{format(new Date(txn.transaction_date), 'dd MMM yyyy')}</span>
+                        {txn.payment_method && <span>{PAYMENT_METHOD_LABELS[txn.payment_method] || txn.payment_method}</span>}
+                        {txn.reference_number && <span>Ref: {txn.reference_number}</span>}
+                        {hasROE && (
+                          <span className="flex items-center gap-1 text-blue-600">
+                            <ArrowRightLeft className="w-3 h-3" />
+                            {txn.original_currency} {Number(txn.original_amount).toLocaleString()} @ {txn.exchange_rate}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className={`text-right flex-shrink-0 ${isRefund ? 'text-blue-600' : 'text-red-600'}`}>
+                      <p className="text-lg font-semibold">{isRefund ? '+' : '-'}{formatCurrency(txn.amount)}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {financialSubTab === 'payables' && (
+        <div className="card">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Payables Breakdown by Passenger</h3>
+          <VendorPayablesBreakdown vendorId={vendorId} />
+        </div>
+      )}
     </div>
   )
 }
 
 // ─── Tab 3: Services Provided ───────────────────────────────────────
-function ServicesTab({ services }: { services: QueryService[] }) {
+function ServicesTab({ services, invoiceServices }: { services: QueryService[]; invoiceServices: any[] }) {
   return (
+    <div className="space-y-6">
+    {/* Invoice-based services (from invoice_items) */}
+    {invoiceServices.length > 0 && (
+      <div className="card">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+          Services via Invoices ({invoiceServices.length})
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Invoice</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Passenger</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Cost (PKR)</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Selling</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Profit</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {invoiceServices.map((svc: any) => {
+                const invoice = svc.invoices as any
+                const passenger = invoice?.passengers
+                return (
+                  <tr key={svc.id} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 text-sm font-medium text-gray-900">
+                      {invoice?.invoice_number || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      {passenger ? (
+                        <Link to={`/passengers/${passenger.id}`} className="text-purple-600 hover:text-purple-800">
+                          {passenger.first_name} {passenger.last_name}
+                        </Link>
+                      ) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-900">{svc.description}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_COLORS[svc.service_type] || TYPE_COLORS['Other']}`}>
+                        {svc.service_type || 'Service'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">
+                      {formatCurrency(svc.purchase_price)}
+                      {svc.original_currency && svc.original_currency !== 'PKR' && (
+                        <span className="block text-xs text-blue-600">
+                          {svc.original_currency} {Number(svc.purchase_price_original).toLocaleString()} @ {svc.exchange_rate}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right font-medium text-gray-900">
+                      {formatCurrency(svc.selling_price)}
+                    </td>
+                    <td className={`px-4 py-3 text-sm text-right font-medium ${svc.profit >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {formatCurrency(svc.profit)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
+                      {format(new Date(invoice?.created_at || svc.created_at), 'dd MMM yyyy')}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
+    {/* Query-based services */}
     <div className="card">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">
-        Services Provided ({services.length})
+        Query Services ({services.length})
       </h3>
       {services.length === 0 ? (
         <p className="text-sm text-gray-500 text-center py-6">No services found for this vendor</p>
@@ -716,6 +910,7 @@ function ServicesTab({ services }: { services: QueryService[] }) {
           </table>
         </div>
       )}
+    </div>
     </div>
   )
 }
