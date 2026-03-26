@@ -1,5 +1,6 @@
 import { Package, FileText, Download, Truck } from 'lucide-react';
 import { Query, QueryService } from '../../../types/query-workflow';
+import { formatCurrency, type CurrencyCode } from '../../../lib/formatCurrency';
 
 interface Props {
   query: Query;
@@ -8,6 +9,9 @@ interface Props {
 }
 
 export default function StageServicesBooked({ query: _query, services, onStartDelivery }: Props) {
+  const totalCostPkr = services.reduce((sum, s) => sum + (s.cost_price_pkr || s.cost_price || 0) * (s.quantity || 1), 0);
+  const totalSellingPkr = services.reduce((sum, s) => sum + (s.selling_price_pkr || s.selling_price || 0) * (s.quantity || 1), 0);
+
   return (
     <div className="space-y-6">
       {/* Stage Banner */}
@@ -18,7 +22,7 @@ export default function StageServicesBooked({ query: _query, services, onStartDe
           </div>
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-indigo-900 mb-2">
-              🎉 All Services Successfully Booked!
+              All Services Successfully Booked!
             </h3>
             <p className="text-sm text-indigo-700">
               All vendors have been paid and all bookings are confirmed. The package is ready for
@@ -36,46 +40,61 @@ export default function StageServicesBooked({ query: _query, services, onStartDe
         </h3>
 
         <div className="space-y-3">
-          {services.map((service, index) => (
-            <div
-              key={service.id}
-              className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200"
-            >
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-1">
-                  <span className="text-xs font-semibold text-gray-500">#{index + 1}</span>
-                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                    {service.service_type}
+          {services.map((service, index) => {
+            const cur = (service.currency || 'PKR') as CurrencyCode;
+            const isForeign = cur !== 'PKR';
+            const costPkr = (service.cost_price_pkr || service.cost_price || 0) * (service.quantity || 1);
+            const costOriginal = (service.cost_price || 0) * (service.quantity || 1);
+
+            return (
+              <div
+                key={service.id}
+                className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200"
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="text-xs font-semibold text-gray-500">#{index + 1}</span>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                      {service.service_type}
+                    </span>
+                    {isForeign && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                        {cur}
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="font-medium text-gray-900 mb-1">{service.service_description}</h4>
+                  {service.vendors && (
+                    <p className="text-sm text-gray-600">Vendor: {service.vendors.name}</p>
+                  )}
+                  {service.booking_confirmation && (
+                    <p className="text-xs text-green-700 mt-1">
+                      Confirmation: {service.booking_confirmation}
+                    </p>
+                  )}
+                  {service.booked_date && (
+                    <p className="text-xs text-gray-500">
+                      Booked: {new Date(service.booked_date).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <div className="text-xs text-gray-500 mb-1">Cost Paid</div>
+                    {isForeign && (
+                      <div className="text-xs text-gray-500">{formatCurrency(costOriginal, cur)}</div>
+                    )}
+                    <div className="font-semibold text-gray-900">
+                      {formatCurrency(costPkr)}
+                    </div>
+                  </div>
+                  <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-green-100 text-green-800">
+                    Confirmed
                   </span>
                 </div>
-                <h4 className="font-medium text-gray-900 mb-1">{service.service_description}</h4>
-                {service.vendors && (
-                  <p className="text-sm text-gray-600">Vendor: {service.vendors.name}</p>
-                )}
-                {service.booking_confirmation && (
-                  <p className="text-xs text-green-700 mt-1">
-                    Confirmation: {service.booking_confirmation}
-                  </p>
-                )}
-                {service.booked_date && (
-                  <p className="text-xs text-gray-500">
-                    Booked: {new Date(service.booked_date).toLocaleDateString()}
-                  </p>
-                )}
               </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <div className="text-xs text-gray-500 mb-1">Cost Paid</div>
-                  <div className="font-semibold text-gray-900">
-                    Rs {((service.cost_price || 0) * (service.quantity || 1)).toLocaleString()}
-                  </div>
-                </div>
-                <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-green-100 text-green-800">
-                  ✅ Confirmed
-                </span>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Totals */}
@@ -88,19 +107,13 @@ export default function StageServicesBooked({ query: _query, services, onStartDe
             <div className="bg-red-50 rounded-lg p-4 border border-red-200">
               <div className="text-xs text-red-700 mb-1">Total Cost Paid to Vendors</div>
               <div className="text-2xl font-bold text-red-700">
-                Rs{' '}
-                {services
-                  .reduce((sum, s) => sum + (s.cost_price || 0) * (s.quantity || 1), 0)
-                  .toLocaleString()}
+                {formatCurrency(totalCostPkr)}
               </div>
             </div>
             <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
               <div className="text-xs text-blue-700 mb-1">Package Value (Customer)</div>
               <div className="text-2xl font-bold text-blue-700">
-                Rs{' '}
-                {services
-                  .reduce((sum, s) => sum + (s.selling_price || 0) * (s.quantity || 1), 0)
-                  .toLocaleString()}
+                {formatCurrency(totalSellingPkr)}
               </div>
             </div>
           </div>
@@ -144,7 +157,7 @@ export default function StageServicesBooked({ query: _query, services, onStartDe
             onClick={() => alert('Phase B: Email booking documents to customer')}
             className="flex-1 px-4 py-3 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-medium"
           >
-            📧 Email Documents to Customer
+            Email Documents to Customer
           </button>
           <button
             onClick={onStartDelivery}

@@ -48,11 +48,20 @@ export interface Query {
   follow_up_date?: string | null
   notes?: string | null
 
-  // Financials
+  // Financials (legacy — original currency totals)
   cost_price: number
   selling_price: number
   profit: number
   profit_margin: number
+
+  // PKR totals (computed from services)
+  total_cost_pkr?: number
+  total_selling_pkr?: number
+  total_profit_pkr?: number
+
+  // Advance payment tracking
+  advance_payment_recorded?: boolean
+  advance_transaction_id?: string | null
 
   // Stage tracking fields
   proposal_sent_date?: string
@@ -78,6 +87,13 @@ export interface QueryService {
 
   // Service-specific details (JSON field)
   service_details?: any
+
+  // ROE / Multi-currency fields
+  currency?: string       // 'PKR' | 'SAR' | 'USD' | 'AED' | 'EUR' | 'GBP'
+  exchange_rate?: number  // 1 SAR = X PKR
+  cost_price_pkr?: number
+  selling_price_pkr?: number
+  profit_pkr?: number
 
   // Booking fields
   booking_status: BookingStatus

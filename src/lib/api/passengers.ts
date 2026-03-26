@@ -53,6 +53,102 @@ export async function createPassenger(passenger: {
   return data
 }
 
+// ─── Phase 5: Passenger Auto-Create from Query ──────────────────
+
+export async function findDuplicatePassenger(
+  firstName: string,
+  lastName: string,
+  phone?: string,
+  passportNumber?: string
+): Promise<any | null> {
+  // Check by name + phone first (most common match)
+  if (phone) {
+    const { data } = await supabase
+      .from('passengers')
+      .select('id, first_name, last_name, phone, email, passport_number')
+      .ilike('first_name', firstName.trim())
+      .ilike('last_name', lastName.trim())
+      .eq('phone', phone.trim())
+      .limit(1)
+    if (data && data.length > 0) return data[0]
+  }
+
+  // Check by passport number (unique identifier)
+  if (passportNumber) {
+    const { data } = await supabase
+      .from('passengers')
+      .select('id, first_name, last_name, phone, email, passport_number')
+      .ilike('passport_number', passportNumber.trim())
+      .limit(1)
+    if (data && data.length > 0) return data[0]
+  }
+
+  return null
+}
+
+export interface CreatePassengerFromQueryInput {
+  first_name: string
+  last_name: string
+  phone: string
+  whatsapp?: string
+  email?: string
+  passport_number?: string
+  passport_expiry?: string
+  date_of_birth?: string
+  cnic?: string
+  gender?: string
+  nationality?: string
+}
+
+export async function createPassengerFromQuery(
+  passengerData: CreatePassengerFromQueryInput,
+  queryId: string,
+  queryNumber: string
+) {
+  // Create the passenger record
+  const { data: passenger, error: pError } = await supabase
+    .from('passengers')
+    .insert({
+      ...passengerData,
+      nationality: passengerData.nationality || 'Pakistani',
+      status: 'active',
+    })
+    .select('id, first_name, last_name, email, phone, passport_number, nationality')
+    .single()
+
+  if (pError) throw pError
+
+  // Create the query_passengers junction record
+  const { data: existingLinks } = await supabase
+    .from('query_passengers')
+    .select('id')
+    .eq('query_id', queryId)
+    .limit(1)
+
+  const isPrimary = !existingLinks || existingLinks.length === 0
+
+  const { error: qpError } = await supabase
+    .from('query_passengers')
+    .insert({
+      query_id: queryId,
+      passenger_id: passenger.id,
+      is_primary: isPrimary,
+      passenger_type: 'adult',
+    })
+
+  if (qpError) throw qpError
+
+  // Log activity
+  await supabase.from('activities').insert({
+    entity_type: 'passenger',
+    entity_id: passenger.id,
+    action: 'created',
+    description: `Auto-created from Query ${queryNumber}`,
+  }).then(() => {}) // fire and forget
+
+  return { passenger, isPrimary }
+}
+
 // ─── Phase 2: Passenger Profile Functions ───────────────────────
 
 export interface PassengerOutstanding {
