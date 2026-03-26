@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, MapPin, Phone, Mail, Users,
-  AlertCircle, Clock, Package, Calculator, DollarSign
+  AlertCircle, Clock, Package, Calculator, DollarSign,
+  Copy, BookmarkPlus, Bell
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
@@ -25,6 +26,11 @@ import QueryPaymentSummary from './QueryPaymentSummary';
 import GenerateInvoiceModal from './GenerateInvoiceModal';
 import QueryInvoiceStatus from './QueryInvoiceStatus';
 import GenerateItinerary from './GenerateItinerary';
+import CloneQueryModal from './CloneQueryModal';
+import SaveTemplateModal from './SaveTemplateModal';
+import SetReminderModal from './SetReminderModal';
+import QueryReminders from './QueryReminders';
+import { checkAutoReminders } from '../../lib/api/queries';
 
 export default function QueryWorkspace() {
   const { queryId } = useParams<{ queryId: string }>();
@@ -36,6 +42,9 @@ export default function QueryWorkspace() {
   const [showCalculator, setShowCalculator] = useState(false);
   const [showAdvancePayment, setShowAdvancePayment] = useState(false);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [showCloneModal, setShowCloneModal] = useState(false);
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
 
   useEffect(() => {
     if (queryId) {
@@ -147,6 +156,9 @@ export default function QueryWorkspace() {
         setShowInvoiceModal(true);
       }
 
+      // Auto-create reminders based on status
+      checkAutoReminders(query.id, newStatus).catch(() => {});
+
       console.log('✅ Status changed to:', newStatus);
     } catch (err: any) {
       console.error('Error updating status:', err);
@@ -242,6 +254,27 @@ export default function QueryWorkspace() {
 
             <div className="flex items-center gap-2">
               {/* Quick Action Buttons */}
+              <button
+                onClick={() => setShowCloneModal(true)}
+                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Clone Query"
+              >
+                <Copy className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowSaveTemplate(true)}
+                className="p-2 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                title="Save as Template"
+              >
+                <BookmarkPlus className="w-5 h-5" />
+              </button>
+              <button
+                onClick={() => setShowReminderModal(true)}
+                className="p-2 text-gray-500 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                title="Set Reminder"
+              >
+                <Bell className="w-5 h-5" />
+              </button>
               <button
                 onClick={() => setShowCalculator(true)}
                 className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -369,6 +402,9 @@ export default function QueryWorkspace() {
           {renderStageContent()}
         </div>
 
+        {/* Reminders */}
+        <QueryReminders queryId={query.id} />
+
         {/* Payment Summary — visible at stages 4+ (when advance payments become relevant) */}
         {!['New Query - Not Responded', 'Responded - Awaiting Reply', 'Working on Proposal', 'Cancelled'].includes(query.status) && (
           <QueryPaymentSummary queryId={query.id} />
@@ -406,6 +442,33 @@ export default function QueryWorkspace() {
           services={services}
           onClose={() => setShowInvoiceModal(false)}
           onSuccess={() => { setShowInvoiceModal(false); loadQueryData(); }}
+        />
+      )}
+
+      {showCloneModal && (
+        <CloneQueryModal
+          sourceQuery={query}
+          onClose={() => setShowCloneModal(false)}
+          onSuccess={(newId) => { setShowCloneModal(false); navigate(`/queries/${newId}`); }}
+        />
+      )}
+
+      {showSaveTemplate && (
+        <SaveTemplateModal
+          queryId={query.id}
+          queryNumber={query.query_number}
+          onClose={() => setShowSaveTemplate(false)}
+          onSuccess={() => { setShowSaveTemplate(false); alert('Template saved successfully!'); }}
+        />
+      )}
+
+      {showReminderModal && (
+        <SetReminderModal
+          queryId={query.id}
+          queryNumber={query.query_number}
+          clientName={query.client_name}
+          onClose={() => setShowReminderModal(false)}
+          onSuccess={() => { setShowReminderModal(false); loadQueryData(); }}
         />
       )}
     </div>

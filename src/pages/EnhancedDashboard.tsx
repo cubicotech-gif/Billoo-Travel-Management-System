@@ -13,6 +13,8 @@ import {
 import { format, subDays } from 'date-fns'
 import { formatCurrency } from '@/lib/formatCurrency'
 import DocumentExpiryAlerts from '@/components/DocumentExpiryAlerts'
+import TravelAlertBanner from '@/components/queries/TravelAlertBanner'
+import TravelAlertsDashboard from '@/components/queries/TravelAlertsDashboard'
 import QuickActionBar from '@/components/finance/QuickActionBar'
 import SmartPassengerSelector from '@/components/finance/SmartPassengerSelector'
 import SmartVendorSelector from '@/components/finance/SmartVendorSelector'
@@ -197,6 +199,9 @@ export default function EnhancedDashboard() {
           />
         </div>
       </div>
+
+      {/* Travel Proximity Alerts */}
+      <TravelAlertBanner />
 
       {/* Mini Alerts */}
       {hasAlerts && (
@@ -536,6 +541,9 @@ export default function EnhancedDashboard() {
           </LineChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Pending Reminders */}
+      <TravelAlertsDashboard />
 
       {/* Document Expiry Alerts */}
       <DocumentExpiryAlerts />
