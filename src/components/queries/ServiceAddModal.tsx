@@ -3,6 +3,7 @@ import { X, Package, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import QuickAddVendorModal from './QuickAddVendorModal';
 import ServiceDetailsForm from './ServiceDetailsForm';
+import { SUPPORTED_CURRENCIES, type CurrencyCode, convertToPKR, formatCurrency } from '../../lib/formatCurrency';
 
 interface Vendor {
   id: string;
@@ -43,24 +44,45 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
     cost_price: 0,
     selling_price: 0,
     vendor_id: '',
-    notes: ''
+    notes: '',
+    currency: 'SAR' as CurrencyCode,
+    exchange_rate: 0,
   });
+
+  // Derived PKR values
+  const isPKR = formData.currency === 'PKR';
+  const costPricePkr = isPKR ? formData.cost_price : convertToPKR(formData.cost_price, formData.exchange_rate);
+  const sellingPricePkr = isPKR ? formData.selling_price : convertToPKR(formData.selling_price, formData.exchange_rate);
+  const profitPkr = sellingPricePkr - costPricePkr;
+  const profitOriginal = formData.selling_price - formData.cost_price;
 
   useEffect(() => {
     loadVendors();
 
-    // Listen for vendor updates from QuickAddVendorModal
     const handleVendorsUpdated = () => {
-      console.log('Vendors updated event received');
       loadVendors();
     };
 
     window.addEventListener('vendorsUpdated', handleVendorsUpdated);
-
     return () => {
       window.removeEventListener('vendorsUpdated', handleVendorsUpdated);
     };
   }, []);
+
+  // Auto-set currency when vendor changes
+  useEffect(() => {
+    if (formData.vendor_id) {
+      const vendor = vendors.find(v => v.id === formData.vendor_id);
+      if (vendor?.default_currency) {
+        const cur = vendor.default_currency as CurrencyCode;
+        setFormData(prev => ({
+          ...prev,
+          currency: cur,
+          exchange_rate: cur === 'PKR' ? 1 : prev.exchange_rate,
+        }));
+      }
+    }
+  }, [formData.vendor_id, vendors]);
 
   const loadVendors = async () => {
     setLoadingVendors(true);
@@ -72,12 +94,7 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
         .eq('is_active', true)
         .order('name');
 
-      if (error) {
-        console.error('Error loading vendors:', error);
-        throw error;
-      }
-
-      console.log('Loaded vendors:', data);
+      if (error) throw error;
       setVendors(data || []);
     } catch (error) {
       console.error('Error loading vendors:', error);
@@ -100,7 +117,12 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
       return;
     }
 
-    if (formData.selling_price < formData.cost_price) {
+    if (!isPKR && (!formData.exchange_rate || formData.exchange_rate <= 0)) {
+      alert('Please enter a valid exchange rate (ROE)');
+      return;
+    }
+
+    if (sellingPricePkr < costPricePkr) {
       const confirmed = confirm(
         'Warning: Selling price is lower than cost price. This will result in a loss. Continue anyway?'
       );
@@ -110,11 +132,12 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
     setSaving(true);
 
     try {
-      // Get vendor currency for transaction
       const vendor = vendors.find(v => v.id === formData.vendor_id);
       if (!vendor) throw new Error('Vendor not found');
 
-      // 1. Create query service with service_details
+      const effectiveRate = isPKR ? 1 : formData.exchange_rate;
+
+      // 1. Create query service with ROE columns
       const { data: service, error: serviceError } = await supabase
         .from('query_services')
         .insert({
@@ -126,20 +149,27 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
           cost_price: formData.cost_price,
           selling_price: formData.selling_price,
           vendor_id: formData.vendor_id,
-          vendor: vendor.name, // Populate legacy text field for backward compatibility
+          vendor: vendor.name,
           booking_status: 'pending',
           delivery_status: 'not_started',
           notes: formData.notes || null,
-          service_details: serviceDetails // Include service-specific details
+          service_details: serviceDetails,
+          currency: formData.currency,
+          exchange_rate: effectiveRate,
+          cost_price_pkr: costPricePkr,
+          selling_price_pkr: sellingPricePkr,
+          profit_pkr: profitPkr,
         })
         .select()
         .single();
 
       if (serviceError) throw serviceError;
 
-      // 2. Create vendor transaction
-      const totalCost = formData.cost_price * formData.quantity;
-      const totalSellingPrice = formData.selling_price * formData.quantity;
+      // 2. Create vendor transaction with proper currency data
+      const totalCostOriginal = formData.cost_price * formData.quantity;
+      const totalCostPkr = costPricePkr * formData.quantity;
+      const totalSellingOriginal = formData.selling_price * formData.quantity;
+      const totalSellingPkr = sellingPricePkr * formData.quantity;
 
       const { error: transactionError } = await supabase
         .from('vendor_transactions')
@@ -149,12 +179,12 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
           vendor_id: formData.vendor_id,
           service_description: formData.service_description,
           service_type: formData.service_type,
-          purchase_amount_original: totalCost,
-          purchase_amount_pkr: totalCost, // Will be updated by exchange rate if needed
-          selling_amount_original: totalSellingPrice,
-          selling_amount_pkr: totalSellingPrice,
-          currency: vendor.default_currency,
-          exchange_rate_to_pkr: 1.0, // Default to 1.0, will be updated if different currency
+          purchase_amount_original: totalCostOriginal,
+          purchase_amount_pkr: totalCostPkr,
+          selling_amount_original: totalSellingOriginal,
+          selling_amount_pkr: totalSellingPkr,
+          currency: formData.currency,
+          exchange_rate_to_pkr: effectiveRate,
           amount_paid: 0,
           payment_status: 'PENDING',
           transaction_type: 'SERVICE_BOOKING',
@@ -175,13 +205,14 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
   const handleVendorAdded = () => {
     setShowQuickAddVendor(false);
     loadVendors();
-    // Emit event for other components
     window.dispatchEvent(new Event('vendorsUpdated'));
   };
 
-  const profitMargin = formData.selling_price > 0
-    ? ((formData.selling_price - formData.cost_price) / formData.selling_price) * 100
+  const profitMarginPkr = sellingPricePkr > 0
+    ? ((sellingPricePkr - costPricePkr) / sellingPricePkr) * 100
     : 0;
+
+  const currencySymbol = SUPPORTED_CURRENCIES.find(c => c.code === formData.currency)?.symbol || formData.currency;
 
   return (
     <>
@@ -307,19 +338,65 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
               </div>
             </div>
 
+            {/* Currency Selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Currency
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {SUPPORTED_CURRENCIES.map((cur) => (
+                  <button
+                    key={cur.code}
+                    type="button"
+                    onClick={() => setFormData({
+                      ...formData,
+                      currency: cur.code as CurrencyCode,
+                      exchange_rate: cur.code === 'PKR' ? 1 : formData.exchange_rate,
+                    })}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                      formData.currency === cur.code
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-blue-400'
+                    }`}
+                  >
+                    {cur.code}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ROE Field (only for foreign currencies) */}
+            {!isPKR && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <label className="block text-sm font-medium text-amber-800 mb-2">
+                  Exchange Rate (ROE) — 1 {formData.currency} = ? PKR *
+                </label>
+                <input
+                  type="number"
+                  value={formData.exchange_rate || ''}
+                  onChange={(e) => setFormData({ ...formData, exchange_rate: parseFloat(e.target.value) || 0 })}
+                  className="w-full px-3 py-2 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white"
+                  min="0"
+                  step="0.0001"
+                  placeholder={`e.g., 74.5 (1 ${formData.currency} = 74.5 PKR)`}
+                  required
+                />
+              </div>
+            )}
+
             {/* Cost and Selling Price */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Cost Price (PKR) *
+                  Cost Price ({formData.currency}) *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-gray-500">Rs</span>
+                  <span className="absolute left-3 top-2.5 text-gray-500">{currencySymbol}</span>
                   <input
                     type="number"
                     value={formData.cost_price}
                     onChange={(e) => setFormData({ ...formData, cost_price: parseFloat(e.target.value) || 0 })}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     min="0"
                     step="0.01"
                     required
@@ -329,15 +406,15 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Selling Price (PKR) *
+                  Selling Price ({formData.currency}) *
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-gray-500">Rs</span>
+                  <span className="absolute left-3 top-2.5 text-gray-500">{currencySymbol}</span>
                   <input
                     type="number"
                     value={formData.selling_price}
                     onChange={(e) => setFormData({ ...formData, selling_price: parseFloat(e.target.value) || 0 })}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     min="0"
                     step="0.01"
                     required
@@ -347,25 +424,53 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
               </div>
             </div>
 
+            {/* PKR Auto-Calculated (for foreign currencies) */}
+            {!isPKR && formData.exchange_rate > 0 && (formData.cost_price > 0 || formData.selling_price > 0) && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-blue-800 mb-2">PKR Equivalents (Auto-calculated)</h4>
+                <div className="grid grid-cols-3 gap-3 text-sm">
+                  <div>
+                    <span className="text-blue-600">Cost (PKR):</span>
+                    <div className="font-semibold text-blue-900">{formatCurrency(costPricePkr)}</div>
+                  </div>
+                  <div>
+                    <span className="text-blue-600">Selling (PKR):</span>
+                    <div className="font-semibold text-blue-900">{formatCurrency(sellingPricePkr)}</div>
+                  </div>
+                  <div>
+                    <span className="text-blue-600">Profit (PKR):</span>
+                    <div className={`font-semibold ${profitPkr >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {formatCurrency(profitPkr)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Profit Indicator */}
             {formData.cost_price > 0 && formData.selling_price > 0 && (
               <div className={`p-3 rounded-lg border ${
-                formData.selling_price >= formData.cost_price
+                profitOriginal >= 0
                   ? 'bg-green-50 border-green-200'
                   : 'bg-red-50 border-red-200'
               }`}>
                 <div className="flex items-center justify-between text-sm">
-                  <span className={formData.selling_price >= formData.cost_price ? 'text-green-800' : 'text-red-800'}>
-                    Profit per unit: Rs {(formData.selling_price - formData.cost_price).toLocaleString()}
+                  <span className={profitOriginal >= 0 ? 'text-green-800' : 'text-red-800'}>
+                    Profit per unit: {formatCurrency(profitOriginal, formData.currency)}
                   </span>
-                  <span className={`font-semibold ${formData.selling_price >= formData.cost_price ? 'text-green-700' : 'text-red-700'}`}>
-                    Margin: {profitMargin.toFixed(1)}%
+                  <span className={`font-semibold ${profitOriginal >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                    Margin: {profitMarginPkr.toFixed(1)}%
                   </span>
                 </div>
                 {formData.quantity > 1 && (
                   <div className="mt-1 text-sm">
-                    <span className={formData.selling_price >= formData.cost_price ? 'text-green-700' : 'text-red-700'}>
-                      Total profit: Rs {((formData.selling_price - formData.cost_price) * formData.quantity).toLocaleString()}
+                    <span className={profitOriginal >= 0 ? 'text-green-700' : 'text-red-700'}>
+                      Total profit: {formatCurrency(profitOriginal * formData.quantity, formData.currency)}
+                      {!isPKR && formData.exchange_rate > 0 && (
+                        <span className="text-gray-500 ml-1">
+                          ({formatCurrency(profitPkr * formData.quantity)})
+                        </span>
+                      )}
                     </span>
                   </div>
                 )}

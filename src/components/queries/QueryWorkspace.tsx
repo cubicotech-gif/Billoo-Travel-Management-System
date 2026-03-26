@@ -69,6 +69,31 @@ export default function QueryWorkspace() {
 
       setQuery(queryData);
       setServices(servicesData || []);
+
+      // Recalculate and update query PKR totals from services
+      if (servicesData && servicesData.length > 0) {
+        const totalCostPkr = servicesData.reduce((sum: number, s: any) =>
+          sum + (s.cost_price_pkr || s.cost_price || 0) * (s.quantity || 1), 0);
+        const totalSellingPkr = servicesData.reduce((sum: number, s: any) =>
+          sum + (s.selling_price_pkr || s.selling_price || 0) * (s.quantity || 1), 0);
+        const totalProfitPkr = totalSellingPkr - totalCostPkr;
+
+        // Update query PKR totals if they differ
+        if (
+          queryData.total_cost_pkr !== totalCostPkr ||
+          queryData.total_selling_pkr !== totalSellingPkr ||
+          queryData.total_profit_pkr !== totalProfitPkr
+        ) {
+          await supabase
+            .from('queries')
+            .update({
+              total_cost_pkr: totalCostPkr,
+              total_selling_pkr: totalSellingPkr,
+              total_profit_pkr: totalProfitPkr,
+            })
+            .eq('id', queryId);
+        }
+      }
     } catch (err: any) {
       console.error('Error loading query:', err);
       setError(err.message || 'Failed to load query');

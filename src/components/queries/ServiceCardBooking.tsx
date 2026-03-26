@@ -5,6 +5,7 @@ import { supabase } from '../../lib/supabase';
 import BookingStatusBadge from './BookingStatusBadge';
 import VoucherUploadModal from './booking/VoucherUploadModal';
 import RecordPaymentModal from './RecordPaymentModal';
+import { formatCurrency, type CurrencyCode } from '../../lib/formatCurrency';
 
 interface Props {
   service: QueryService;
@@ -139,9 +140,22 @@ export default function ServiceCardBooking({ service, index, onRefresh }: Props)
 
         <div className="text-right">
           <div className="text-xs text-gray-500 mb-1">Payment to Vendor</div>
-          <div className="text-2xl font-bold text-gray-900">
-            Rs {((service.cost_price || 0) * (service.quantity || 1)).toLocaleString()}
-          </div>
+          {(() => {
+            const cur = (service.currency || 'PKR') as CurrencyCode;
+            const isForeign = cur !== 'PKR';
+            const costPkr = (service.cost_price_pkr || service.cost_price || 0) * (service.quantity || 1);
+            const costOriginal = (service.cost_price || 0) * (service.quantity || 1);
+            return (
+              <>
+                {isForeign && (
+                  <div className="text-sm text-gray-500">{formatCurrency(costOriginal, cur)}</div>
+                )}
+                <div className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(costPkr)}
+                </div>
+              </>
+            );
+          })()}
         </div>
       </div>
 

@@ -32,7 +32,7 @@ export default function WhatsAppQuotationGenerator({ query, services }: Props) {
   };
 
   const generateMessage = () => {
-    const totalPrice = services.reduce((sum, s) => sum + ((s.selling_price || 0) * (s.quantity || 1)), 0);
+    const totalPrice = services.reduce((sum, s) => sum + ((s.selling_price_pkr || s.selling_price || 0) * (s.quantity || 1)), 0);
 
     const totalPax = (query.adults || 0) + (query.children || 0) + (query.infants || 0);
     const perPersonPrice = totalPax > 0 ? Math.round(totalPrice / totalPax) : totalPrice;
