@@ -18,6 +18,10 @@ export type VendorPaymentStatus = 'unpaid' | 'partially_paid' | 'paid'
 
 export type CurrencyCode = 'PKR' | 'SAR' | 'USD' | 'AED' | 'EUR' | 'GBP'
 
+export type PaymentMode = 'collective' | 'specific'
+
+export const ALL_CURRENCIES: CurrencyCode[] = ['PKR', 'SAR', 'USD', 'AED', 'EUR', 'GBP']
+
 // ─── Transaction ───────────────────────────────────────────────
 
 export interface Transaction {
@@ -39,6 +43,12 @@ export interface Transaction {
   description: string | null
   receipt_url: string | null
   notes: string | null
+  // ROE (Rate of Exchange) fields
+  original_amount: number | null
+  original_currency: CurrencyCode | null
+  exchange_rate: number | null
+  // Payment mode (collective vs specific for vendor payments)
+  payment_mode: PaymentMode | null
   created_at: string
   updated_at: string
   // Joined relations (Supabase FK joins return single objects)
@@ -61,6 +71,12 @@ export interface TransactionInsert {
   description?: string | null
   receipt_url?: string | null
   notes?: string | null
+  // ROE fields
+  original_amount?: number | null
+  original_currency?: CurrencyCode | null
+  exchange_rate?: number | null
+  // Payment mode
+  payment_mode?: PaymentMode | null
 }
 
 export interface TransactionFilters {
@@ -91,6 +107,10 @@ export interface Invoice {
   source_reference_id: string | null
   source_reference_type: string | null
   notes: string | null
+  // ROE fields
+  original_currency: string | null
+  exchange_rate: number | null
+  original_amount: number | null
   created_at: string
   updated_at: string
   // Joined relations
@@ -110,6 +130,10 @@ export interface InvoiceInsert {
   passenger_id?: string | null
   query_id?: string | null
   notes?: string | null
+  // ROE fields
+  original_currency?: string | null
+  exchange_rate?: number | null
+  original_amount?: number | null
 }
 
 export interface InvoiceItem {
@@ -129,6 +153,11 @@ export interface InvoiceItem {
   vendor_payment_status: VendorPaymentStatus
   vendor_amount_paid: number
   notes: string | null
+  // ROE fields
+  original_currency: string | null
+  exchange_rate: number | null
+  purchase_price_original: number | null
+  selling_price_original: number | null
   created_at: string
   // Joined
   vendors?: { name: string } | null
@@ -144,6 +173,11 @@ export interface InvoiceItemInput {
   purchase_price: number
   selling_price: number
   notes?: string | null
+  // ROE fields — purchase_price/selling_price/unit_price are ALWAYS PKR
+  original_currency?: string | null
+  exchange_rate?: number | null
+  purchase_price_original?: number | null
+  selling_price_original?: number | null
 }
 
 // ─── Financial Summary ─────────────────────────────────────────

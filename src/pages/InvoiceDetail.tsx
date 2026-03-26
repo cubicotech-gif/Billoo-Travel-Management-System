@@ -158,6 +158,21 @@ export default function InvoiceDetail() {
             </div>
           </div>
 
+          {/* Invoice-level ROE info */}
+          {invoice.original_currency && invoice.original_currency !== 'PKR' && invoice.exchange_rate && (
+            <div className="card bg-blue-50 border border-blue-200">
+              <div className="flex items-center gap-2 text-sm text-blue-800">
+                <span className="font-medium">Exchange Rate:</span>
+                <span>1 {invoice.original_currency} = {invoice.exchange_rate} PKR</span>
+                {invoice.original_amount && (
+                  <span className="ml-4">
+                    Original: {invoice.original_currency} {invoice.original_amount.toLocaleString()}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Line Items */}
           <div className="card">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">
@@ -181,9 +196,18 @@ export default function InvoiceDetail() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {items.map(item => (
+                    {items.map(item => {
+                      const hasROE = item.original_currency && item.original_currency !== 'PKR' && item.exchange_rate
+                      return (
                       <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900">{item.description}</td>
+                        <td className="px-4 py-3 text-sm text-gray-900">
+                          {item.description}
+                          {hasROE && (
+                            <div className="text-xs text-blue-600 mt-0.5">
+                              {item.original_currency}: {item.purchase_price_original?.toLocaleString()} → {item.selling_price_original?.toLocaleString()} @ {item.exchange_rate}
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-600">{item.service_type || '—'}</td>
                         <td className="px-4 py-3 text-sm">
                           {item.vendors ? (
@@ -202,7 +226,7 @@ export default function InvoiceDetail() {
                           </span>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                   <tfoot className="bg-gray-50">
                     <tr>

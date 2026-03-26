@@ -12,6 +12,11 @@ interface LedgerTableProps {
   compact?: boolean
 }
 
+function formatROE(txn: Transaction): string | null {
+  if (!txn.original_amount || !txn.original_currency || txn.original_currency === 'PKR') return null
+  return `${txn.original_currency} ${txn.original_amount.toLocaleString()} @ ${txn.exchange_rate}`
+}
+
 export default function LedgerTable({ transactions, showBalance = true, compact = false }: LedgerTableProps) {
   // Calculate running balance (chronological order)
   const balanceMap = new Map<string, number>()
@@ -50,66 +55,79 @@ export default function LedgerTable({ transactions, showBalance = true, compact 
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200">
-          {transactions.map(txn => (
-            <tr key={txn.id} className="hover:bg-gray-50">
-              <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
-                <div className="flex items-center">
-                  <Calendar className="w-3 h-3 text-gray-400 mr-1" />
-                  {format(new Date(txn.transaction_date), compact ? 'MMM d' : 'MMM d, yyyy')}
-                </div>
-              </td>
-              {!compact && (
-                <td className="px-4 py-3 text-sm font-mono text-gray-600">{txn.transaction_number}</td>
-              )}
-              <td className="px-4 py-3">
-                <StatusBadge status={txn.type} type="transaction" />
-              </td>
-              <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">
-                {txn.description || '—'}
-                {txn.payment_method && (
-                  <span className="text-xs text-gray-500 ml-1">
-                    ({PAYMENT_METHOD_LABELS[txn.payment_method] || txn.payment_method})
-                  </span>
-                )}
-              </td>
-              {!compact && (
-                <td className="px-4 py-3 text-sm">
-                  {txn.passengers && (
-                    <Link to={`/passengers/${txn.passenger_id}`} className="text-primary-600 hover:text-primary-800">
-                      {txn.passengers.first_name} {txn.passengers.last_name}
-                    </Link>
-                  )}
-                  {txn.vendors && (
-                    <Link to={`/vendors/${txn.vendor_id}`} className="text-purple-600 hover:text-purple-800">
-                      {txn.vendors.name}
-                    </Link>
-                  )}
-                  {!txn.passengers && !txn.vendors && <span className="text-gray-400">—</span>}
+          {transactions.map(txn => {
+            const roeInfo = formatROE(txn)
+            return (
+              <tr key={txn.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <Calendar className="w-3 h-3 text-gray-400 mr-1" />
+                    {format(new Date(txn.transaction_date), compact ? 'MMM d' : 'MMM d, yyyy')}
+                  </div>
                 </td>
-              )}
-              <td className="px-4 py-3 text-sm text-right font-medium">
-                {txn.direction === 'in' ? (
-                  <span className="text-green-600">{formatCurrency(txn.amount)}</span>
-                ) : (
-                  <span className="text-gray-400">—</span>
+                {!compact && (
+                  <td className="px-4 py-3 text-sm font-mono text-gray-600">{txn.transaction_number}</td>
                 )}
-              </td>
-              <td className="px-4 py-3 text-sm text-right font-medium">
-                {txn.direction === 'out' ? (
-                  <span className="text-red-600">{formatCurrency(txn.amount)}</span>
-                ) : (
-                  <span className="text-gray-400">—</span>
+                <td className="px-4 py-3">
+                  <StatusBadge status={txn.type} type="transaction" />
+                  {txn.payment_mode === 'collective' && (
+                    <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-700">
+                      COLLECTIVE
+                    </span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-900 max-w-xs">
+                  <div className="truncate">
+                    {txn.description || '—'}
+                    {txn.payment_method && (
+                      <span className="text-xs text-gray-500 ml-1">
+                        ({PAYMENT_METHOD_LABELS[txn.payment_method] || txn.payment_method})
+                      </span>
+                    )}
+                  </div>
+                  {roeInfo && (
+                    <div className="text-xs text-blue-600 mt-0.5">{roeInfo}</div>
+                  )}
+                </td>
+                {!compact && (
+                  <td className="px-4 py-3 text-sm">
+                    {txn.passengers && (
+                      <Link to={`/passengers/${txn.passenger_id}`} className="text-primary-600 hover:text-primary-800">
+                        {txn.passengers.first_name} {txn.passengers.last_name}
+                      </Link>
+                    )}
+                    {txn.vendors && (
+                      <Link to={`/vendors/${txn.vendor_id}`} className="text-purple-600 hover:text-purple-800">
+                        {txn.vendors.name}
+                      </Link>
+                    )}
+                    {!txn.passengers && !txn.vendors && <span className="text-gray-400">—</span>}
+                  </td>
                 )}
-              </td>
-              {showBalance && (
                 <td className="px-4 py-3 text-sm text-right font-medium">
-                  <span className={(balanceMap.get(txn.id) || 0) >= 0 ? 'text-blue-700' : 'text-orange-700'}>
-                    {formatCurrency(Math.abs(balanceMap.get(txn.id) || 0))}
-                  </span>
+                  {txn.direction === 'in' ? (
+                    <span className="text-green-600">{formatCurrency(txn.amount)}</span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
                 </td>
-              )}
-            </tr>
-          ))}
+                <td className="px-4 py-3 text-sm text-right font-medium">
+                  {txn.direction === 'out' ? (
+                    <span className="text-red-600">{formatCurrency(txn.amount)}</span>
+                  ) : (
+                    <span className="text-gray-400">—</span>
+                  )}
+                </td>
+                {showBalance && (
+                  <td className="px-4 py-3 text-sm text-right font-medium">
+                    <span className={(balanceMap.get(txn.id) || 0) >= 0 ? 'text-blue-700' : 'text-orange-700'}>
+                      {formatCurrency(Math.abs(balanceMap.get(txn.id) || 0))}
+                    </span>
+                  </td>
+                )}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>

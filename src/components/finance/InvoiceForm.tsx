@@ -6,15 +6,13 @@ import { fetchActiveVendors } from '@/lib/api/vendors'
 import { formatCurrency } from '@/lib/formatCurrency'
 import { supabase } from '@/lib/supabase'
 import InvoiceItemRow from './InvoiceItemRow'
-import type { InvoiceItemInput, PassengerOption, VendorOption, InvoiceStatus } from '@/types/finance'
-import { ALL_INVOICE_STATUSES } from '@/types/finance'
+import type { InvoiceItemInput, PassengerOption, VendorOption, InvoiceStatus, CurrencyCode } from '@/types/finance'
+import { ALL_INVOICE_STATUSES, ALL_CURRENCIES } from '@/types/finance'
 
 interface InvoiceFormProps {
   onSuccess: () => void
   onCancel: () => void
 }
-
-const CURRENCIES = ['PKR', 'SAR', 'USD', 'AED', 'EUR', 'GBP']
 
 const emptyItem = (): InvoiceItemInput => ({
   description: '',
@@ -25,6 +23,10 @@ const emptyItem = (): InvoiceItemInput => ({
   vendor_id: null,
   purchase_price: 0,
   selling_price: 0,
+  original_currency: null,
+  exchange_rate: null,
+  purchase_price_original: null,
+  selling_price_original: null,
 })
 
 export default function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
@@ -37,11 +39,15 @@ export default function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
   const [formData, setFormData] = useState({
     status: 'pending' as InvoiceStatus,
     due_date: '',
-    currency: 'PKR',
     passenger_id: '',
     query_id: '',
     notes: '',
   })
+
+  // Invoice-level ROE toggle
+  const [useGlobalROE, setUseGlobalROE] = useState(false)
+  const [globalCurrency, setGlobalCurrency] = useState<CurrencyCode>('PKR')
+  const [globalRate, setGlobalRate] = useState('')
 
   const [items, setItems] = useState<InvoiceItemInput[]>([emptyItem()])
 
@@ -71,17 +77,30 @@ export default function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
   const addItem = () => setItems(prev => [...prev, emptyItem()])
   const removeItem = (index: number) => setItems(prev => prev.filter((_, i) => i !== index))
 
-  // Calculate totals
-  const totalAmount = items.reduce((sum, item) =>
-    sum + item.quantity * item.unit_price * (1 + item.tax_percentage / 100), 0)
-  const totalCost = items.reduce((sum, item) => sum + item.purchase_price, 0)
+  const globalRateNum = parseFloat(globalRate) || 0
+  const isGlobalForeign = useGlobalROE && globalCurrency !== 'PKR'
+
+  // Calculate totals (always in PKR)
+  const totalAmount = items.reduce((sum, item) => {
+    const sellingPKR = isGlobalForeign && globalRateNum > 0 && (item.selling_price_original || 0) > 0
+      ? (item.selling_price_original || 0) * globalRateNum
+      : item.quantity * item.unit_price
+    return sum + sellingPKR * (1 + item.tax_percentage / 100)
+  }, 0)
+
+  const totalCost = items.reduce((sum, item) => {
+    if (isGlobalForeign && globalRateNum > 0 && (item.purchase_price_original || 0) > 0) {
+      return sum + (item.purchase_price_original || 0) * globalRateNum
+    }
+    return sum + item.purchase_price
+  }, 0)
+
   const totalProfit = totalAmount - totalCost
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
-    // Validate at least one item with description
     const validItems = items.filter(i => i.description.trim())
     if (validItems.length === 0) {
       setError('Please add at least one line item with a description')
@@ -91,28 +110,60 @@ export default function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
       setError('Invoice total must be greater than 0')
       return
     }
+    if (isGlobalForeign && globalRateNum <= 0) {
+      setError('Please enter a valid exchange rate')
+      return
+    }
 
     setSaving(true)
     try {
-      // Create invoice
+      // Calculate original_amount for the invoice if using global ROE
+      const originalAmount = isGlobalForeign
+        ? validItems.reduce((sum, item) => {
+            const selling = item.selling_price_original || 0
+            return sum + selling * item.quantity * (1 + item.tax_percentage / 100)
+          }, 0)
+        : null
+
       const invoice = await createInvoice({
         amount: totalAmount,
         paid_amount: 0,
         total_cost: totalCost,
         total_profit: totalProfit,
-        currency: formData.currency,
+        currency: 'PKR',
         status: formData.status,
         due_date: formData.due_date || null,
         passenger_id: formData.passenger_id || null,
         query_id: formData.query_id || null,
         notes: formData.notes.trim() || null,
+        original_currency: isGlobalForeign ? globalCurrency : null,
+        exchange_rate: isGlobalForeign ? globalRateNum : null,
+        original_amount: originalAmount,
       })
 
-      // Create line items
-      await createInvoiceItems(invoice.id, validItems.map(item => ({
-        ...item,
-        selling_price: item.quantity * item.unit_price,
-      })))
+      // Prepare items with ROE data
+      const itemsToCreate = validItems.map(item => {
+        const isForeign = isGlobalForeign || (item.original_currency && item.original_currency !== 'PKR')
+        const rate = isGlobalForeign ? globalRateNum : (item.exchange_rate || 0)
+        const currency = isGlobalForeign ? globalCurrency : (item.original_currency || null)
+
+        return {
+          ...item,
+          selling_price: isForeign && rate > 0 && (item.selling_price_original || 0) > 0
+            ? (item.selling_price_original || 0) * rate
+            : item.quantity * item.unit_price,
+          purchase_price: isForeign && rate > 0 && (item.purchase_price_original || 0) > 0
+            ? (item.purchase_price_original || 0) * rate
+            : item.purchase_price,
+          unit_price: isForeign && rate > 0 && (item.selling_price_original || 0) > 0
+            ? (item.selling_price_original || 0) * rate
+            : item.unit_price,
+          original_currency: currency,
+          exchange_rate: isForeign ? rate : null,
+        }
+      })
+
+      await createInvoiceItems(invoice.id, itemsToCreate)
 
       onSuccess()
     } catch (err: any) {
@@ -197,16 +248,60 @@ export default function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
                     className="input"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                  <select
-                    value={formData.currency}
-                    onChange={e => setFormData({ ...formData, currency: e.target.value })}
-                    className="input"
-                  >
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+              </div>
+
+              {/* Invoice-level ROE Toggle */}
+              <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold text-gray-900">Currency & Exchange Rate</label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={useGlobalROE}
+                      onChange={e => {
+                        setUseGlobalROE(e.target.checked)
+                        if (!e.target.checked) {
+                          setGlobalCurrency('PKR')
+                          setGlobalRate('')
+                        }
+                      }}
+                      className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <span className="text-sm text-gray-700">Apply same ROE to all items</span>
+                  </label>
                 </div>
+
+                {useGlobalROE && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Currency for all items</label>
+                      <select
+                        value={globalCurrency}
+                        onChange={e => setGlobalCurrency(e.target.value as CurrencyCode)}
+                        className="input text-sm"
+                      >
+                        {ALL_CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    {globalCurrency !== 'PKR' && (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">
+                          ROE (1 {globalCurrency} = ? PKR)
+                        </label>
+                        <input
+                          type="number" step="0.0001" min="0.0001"
+                          value={globalRate}
+                          onChange={e => setGlobalRate(e.target.value)}
+                          className="input text-sm" placeholder="e.g. 77.50"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {!useGlobalROE && (
+                  <p className="text-xs text-gray-500">Each line item can have its own currency and ROE.</p>
+                )}
               </div>
 
               {/* Line Items */}
@@ -231,6 +326,8 @@ export default function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
                       onChange={handleItemChange}
                       onRemove={removeItem}
                       canRemove={items.length > 1}
+                      overrideCurrency={isGlobalForeign ? globalCurrency : null}
+                      overrideRate={isGlobalForeign ? globalRateNum : null}
                     />
                   ))}
                 </div>
@@ -239,15 +336,15 @@ export default function InvoiceForm({ onSuccess, onCancel }: InvoiceFormProps) {
               {/* Totals */}
               <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Total Amount</span>
+                  <span className="text-gray-600">Total Amount (PKR)</span>
                   <span className="font-bold text-gray-900">{formatCurrency(totalAmount)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Total Cost</span>
+                  <span className="text-gray-600">Total Cost (PKR)</span>
                   <span className="font-medium text-gray-700">{formatCurrency(totalCost)}</span>
                 </div>
                 <div className="flex justify-between text-sm border-t pt-2">
-                  <span className="text-gray-600">Profit</span>
+                  <span className="text-gray-600">Profit (PKR)</span>
                   <span className={`font-bold ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatCurrency(totalProfit)}
                   </span>

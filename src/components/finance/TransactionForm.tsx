@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
-import { X, AlertCircle, DollarSign, Loader } from 'lucide-react'
-import { createTransaction } from '@/lib/api/finance'
+import { X, AlertCircle, DollarSign, Loader, ArrowRightLeft } from 'lucide-react'
+import { createTransaction, updatePassengerCreditBalance } from '@/lib/api/finance'
 import { fetchActivePassengers } from '@/lib/api/passengers'
 import { fetchActiveVendors } from '@/lib/api/vendors'
 import { logActivity } from '@/lib/api/activity'
 import { supabase } from '@/lib/supabase'
+import { formatCurrency } from '@/lib/formatCurrency'
 import type {
-  TransactionType, TransactionDirection, PassengerOption, VendorOption, InvoiceOption,
+  TransactionType, TransactionDirection, CurrencyCode,
+  PassengerOption, VendorOption, InvoiceOption, PaymentMode,
 } from '@/types/finance'
+import { ALL_CURRENCIES } from '@/types/finance'
 
 interface TransactionFormProps {
   defaultType?: TransactionType
@@ -35,8 +38,6 @@ const PAYMENT_METHODS = [
   { value: 'other', label: 'Other' },
 ]
 
-const CURRENCIES = ['PKR', 'SAR', 'USD', 'AED', 'EUR', 'GBP']
-
 export default function TransactionForm({
   defaultType,
   defaultPassengerId,
@@ -53,8 +54,9 @@ export default function TransactionForm({
 
   const [formData, setFormData] = useState({
     type: defaultType || ('payment_received' as TransactionType),
-    amount: '',
-    currency: 'PKR',
+    original_currency: 'PKR' as CurrencyCode,
+    original_amount: '',
+    exchange_rate: '',
     payment_method: 'bank_transfer',
     reference_number: '',
     passenger_id: defaultPassengerId || '',
@@ -63,6 +65,7 @@ export default function TransactionForm({
     transaction_date: new Date().toISOString().split('T')[0],
     description: '',
     notes: '',
+    payment_mode: 'specific' as PaymentMode,
   })
 
   useEffect(() => {
@@ -87,8 +90,20 @@ export default function TransactionForm({
   const needsPassenger = ['payment_received', 'refund_to_client'].includes(formData.type)
   const needsVendor = ['payment_to_vendor', 'refund_from_vendor'].includes(formData.type)
   const needsInvoice = formData.type === 'payment_received'
+  const isVendorPayment = formData.type === 'payment_to_vendor'
+  const isForeignCurrency = formData.original_currency !== 'PKR'
 
-  // Auto-suggest description based on type
+  // PKR equivalent calculation
+  const originalAmount = parseFloat(formData.original_amount) || 0
+  const exchangeRate = parseFloat(formData.exchange_rate) || 0
+  const pkrEquivalent = isForeignCurrency && exchangeRate > 0
+    ? originalAmount * exchangeRate
+    : originalAmount
+
+  // For collective vendor payments, hide passenger/invoice selectors
+  const showPassengerForVendor = isVendorPayment && formData.payment_mode === 'specific'
+  const showInvoiceForVendor = isVendorPayment && formData.payment_mode === 'specific'
+
   const getAutoDescription = () => {
     const typeName = selectedType?.label || ''
     if (needsPassenger && formData.passenger_id) {
@@ -106,9 +121,12 @@ export default function TransactionForm({
     e.preventDefault()
     setError('')
 
-    const amount = parseFloat(formData.amount)
-    if (isNaN(amount) || amount <= 0) {
+    if (originalAmount <= 0) {
       setError('Please enter a valid amount greater than 0')
+      return
+    }
+    if (isForeignCurrency && exchangeRate <= 0) {
+      setError('Please enter a valid exchange rate for the selected currency')
       return
     }
 
@@ -117,28 +135,46 @@ export default function TransactionForm({
       await createTransaction({
         type: formData.type,
         direction,
-        amount,
-        currency: formData.currency,
+        amount: pkrEquivalent,
+        currency: 'PKR',
         payment_method: (formData.payment_method || null) as any,
         reference_number: formData.reference_number.trim() || null,
-        passenger_id: formData.passenger_id || null,
+        passenger_id: (isVendorPayment && formData.payment_mode === 'collective')
+          ? null
+          : formData.passenger_id || null,
         vendor_id: formData.vendor_id || null,
-        invoice_id: formData.invoice_id || null,
+        invoice_id: (isVendorPayment && formData.payment_mode === 'collective')
+          ? null
+          : formData.invoice_id || null,
         transaction_date: formData.transaction_date || new Date().toISOString(),
         description: formData.description.trim() || null,
         notes: formData.notes.trim() || null,
+        // ROE fields
+        original_amount: isForeignCurrency ? originalAmount : null,
+        original_currency: formData.original_currency,
+        exchange_rate: isForeignCurrency ? exchangeRate : null,
+        // Payment mode
+        payment_mode: isVendorPayment ? formData.payment_mode : 'specific',
       })
 
       // Log activity
       const entityType = needsVendor ? 'vendor' : needsPassenger ? 'passenger' : 'transaction'
       const entityId = needsVendor ? formData.vendor_id : needsPassenger ? formData.passenger_id : null
       if (entityId) {
+        const amountLabel = isForeignCurrency
+          ? `${formData.original_currency} ${originalAmount.toLocaleString()} @ ${exchangeRate} = PKR ${pkrEquivalent.toLocaleString()}`
+          : `PKR ${pkrEquivalent.toLocaleString()}`
         await logActivity({
           entity_type: entityType,
           entity_id: entityId,
           action: direction === 'in' ? 'payment_received' : 'payment_made',
-          description: `${selectedType?.label}: PKR ${amount.toLocaleString()}${formData.reference_number ? ` (Ref: ${formData.reference_number})` : ''}`,
+          description: `${selectedType?.label}: ${amountLabel}${formData.reference_number ? ` (Ref: ${formData.reference_number})` : ''}`,
         })
+      }
+
+      // Update passenger credit balance if payment_received
+      if (formData.type === 'payment_received' && formData.passenger_id) {
+        await updatePassengerCreditBalance(formData.passenger_id)
       }
 
       onSuccess()
@@ -182,7 +218,12 @@ export default function TransactionForm({
                 <label className="block text-sm font-medium text-gray-700 mb-1">Transaction Type *</label>
                 <select
                   value={formData.type}
-                  onChange={e => setFormData({ ...formData, type: e.target.value as TransactionType, passenger_id: '', vendor_id: '', invoice_id: '' })}
+                  onChange={e => setFormData({
+                    ...formData,
+                    type: e.target.value as TransactionType,
+                    passenger_id: '', vendor_id: '', invoice_id: '',
+                    payment_mode: 'specific',
+                  })}
                   className="input"
                 >
                   {TXN_TYPES.map(t => (
@@ -198,26 +239,107 @@ export default function TransactionForm({
                 </div>
               </div>
 
+              {/* Payment Mode Toggle (for vendor payments only) */}
+              {isVendorPayment && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Payment Mode</label>
+                  <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, payment_mode: 'specific', passenger_id: '', invoice_id: '' })}
+                      className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                        formData.payment_mode === 'specific'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Specific Payment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, payment_mode: 'collective', passenger_id: '', invoice_id: '' })}
+                      className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                        formData.payment_mode === 'collective'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-50'
+                      }`}
+                    >
+                      Collective Payment
+                    </button>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {formData.payment_mode === 'collective'
+                      ? 'Lump sum payment to vendor — not linked to any specific passenger or invoice'
+                      : 'Payment linked to a specific passenger and/or invoice'}
+                  </p>
+                </div>
+              )}
+
+              {/* Currency + Amount + ROE */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_CURRENCIES.map(c => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, original_currency: c, exchange_rate: '' })}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                        formData.original_currency === c
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-white text-gray-700 border-gray-300 hover:border-emerald-400'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount ({formData.original_currency}) *
+                  </label>
                   <input
                     type="number" required step="0.01" min="0.01"
-                    value={formData.amount}
-                    onChange={e => setFormData({ ...formData, amount: e.target.value })}
+                    value={formData.original_amount}
+                    onChange={e => setFormData({ ...formData, original_amount: e.target.value })}
                     className="input" placeholder="0.00"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Currency</label>
-                  <select
-                    value={formData.currency}
-                    onChange={e => setFormData({ ...formData, currency: e.target.value })}
-                    className="input"
-                  >
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
+
+                {isForeignCurrency && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      ROE (1 {formData.original_currency} = ? PKR) *
+                    </label>
+                    <input
+                      type="number" required step="0.0001" min="0.0001"
+                      value={formData.exchange_rate}
+                      onChange={e => setFormData({ ...formData, exchange_rate: e.target.value })}
+                      className="input" placeholder="e.g. 77.50"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* PKR Equivalent display */}
+              {isForeignCurrency && originalAmount > 0 && exchangeRate > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <ArrowRightLeft className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                  <div className="text-sm">
+                    <span className="font-medium text-blue-900">
+                      {formData.original_currency} {originalAmount.toLocaleString()} × {exchangeRate} =
+                    </span>
+                    <span className="ml-1 font-bold text-blue-900">
+                      PKR {formatCurrency(pkrEquivalent).replace('Rs ', '')}
+                    </span>
+                  </div>
                 </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method</label>
                   <select
@@ -267,15 +389,32 @@ export default function TransactionForm({
 
               {needsVendor && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Vendor</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Vendor *</label>
                   <select
                     value={formData.vendor_id}
                     onChange={e => setFormData({ ...formData, vendor_id: e.target.value })}
                     className="input"
                   >
-                    <option value="">Select vendor (optional)</option>
+                    <option value="">Select vendor</option>
                     {vendors.map(v => (
                       <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Passenger selector for specific vendor payments */}
+              {showPassengerForVendor && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Passenger (optional)</label>
+                  <select
+                    value={formData.passenger_id}
+                    onChange={e => setFormData({ ...formData, passenger_id: e.target.value })}
+                    className="input"
+                  >
+                    <option value="">No passenger link</option>
+                    {passengers.map(p => (
+                      <option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>
                     ))}
                   </select>
                 </div>
@@ -297,6 +436,25 @@ export default function TransactionForm({
                     ))}
                   </select>
                   <p className="mt-1 text-xs text-gray-500">Linking auto-updates invoice paid amount and status</p>
+                </div>
+              )}
+
+              {/* Invoice selector for specific vendor payments */}
+              {showInvoiceForVendor && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Link to Invoice (optional)</label>
+                  <select
+                    value={formData.invoice_id}
+                    onChange={e => setFormData({ ...formData, invoice_id: e.target.value })}
+                    className="input"
+                  >
+                    <option value="">No invoice link</option>
+                    {invoices.map(i => (
+                      <option key={i.id} value={i.id}>
+                        {i.invoice_number} — PKR {i.amount.toLocaleString()}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               )}
 
