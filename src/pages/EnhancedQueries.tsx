@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import {
   Plus, Search, Calendar, Phone, MapPin, AlertCircle,
-  Users, MessageCircle, Clock, X, Eye
+  Users, MessageCircle, Clock, X, Eye, FileText
 } from 'lucide-react'
 import { format } from 'date-fns'
 import PassengerSelector from '@/components/PassengerSelector'
 import CommunicationLog from '@/components/CommunicationLog'
 import AddCommunication from '@/components/AddCommunication'
 import QuickActions from '@/components/QuickActions'
+import TravelAlertBanner from '@/components/queries/TravelAlertBanner'
+import CreateFromTemplateModal from '@/components/queries/CreateFromTemplateModal'
 
 interface Query {
   id: string
@@ -80,6 +82,7 @@ export default function EnhancedQueries() {
   const [searchTerm, setSearchTerm] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [viewMode, setViewMode] = useState<'all' | 'urgent' | 'awaiting'>('all')
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
   
   const [formData, setFormData] = useState({
     client_name: '',
@@ -288,11 +291,23 @@ export default function EnhancedQueries() {
             Track customer queries from first contact to service delivery
           </p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn btn-primary">
-          <Plus className="w-5 h-5 mr-2" />
-          New Query
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowTemplateModal(true)}
+            className="btn btn-secondary flex items-center gap-1.5"
+          >
+            <FileText className="w-4 h-4" />
+            From Template
+          </button>
+          <button onClick={() => setShowModal(true)} className="btn btn-primary">
+            <Plus className="w-5 h-5 mr-2" />
+            New Query
+          </button>
+        </div>
       </div>
+
+      {/* Travel Alerts */}
+      <TravelAlertBanner />
 
       {/* Priority Alerts */}
       {urgentCount > 0 && (
@@ -965,6 +980,13 @@ Budget: Rs 250,000 per person"
             </div>
           </div>
         </div>
+      )}
+
+      {showTemplateModal && (
+        <CreateFromTemplateModal
+          onClose={() => setShowTemplateModal(false)}
+          onSuccess={(newId) => { setShowTemplateModal(false); navigate(`/queries/${newId}`); }}
+        />
       )}
     </div>
   )

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { getPassengerStatusCounts, getPassengersByStatus, type PassengerStatusTab, type PassengerStatusCounts } from '@/lib/api/passengers'
 import {
   Plus, Search, User, Phone, X,
-  MessageCircle, AlertCircle, Tag, MapPin, Filter
+  MessageCircle, AlertCircle, Tag, MapPin, Filter, Plane, CheckCircle, CreditCard, UserPlus
 } from 'lucide-react'
 
 interface Passenger {
@@ -50,6 +51,9 @@ export default function Passengers() {
   const [filterCity, setFilterCity] = useState('')
   const [filterTag, setFilterTag] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [statusTab, setStatusTab] = useState<PassengerStatusTab>('all')
+  const [statusCounts, setStatusCounts] = useState<PassengerStatusCounts>({ all: 0, query_in_process: 0, trip_active: 0, completed: 0, pending_payment: 0, new_no_queries: 0 })
+  const [statusFilterIds, setStatusFilterIds] = useState<string[] | null>(null)
 
   const [formData, setFormData] = useState({
     first_name: '',
@@ -77,7 +81,25 @@ export default function Passengers() {
 
   useEffect(() => {
     loadPassengers()
+    loadStatusCounts()
   }, [])
+
+  useEffect(() => {
+    if (statusTab === 'all') {
+      setStatusFilterIds(null)
+    } else {
+      getPassengersByStatus(statusTab).then(ids => setStatusFilterIds(ids)).catch(() => setStatusFilterIds(null))
+    }
+  }, [statusTab])
+
+  const loadStatusCounts = async () => {
+    try {
+      const counts = await getPassengerStatusCounts()
+      setStatusCounts(counts)
+    } catch (err) {
+      console.error('Failed to load status counts:', err)
+    }
+  }
 
   const loadPassengers = async () => {
     try {
@@ -202,8 +224,9 @@ export default function Passengers() {
 
     const matchesCity = !filterCity || p.city === filterCity
     const matchesTag = !filterTag || (p.tags || []).includes(filterTag)
+    const matchesStatusTab = statusFilterIds === null || statusFilterIds.includes(p.id)
 
-    return matchesSearch && matchesStatus && matchesCity && matchesTag
+    return matchesSearch && matchesStatus && matchesCity && matchesTag && matchesStatusTab
   })
 
   if (loading) {
@@ -228,6 +251,31 @@ export default function Passengers() {
           <Plus className="w-5 h-5 mr-2" />
           Add Passenger
         </button>
+      </div>
+
+      {/* Status Tabs */}
+      <div className="flex flex-wrap gap-2">
+        {([
+          { key: 'all' as const, label: 'All', icon: User, count: statusCounts.all, color: 'primary' },
+          { key: 'query_in_process' as const, label: 'Query in Process', icon: Search, count: statusCounts.query_in_process, color: 'blue' },
+          { key: 'trip_active' as const, label: 'Trip Active', icon: Plane, count: statusCounts.trip_active, color: 'cyan' },
+          { key: 'completed' as const, label: 'Completed', icon: CheckCircle, count: statusCounts.completed, color: 'green' },
+          { key: 'pending_payment' as const, label: 'Pending Payment', icon: CreditCard, count: statusCounts.pending_payment, color: 'red' },
+          { key: 'new_no_queries' as const, label: 'New / No Queries', icon: UserPlus, count: statusCounts.new_no_queries, color: 'gray' },
+        ]).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setStatusTab(tab.key)}
+            className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+              statusTab === tab.key
+                ? `bg-${tab.color}-600 text-white`
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <tab.icon className="w-3.5 h-3.5" />
+            {tab.label} ({tab.count})
+          </button>
+        ))}
       </div>
 
       {/* Search and Filters */}

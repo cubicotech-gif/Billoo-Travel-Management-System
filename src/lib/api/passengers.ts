@@ -205,6 +205,123 @@ export async function getPassengerOutstanding(passengerId: string): Promise<Pass
   }
 }
 
+// ─── Phase Q5: Passenger Status Tabs ─────────────────────────
+
+export type PassengerStatusTab = 'all' | 'query_in_process' | 'trip_active' | 'completed' | 'pending_payment' | 'new_no_queries'
+
+export interface PassengerStatusCounts {
+  all: number
+  query_in_process: number
+  trip_active: number
+  completed: number
+  pending_payment: number
+  new_no_queries: number
+}
+
+export async function getPassengerStatusCounts(): Promise<PassengerStatusCounts> {
+  const { data: passengers } = await supabase
+    .from('passengers')
+    .select('id')
+    .eq('status', 'active')
+
+  const passengerIds = (passengers || []).map(p => p.id)
+  if (passengerIds.length === 0) return { all: 0, query_in_process: 0, trip_active: 0, completed: 0, pending_payment: 0, new_no_queries: 0 }
+
+  // Get all query_passengers links with query status
+  const { data: links } = await supabase
+    .from('query_passengers')
+    .select('passenger_id, queries:query_id (status)')
+
+  // Get invoices with pending payments
+  const { data: invoices } = await supabase
+    .from('invoices')
+    .select('passenger_id, amount, paid_amount')
+
+  const linkMap = new Map<string, string[]>()
+  for (const link of links || []) {
+    const statuses = linkMap.get(link.passenger_id) || []
+    statuses.push((link as any).queries?.status || '')
+    linkMap.set(link.passenger_id, statuses)
+  }
+
+  const pendingMap = new Set<string>()
+  for (const inv of invoices || []) {
+    if (inv.passenger_id && (inv.amount - inv.paid_amount) > 0) {
+      pendingMap.add(inv.passenger_id)
+    }
+  }
+
+  const activeStatuses = ['New Query - Not Responded', 'Responded - Awaiting Reply', 'Working on Proposal', 'Proposal Sent', 'Revisions Requested', 'Finalized & Booking', 'Services Booked']
+  const tripActiveStatuses = ['In Delivery']
+
+  let queryInProcess = 0, tripActive = 0, completed = 0, pendingPayment = 0, newNoQueries = 0
+
+  for (const pid of passengerIds) {
+    const statuses = linkMap.get(pid) || []
+    if (statuses.length === 0) { newNoQueries++; continue }
+    if (statuses.some(s => tripActiveStatuses.includes(s))) tripActive++
+    else if (statuses.some(s => activeStatuses.includes(s))) queryInProcess++
+    else if (statuses.every(s => s === 'Completed' || s === 'Cancelled')) completed++
+    if (pendingMap.has(pid)) pendingPayment++
+  }
+
+  return {
+    all: passengerIds.length,
+    query_in_process: queryInProcess,
+    trip_active: tripActive,
+    completed,
+    pending_payment: pendingPayment,
+    new_no_queries: newNoQueries,
+  }
+}
+
+export async function getPassengersByStatus(tab: PassengerStatusTab): Promise<string[]> {
+  if (tab === 'all') return []
+
+  const { data: passengers } = await supabase
+    .from('passengers')
+    .select('id')
+    .eq('status', 'active')
+
+  const passengerIds = (passengers || []).map(p => p.id)
+  if (passengerIds.length === 0) return []
+
+  const { data: links } = await supabase
+    .from('query_passengers')
+    .select('passenger_id, queries:query_id (status)')
+
+  const { data: invoices } = await supabase
+    .from('invoices')
+    .select('passenger_id, amount, paid_amount')
+
+  const linkMap = new Map<string, string[]>()
+  for (const link of links || []) {
+    const statuses = linkMap.get(link.passenger_id) || []
+    statuses.push((link as any).queries?.status || '')
+    linkMap.set(link.passenger_id, statuses)
+  }
+
+  const activeStatuses = ['New Query - Not Responded', 'Responded - Awaiting Reply', 'Working on Proposal', 'Proposal Sent', 'Revisions Requested', 'Finalized & Booking', 'Services Booked']
+  const tripActiveStatuses = ['In Delivery']
+
+  return passengerIds.filter(pid => {
+    const statuses = linkMap.get(pid) || []
+    switch (tab) {
+      case 'new_no_queries': return statuses.length === 0
+      case 'query_in_process': return statuses.some(s => activeStatuses.includes(s))
+      case 'trip_active': return statuses.some(s => tripActiveStatuses.includes(s))
+      case 'completed': return statuses.length > 0 && statuses.every(s => s === 'Completed' || s === 'Cancelled')
+      case 'pending_payment': {
+        for (const inv of invoices || []) {
+          if (inv.passenger_id === pid && (inv.amount - inv.paid_amount) > 0) return true
+        }
+        return false
+      }
+      default: return true
+    }
+  })
+}
+
 export async function fetchPassengerTransactions(passengerId: string) {
   const { data, error } = await supabase
     .from('transactions')
