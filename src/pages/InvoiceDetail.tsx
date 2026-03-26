@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, DollarSign, Loader, AlertCircle,
-  Calendar, User, Hash
+  Calendar, User, Hash, Printer, Wallet
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { formatCurrency } from '@/lib/formatCurrency'
@@ -10,6 +10,9 @@ import { fetchInvoiceById, fetchInvoiceItems, fetchInvoicePayments, updateInvoic
 import StatusBadge from '@/components/shared/StatusBadge'
 import AmountDisplay from '@/components/shared/AmountDisplay'
 import TransactionForm from '@/components/finance/TransactionForm'
+import InlineLineItemEditor from '@/components/finance/InlineLineItemEditor'
+import InvoicePrintView from '@/components/finance/InvoicePrintView'
+import ApplyCreditModal from '@/components/finance/ApplyCreditModal'
 import type { Invoice, InvoiceInsert, InvoiceItem, Transaction, InvoiceStatus } from '@/types/finance'
 import { ALL_INVOICE_STATUSES } from '@/types/finance'
 
@@ -22,6 +25,10 @@ export default function InvoiceDetail() {
   const [loading, setLoading] = useState(true)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [editMode, setEditMode] = useState(false)
+  const [showPrintView, setShowPrintView] = useState(false)
+  const [showCreditModal, setShowCreditModal] = useState(false)
+  const [creditBalance, setCreditBalance] = useState(0)
 
   useEffect(() => {
     if (id) loadData()
@@ -37,6 +44,19 @@ export default function InvoiceDetail() {
       setInvoice(inv)
       setItems(itms)
       setPayments(pmts)
+
+      // Load passenger credit balance if applicable
+      if (inv.passenger_id) {
+        const { supabase } = await import('@/lib/supabase')
+        const { data } = await supabase
+          .from('passengers')
+          .select('credit_balance')
+          .eq('id', inv.passenger_id)
+          .limit(1)
+        if (data && data[0]) {
+          setCreditBalance(data[0].credit_balance || 0)
+        }
+      }
     } catch (err) {
       console.error('Error loading invoice:', err)
     } finally {
@@ -48,8 +68,6 @@ export default function InvoiceDetail() {
     if (!invoice) return
     setUpdatingStatus(true)
     try {
-      // When marking as "paid", also set paid_amount = amount so stats reflect correctly
-      // When marking as "pending"/"draft", reset paid_amount to 0
       const updates: Partial<InvoiceInsert> = { status: newStatus }
       if (newStatus === 'paid') {
         updates.paid_amount = invoice.amount
@@ -89,11 +107,14 @@ export default function InvoiceDetail() {
   const balance = invoice.amount - invoice.paid_amount
   const isOverdue = invoice.due_date && new Date(invoice.due_date) < new Date() &&
     !['paid', 'cancelled'].includes(invoice.status)
+  const passengerName = invoice.passengers
+    ? `${invoice.passengers.first_name} ${invoice.passengers.last_name}`
+    : ''
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/finance/invoices')} className="btn btn-secondary btn-sm">
             <ArrowLeft className="w-4 h-4 mr-1" /> Back
@@ -108,7 +129,28 @@ export default function InvoiceDetail() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Print button */}
+          <button onClick={() => setShowPrintView(true)} className="btn btn-secondary btn-sm">
+            <Printer className="w-4 h-4 mr-1" /> Print
+          </button>
+
+          {/* Apply Credit button */}
+          {balance > 0 && creditBalance > 0 && invoice.status !== 'cancelled' && (
+            <button onClick={() => setShowCreditModal(true)} className="btn btn-secondary btn-sm">
+              <Wallet className="w-4 h-4 mr-1" /> Apply Credit ({formatCurrency(creditBalance)})
+            </button>
+          )}
+
+          {/* Edit toggle */}
+          <button
+            onClick={() => setEditMode(!editMode)}
+            className={`btn btn-sm ${editMode ? 'btn-primary' : 'btn-secondary'}`}
+          >
+            {editMode ? 'Done Editing' : 'Edit Invoice'}
+          </button>
+
+          {/* Record Payment */}
           {balance > 0 && invoice.status !== 'cancelled' && (
             <button onClick={() => setShowPaymentModal(true)} className="btn btn-primary">
               <DollarSign className="w-4 h-4 mr-2" /> Record Payment
@@ -173,74 +215,84 @@ export default function InvoiceDetail() {
             </div>
           )}
 
-          {/* Line Items */}
+          {/* Line Items - Edit mode or read-only */}
           <div className="card">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Line Items ({items.length})
-            </h3>
-            {items.length === 0 ? (
-              <p className="text-sm text-gray-500 text-center py-4">No line items</p>
+            {editMode ? (
+              <InlineLineItemEditor
+                invoiceId={invoice.id}
+                items={items}
+                onItemsChanged={loadData}
+              />
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Price</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cost</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Profit</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {items.map(item => {
-                      const hasROE = item.original_currency && item.original_currency !== 'PKR' && item.exchange_rate
-                      return (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {item.description}
-                          {hasROE && (
-                            <div className="text-xs text-blue-600 mt-0.5">
-                              {item.original_currency}: {item.purchase_price_original?.toLocaleString()} → {item.selling_price_original?.toLocaleString()} @ {item.exchange_rate}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">{item.service_type || '—'}</td>
-                        <td className="px-4 py-3 text-sm">
-                          {item.vendors ? (
-                            <Link to={`/vendors/${item.vendor_id}`} className="text-purple-600 hover:text-purple-800">
-                              {item.vendors.name}
-                            </Link>
-                          ) : '—'}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-right">{item.quantity}</td>
-                        <td className="px-4 py-3 text-sm text-right">{formatCurrency(item.unit_price)}</td>
-                        <td className="px-4 py-3 text-sm text-right text-gray-600">{formatCurrency(item.purchase_price)}</td>
-                        <td className="px-4 py-3 text-sm text-right font-medium">{formatCurrency(item.total)}</td>
-                        <td className="px-4 py-3 text-sm text-right">
-                          <span className={item.profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                            {formatCurrency(item.profit)}
-                          </span>
-                        </td>
-                      </tr>
-                    )})}
-                  </tbody>
-                  <tfoot className="bg-gray-50">
-                    <tr>
-                      <td colSpan={6} className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">Totals</td>
-                      <td className="px-4 py-3 text-sm font-bold text-right">{formatCurrency(invoice.amount)}</td>
-                      <td className="px-4 py-3 text-sm font-bold text-right">
-                        <span className={(invoice.total_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}>
-                          {formatCurrency(invoice.total_profit || 0)}
-                        </span>
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+              <>
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Line Items ({items.length})
+                </h3>
+                {items.length === 0 ? (
+                  <p className="text-sm text-gray-500 text-center py-4">No line items</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Vendor</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Qty</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Price</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cost</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Total</th>
+                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Profit</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {items.map(item => {
+                          const hasROE = item.original_currency && item.original_currency !== 'PKR' && item.exchange_rate
+                          return (
+                          <tr key={item.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-3 text-sm text-gray-900">
+                              {item.description}
+                              {hasROE && (
+                                <div className="text-xs text-blue-600 mt-0.5">
+                                  {item.original_currency}: {item.purchase_price_original?.toLocaleString()} → {item.selling_price_original?.toLocaleString()} @ {item.exchange_rate}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-gray-600">{item.service_type || '—'}</td>
+                            <td className="px-4 py-3 text-sm">
+                              {item.vendors ? (
+                                <Link to={`/vendors/${item.vendor_id}`} className="text-purple-600 hover:text-purple-800">
+                                  {item.vendors.name}
+                                </Link>
+                              ) : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-sm text-right">{item.quantity}</td>
+                            <td className="px-4 py-3 text-sm text-right">{formatCurrency(item.unit_price)}</td>
+                            <td className="px-4 py-3 text-sm text-right text-gray-600">{formatCurrency(item.purchase_price)}</td>
+                            <td className="px-4 py-3 text-sm text-right font-medium">{formatCurrency(item.total)}</td>
+                            <td className="px-4 py-3 text-sm text-right">
+                              <span className={item.profit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                                {formatCurrency(item.profit)}
+                              </span>
+                            </td>
+                          </tr>
+                        )})}
+                      </tbody>
+                      <tfoot className="bg-gray-50">
+                        <tr>
+                          <td colSpan={6} className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">Totals</td>
+                          <td className="px-4 py-3 text-sm font-bold text-right">{formatCurrency(invoice.amount)}</td>
+                          <td className="px-4 py-3 text-sm font-bold text-right">
+                            <span className={(invoice.total_profit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}>
+                              {formatCurrency(invoice.total_profit || 0)}
+                            </span>
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -321,7 +373,7 @@ export default function InvoiceDetail() {
                       className="text-sm text-primary-600 hover:text-primary-800 flex items-center gap-1"
                     >
                       <User className="w-3.5 h-3.5" />
-                      {invoice.passengers.first_name} {invoice.passengers.last_name}
+                      {passengerName}
                     </Link>
                   </dd>
                 </div>
@@ -348,6 +400,18 @@ export default function InvoiceDetail() {
               )}
             </dl>
           </div>
+
+          {/* Credit Balance */}
+          {creditBalance > 0 && (
+            <div className="card bg-blue-50 border border-blue-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Wallet className="w-4 h-4 text-blue-600" />
+                <h3 className="text-sm font-semibold text-blue-900">Passenger Credit</h3>
+              </div>
+              <p className="text-xl font-bold text-blue-800">{formatCurrency(creditBalance)}</p>
+              <p className="text-xs text-blue-600 mt-1">Available to apply to this invoice</p>
+            </div>
+          )}
 
           {/* Cost Breakdown */}
           <div className="card">
@@ -408,6 +472,32 @@ export default function InvoiceDetail() {
             loadData()
           }}
           onCancel={() => setShowPaymentModal(false)}
+        />
+      )}
+
+      {/* Print View */}
+      {showPrintView && (
+        <InvoicePrintView
+          invoice={invoice}
+          items={items}
+          onClose={() => setShowPrintView(false)}
+        />
+      )}
+
+      {/* Apply Credit Modal */}
+      {showCreditModal && invoice.passenger_id && (
+        <ApplyCreditModal
+          passengerId={invoice.passenger_id}
+          passengerName={passengerName}
+          creditBalance={creditBalance}
+          invoiceId={invoice.id}
+          invoiceNumber={invoice.invoice_number}
+          invoiceBalance={balance}
+          onSuccess={() => {
+            setShowCreditModal(false)
+            loadData()
+          }}
+          onCancel={() => setShowCreditModal(false)}
         />
       )}
     </div>
