@@ -148,16 +148,27 @@ export default function EnhancedQueries() {
     e.preventDefault()
 
     try {
-      const { error } = await supabase.from('queries').insert([formData])
+      // Clean empty strings to null for DB compatibility
+      const insertData: any = { ...formData }
+      if (!insertData.client_email) insertData.client_email = null
+      if (!insertData.service_type) insertData.service_type = null
+      if (!insertData.travel_date) insertData.travel_date = null
+      if (!insertData.return_date) insertData.return_date = null
+      if (!insertData.tentative_plan) insertData.tentative_plan = null
+      if (!insertData.internal_reminders) insertData.internal_reminders = null
+      if (!insertData.response_given) insertData.response_given = null
+      if (!insertData.query_source) insertData.query_source = null
+
+      const { error } = await supabase.from('queries').insert([insertData])
 
       if (error) throw error
 
       setShowModal(false)
       resetForm()
       loadQueries()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating query:', error)
-      alert('Failed to create query')
+      alert('Failed to create query: ' + (error.message || 'Unknown error'))
     }
   }
 
