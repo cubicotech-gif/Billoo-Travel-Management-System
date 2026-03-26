@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Package, Plus } from 'lucide-react';
+import { Package, Plus, Pencil, Trash2 } from 'lucide-react';
 import { Query, QueryService } from '../../../types/query-workflow';
 import ServiceAddModal from '../ServiceAddModal';
 import { formatCurrency, type CurrencyCode } from '../../../lib/formatCurrency';
+import { deleteQueryService } from '../../../lib/api/queries';
 
 interface Props {
   query: Query;
@@ -18,6 +19,7 @@ export default function StageServiceBuilding({
   onSendProposal
 }: Props) {
   const [showAddService, setShowAddService] = useState(false);
+  const [editingService, setEditingService] = useState<QueryService | null>(null);
 
   // Use PKR totals from services
   const totalCostPkr = services.reduce((sum, s) => sum + (s.cost_price_pkr || s.cost_price || 0) * (s.quantity || 1), 0);
@@ -27,7 +29,18 @@ export default function StageServiceBuilding({
 
   const handleServiceAdded = () => {
     setShowAddService(false);
+    setEditingService(null);
     onRefresh();
+  };
+
+  const handleDeleteService = async (service: QueryService) => {
+    if (!confirm(`Delete ${service.service_type} — ${service.service_description}? This cannot be undone.`)) return;
+    try {
+      await deleteQueryService(service.id);
+      onRefresh();
+    } catch (err: any) {
+      alert('Failed to delete service: ' + err.message);
+    }
   };
 
   return (
@@ -154,6 +167,22 @@ export default function StageServiceBuilding({
                         Qty: {service.quantity}
                       </div>
                     )}
+                    <div className="flex items-center gap-1 mt-2 justify-end">
+                      <button
+                        onClick={() => { setEditingService(service); setShowAddService(true); }}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Edit service"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteService(service)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Delete service"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -219,8 +248,9 @@ export default function StageServiceBuilding({
       {showAddService && (
         <ServiceAddModal
           queryId={query.id}
-          onClose={() => setShowAddService(false)}
+          onClose={() => { setShowAddService(false); setEditingService(null); }}
           onSuccess={handleServiceAdded}
+          editService={editingService}
         />
       )}
     </div>

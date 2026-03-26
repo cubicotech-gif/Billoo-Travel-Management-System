@@ -1,14 +1,25 @@
-import { Trophy, TrendingUp, Star, Download, FileText } from 'lucide-react';
+import { useState } from 'react';
+import { Trophy, TrendingUp, Star, Download, FileText, Pencil, Trash2 } from 'lucide-react';
 import { Query, QueryService } from '../../../types/query-workflow';
 import { format } from 'date-fns';
 import { formatCurrency, type CurrencyCode } from '../../../lib/formatCurrency';
+import { deleteQueryService } from '../../../lib/api/queries';
+import ServiceAddModal from '../ServiceAddModal';
 
 interface Props {
   query: Query;
   services: QueryService[];
+  onRefresh?: () => void;
 }
 
-export default function StageCompleted({ query, services }: Props) {
+export default function StageCompleted({ query, services, onRefresh }: Props) {
+  const [editingService, setEditingService] = useState<QueryService | null>(null);
+
+  const handleDelete = async (service: QueryService) => {
+    if (!confirm(`Delete ${service.service_type} — ${service.service_description}?`)) return;
+    try { await deleteQueryService(service.id); onRefresh?.(); }
+    catch (err: any) { alert('Failed: ' + err.message); }
+  };
   // Use PKR totals
   const totalCostPkr = services.reduce((sum, s) => sum + (s.cost_price_pkr || s.cost_price || 0) * (s.quantity || 1), 0);
   const totalSellingPkr = services.reduce((sum, s) => sum + (s.selling_price_pkr || s.selling_price || 0) * (s.quantity || 1), 0);
@@ -135,15 +146,29 @@ export default function StageCompleted({ query, services }: Props) {
                       <p className="text-xs text-gray-600">Vendor: {service.vendors.name}</p>
                     )}
                   </div>
-                  <div className="text-right">
-                    <div className="text-xs text-gray-500">Revenue</div>
-                    {isForeign ? (
-                      <>
-                        <div className="text-xs text-gray-500">{formatCurrency(sellingOriginal, cur)}</div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-xs text-gray-500">Revenue</div>
+                      {isForeign ? (
+                        <>
+                          <div className="text-xs text-gray-500">{formatCurrency(sellingOriginal, cur)}</div>
+                          <div className="font-semibold text-gray-900">{formatCurrency(sellingPkr)}</div>
+                        </>
+                      ) : (
                         <div className="font-semibold text-gray-900">{formatCurrency(sellingPkr)}</div>
-                      </>
-                    ) : (
-                      <div className="font-semibold text-gray-900">{formatCurrency(sellingPkr)}</div>
+                      )}
+                    </div>
+                    {onRefresh && (
+                      <div className="flex flex-col gap-1">
+                        <button onClick={() => setEditingService(service)}
+                          className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => handleDelete(service)}
+                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -275,6 +300,15 @@ export default function StageCompleted({ query, services }: Props) {
           services have been delivered. Great work!
         </p>
       </div>
+
+      {editingService && (
+        <ServiceAddModal
+          queryId={query.id}
+          onClose={() => setEditingService(null)}
+          onSuccess={() => { setEditingService(null); onRefresh?.(); }}
+          editService={editingService}
+        />
+      )}
     </div>
   );
 }

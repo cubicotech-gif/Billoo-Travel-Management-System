@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, Calendar, MapPin, Phone, Mail, Users,
-  AlertCircle, Clock, Package
+  AlertCircle, Clock, Package, Calculator, DollarSign
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { format } from 'date-fns';
@@ -19,6 +19,9 @@ import StageDelivery from './stages/StageDelivery';
 import StageCompleted from './stages/StageCompleted';
 import StageCancelled from './stages/StageCancelled';
 import QueryDocumentSection from './QueryDocumentSection';
+import PackageCalculator from './PackageCalculator';
+import RecordAdvancePaymentModal from './RecordAdvancePaymentModal';
+import QueryPaymentSummary from './QueryPaymentSummary';
 
 export default function QueryWorkspace() {
   const { queryId } = useParams<{ queryId: string }>();
@@ -27,6 +30,8 @@ export default function QueryWorkspace() {
   const [services, setServices] = useState<QueryService[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCalculator, setShowCalculator] = useState(false);
+  const [showAdvancePayment, setShowAdvancePayment] = useState(false);
 
   useEffect(() => {
     if (queryId) {
@@ -226,23 +231,44 @@ export default function QueryWorkspace() {
               </div>
             </div>
 
-            {/* Status Dropdown */}
-            <select
-              value={query.status}
-              onChange={(e) => updateStatus(e.target.value as QueryStatus)}
-              className="px-4 py-2 border border-gray-300 rounded-lg font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="New Query - Not Responded">🔴 New Query (Not Responded)</option>
-              <option value="Responded - Awaiting Reply">🟡 Awaiting Client Reply</option>
-              <option value="Working on Proposal">🔵 Working on Proposal</option>
-              <option value="Proposal Sent">📧 Proposal Sent</option>
-              <option value="Revisions Requested">🟣 Revisions Requested</option>
-              <option value="Finalized & Booking">✅ Finalized & Booking</option>
-              <option value="Services Booked">📦 Services Booked</option>
-              <option value="In Delivery">🚚 In Delivery</option>
-              <option value="Completed">✅ Completed</option>
-              <option value="Cancelled">❌ Cancelled</option>
-            </select>
+            <div className="flex items-center gap-2">
+              {/* Quick Action Buttons */}
+              <button
+                onClick={() => setShowCalculator(true)}
+                className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                title="Package Calculator"
+              >
+                <Calculator className="w-5 h-5" />
+              </button>
+              {['Proposal Sent', 'Revisions Requested', 'Finalized & Booking'].includes(query.status) && (
+                <button
+                  onClick={() => setShowAdvancePayment(true)}
+                  className="px-3 py-2 bg-green-50 text-green-700 hover:bg-green-100 rounded-lg transition-colors text-sm font-medium flex items-center gap-1.5"
+                  title="Record Advance Payment"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  Advance
+                </button>
+              )}
+
+              {/* Status Dropdown */}
+              <select
+                value={query.status}
+                onChange={(e) => updateStatus(e.target.value as QueryStatus)}
+                className="px-4 py-2 border border-gray-300 rounded-lg font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="New Query - Not Responded">🔴 New Query (Not Responded)</option>
+                <option value="Responded - Awaiting Reply">🟡 Awaiting Client Reply</option>
+                <option value="Working on Proposal">🔵 Working on Proposal</option>
+                <option value="Proposal Sent">📧 Proposal Sent</option>
+                <option value="Revisions Requested">🟣 Revisions Requested</option>
+                <option value="Finalized & Booking">✅ Finalized & Booking</option>
+                <option value="Services Booked">📦 Services Booked</option>
+                <option value="In Delivery">🚚 In Delivery</option>
+                <option value="Completed">✅ Completed</option>
+                <option value="Cancelled">❌ Cancelled</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -322,11 +348,36 @@ export default function QueryWorkspace() {
           {renderStageContent()}
         </div>
 
+        {/* Payment Summary — visible at stages 4+ (when advance payments become relevant) */}
+        {!['New Query - Not Responded', 'Responded - Awaiting Reply', 'Working on Proposal', 'Cancelled'].includes(query.status) && (
+          <QueryPaymentSummary queryId={query.id} />
+        )}
+
         {/* Documents & Checklist Section — visible at all stages */}
         {query.status !== 'Cancelled' && (
           <QueryDocumentSection query={query} onRefresh={loadQueryData} />
         )}
       </div>
+
+      {/* Modals */}
+      {showCalculator && (
+        <PackageCalculator
+          queryId={query.id}
+          passengers={query.adults + query.children + query.infants}
+          onClose={() => setShowCalculator(false)}
+          onAddToQuery={() => { loadQueryData(); }}
+        />
+      )}
+
+      {showAdvancePayment && (
+        <RecordAdvancePaymentModal
+          queryId={query.id}
+          queryNumber={query.query_number}
+          destination={query.destination}
+          onClose={() => setShowAdvancePayment(false)}
+          onSuccess={() => { setShowAdvancePayment(false); loadQueryData(); }}
+        />
+      )}
     </div>
   );
 
@@ -395,6 +446,7 @@ export default function QueryWorkspace() {
           query={query!}
           services={services}
           onStartDelivery={() => updateStatus('In Delivery')}
+          onRefresh={loadQueryData}
         />
       );
     }
@@ -413,7 +465,7 @@ export default function QueryWorkspace() {
 
     // STAGE 9: Completed
     if (status === 'Completed') {
-      return <StageCompleted query={query!} services={services} />;
+      return <StageCompleted query={query!} services={services} onRefresh={loadQueryData} />;
     }
 
     // STAGE 10: Cancelled

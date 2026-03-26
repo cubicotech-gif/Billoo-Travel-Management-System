@@ -77,6 +77,9 @@ export interface TransactionInsert {
   exchange_rate?: number | null
   // Payment mode
   payment_mode?: PaymentMode | null
+  // Source reference
+  source_reference_id?: string | null
+  source_reference_type?: string | null
 }
 
 export interface TransactionFilters {

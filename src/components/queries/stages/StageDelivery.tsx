@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { Truck, CheckCircle, AlertCircle, MessageCircle } from 'lucide-react';
+import { Truck, CheckCircle, AlertCircle, MessageCircle, Pencil, Trash2 } from 'lucide-react';
 import { Query, QueryService } from '../../../types/query-workflow';
 import { supabase } from '../../../lib/supabase';
+import { deleteQueryService } from '../../../lib/api/queries';
+import ServiceAddModal from '../ServiceAddModal';
 
 interface Props {
   query: Query;
@@ -10,7 +12,8 @@ interface Props {
   onComplete: () => void;
 }
 
-export default function StageDelivery({ query: _query, services, onRefresh, onComplete }: Props) {
+export default function StageDelivery({ query, services, onRefresh, onComplete }: Props) {
+  const [editingService, setEditingService] = useState<QueryService | null>(null);
   const deliveredCount = services.filter((s) => s.delivery_status === 'delivered').length;
   const deliveryProgress = services.length > 0 ? (deliveredCount / services.length) * 100 : 0;
   const allDelivered = deliveredCount === services.length && services.length > 0;
@@ -75,6 +78,12 @@ export default function StageDelivery({ query: _query, services, onRefresh, onCo
             service={service}
             index={index}
             onRefresh={onRefresh}
+            onEdit={(s) => setEditingService(s)}
+            onDelete={async (s) => {
+              if (!confirm(`Delete ${s.service_type} — ${s.service_description}?`)) return;
+              try { await deleteQueryService(s.id); onRefresh(); }
+              catch (err: any) { alert('Failed: ' + err.message); }
+            }}
           />
         ))}
       </div>
@@ -109,6 +118,15 @@ export default function StageDelivery({ query: _query, services, onRefresh, onCo
           collection, and automated notifications will be available after Phase B integration.
         </p>
       </div>
+
+      {editingService && (
+        <ServiceAddModal
+          queryId={query.id}
+          onClose={() => setEditingService(null)}
+          onSuccess={() => { setEditingService(null); onRefresh(); }}
+          editService={editingService}
+        />
+      )}
     </div>
   );
 }
@@ -118,10 +136,14 @@ function ServiceDeliveryCard({
   service,
   index,
   onRefresh,
+  onEdit,
+  onDelete,
 }: {
   service: QueryService;
   index: number;
   onRefresh: () => void;
+  onEdit?: (service: QueryService) => void;
+  onDelete?: (service: QueryService) => void;
 }) {
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -195,6 +217,20 @@ function ServiceDeliveryCard({
               {service.service_type}
             </span>
             {getStatusBadge(service.delivery_status)}
+            <div className="ml-auto flex items-center gap-1">
+              {onEdit && (
+                <button onClick={() => onEdit(service)}
+                  className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {onDelete && (
+                <button onClick={() => onDelete(service)}
+                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
           <h4 className="font-semibold text-gray-900 text-lg mb-1">{service.service_description}</h4>
           {service.vendors && (

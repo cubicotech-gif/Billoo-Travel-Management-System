@@ -3,6 +3,8 @@ import { CheckCircle, AlertCircle } from 'lucide-react';
 import { Query, QueryService } from '../../../types/query-workflow';
 import ServiceCardBooking from '../ServiceCardBooking';
 import QueryVendorPaymentSummary from '../QueryVendorPaymentSummary';
+import ServiceAddModal from '../ServiceAddModal';
+import { deleteQueryService } from '../../../lib/api/queries';
 
 interface Props {
   query: Query;
@@ -13,6 +15,7 @@ interface Props {
 
 export default function StageBooking({ query, services, onRefresh, onAllBooked }: Props) {
   const [bookingProgress, setBookingProgress] = useState({ confirmed: 0, total: services.length });
+  const [editingService, setEditingService] = useState<QueryService | null>(null);
 
   const checkBookingProgress = useCallback(() => {
     const confirmed = services.filter((s) => s.booking_status === 'confirmed').length;
@@ -28,6 +31,18 @@ export default function StageBooking({ query, services, onRefresh, onAllBooked }
     checkBookingProgress();
   }, [checkBookingProgress]);
 
+  const handleDeleteService = async (service: QueryService) => {
+    const hasPayments = confirm(
+      `Delete ${service.service_type} — ${service.service_description}?\n\nIf vendor payments were recorded, they will be unlinked but NOT deleted.`
+    );
+    if (!hasPayments) return;
+    try {
+      await deleteQueryService(service.id);
+      onRefresh();
+    } catch (err: any) {
+      alert('Failed to delete: ' + err.message);
+    }
+  };
 
   const progressPercentage =
     bookingProgress.total > 0 ? (bookingProgress.confirmed / bookingProgress.total) * 100 : 0;
@@ -42,7 +57,7 @@ export default function StageBooking({ query, services, onRefresh, onAllBooked }
           </div>
           <div className="flex-1">
             <h3 className="text-lg font-semibold text-teal-900 mb-2">
-              ✅ Package Finalized - Ready to Book
+              Package Finalized - Ready to Book
             </h3>
             <p className="text-sm text-teal-700">
               Customer approved the proposal! Now book each service with vendors and upload booking
@@ -105,10 +120,22 @@ export default function StageBooking({ query, services, onRefresh, onAllBooked }
               service={service}
               index={index}
               onRefresh={onRefresh}
+              onEdit={(s) => setEditingService(s)}
+              onDelete={handleDeleteService}
             />
           ))
         )}
       </div>
+
+      {/* Edit Service Modal */}
+      {editingService && (
+        <ServiceAddModal
+          queryId={query.id}
+          onClose={() => setEditingService(null)}
+          onSuccess={() => { setEditingService(null); onRefresh(); }}
+          editService={editingService}
+        />
+      )}
     </div>
   );
 }
