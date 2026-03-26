@@ -1,16 +1,27 @@
-import { Package, FileText, Download, Truck } from 'lucide-react';
+import { useState } from 'react';
+import { Package, FileText, Download, Truck, Pencil, Trash2 } from 'lucide-react';
 import { Query, QueryService } from '../../../types/query-workflow';
 import { formatCurrency, type CurrencyCode } from '../../../lib/formatCurrency';
+import { deleteQueryService } from '../../../lib/api/queries';
+import ServiceAddModal from '../ServiceAddModal';
 
 interface Props {
   query: Query;
   services: QueryService[];
   onStartDelivery: () => void;
+  onRefresh: () => void;
 }
 
-export default function StageServicesBooked({ query: _query, services, onStartDelivery }: Props) {
+export default function StageServicesBooked({ query, services, onStartDelivery, onRefresh }: Props) {
+  const [editingService, setEditingService] = useState<QueryService | null>(null);
   const totalCostPkr = services.reduce((sum, s) => sum + (s.cost_price_pkr || s.cost_price || 0) * (s.quantity || 1), 0);
   const totalSellingPkr = services.reduce((sum, s) => sum + (s.selling_price_pkr || s.selling_price || 0) * (s.quantity || 1), 0);
+
+  const handleDelete = async (service: QueryService) => {
+    if (!confirm(`Delete ${service.service_type} — ${service.service_description}?`)) return;
+    try { await deleteQueryService(service.id); onRefresh(); }
+    catch (err: any) { alert('Failed: ' + err.message); }
+  };
 
   return (
     <div className="space-y-6">
@@ -91,6 +102,16 @@ export default function StageServicesBooked({ query: _query, services, onStartDe
                   <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-medium bg-green-100 text-green-800">
                     Confirmed
                   </span>
+                  <div className="flex flex-col gap-1">
+                    <button onClick={() => setEditingService(service)}
+                      className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit">
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => handleDelete(service)}
+                      className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );
@@ -176,6 +197,15 @@ export default function StageServicesBooked({ query: _query, services, onStartDe
           automated delivery tracking will be available after Phase B integration.
         </p>
       </div>
+
+      {editingService && (
+        <ServiceAddModal
+          queryId={query.id}
+          onClose={() => setEditingService(null)}
+          onSuccess={() => { setEditingService(null); onRefresh(); }}
+          editService={editingService}
+        />
+      )}
     </div>
   );
 }

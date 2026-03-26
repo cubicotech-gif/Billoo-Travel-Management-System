@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase';
 import QuickAddVendorModal from './QuickAddVendorModal';
 import ServiceDetailsForm from './ServiceDetailsForm';
 import { SUPPORTED_CURRENCIES, type CurrencyCode, convertToPKR, formatCurrency } from '../../lib/formatCurrency';
+import { updateQueryService } from '../../lib/api/queries';
+import type { QueryService } from '../../types/query-workflow';
 
 interface Vendor {
   id: string;
@@ -16,6 +18,7 @@ interface Props {
   queryId: string;
   onClose: () => void;
   onSuccess: () => void;
+  editService?: QueryService | null;
 }
 
 const SERVICE_TYPES = [
@@ -29,24 +32,25 @@ const SERVICE_TYPES = [
   'Other'
 ];
 
-export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) {
+export default function ServiceAddModal({ queryId, onClose, onSuccess, editService }: Props) {
+  const isEditMode = !!editService;
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [loadingVendors, setLoadingVendors] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showQuickAddVendor, setShowQuickAddVendor] = useState(false);
-  const [serviceDetails, setServiceDetails] = useState<any>({});
+  const [serviceDetails, setServiceDetails] = useState<any>(editService?.service_details || {});
 
   const [formData, setFormData] = useState({
-    service_type: 'Hotel',
-    service_description: '',
-    service_date: '',
-    quantity: 1,
-    cost_price: 0,
-    selling_price: 0,
-    vendor_id: '',
-    notes: '',
-    currency: 'SAR' as CurrencyCode,
-    exchange_rate: 0,
+    service_type: editService?.service_type || 'Hotel',
+    service_description: editService?.service_description || '',
+    service_date: editService?.service_date || '',
+    quantity: editService?.quantity || 1,
+    cost_price: editService?.cost_price || 0,
+    selling_price: editService?.selling_price || 0,
+    vendor_id: editService?.vendor_id || '',
+    notes: editService?.notes || '',
+    currency: (editService?.currency || 'SAR') as CurrencyCode,
+    exchange_rate: editService?.exchange_rate || 0,
   });
 
   // Derived PKR values
@@ -129,6 +133,12 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
       if (!confirmed) return;
     }
 
+    // Warn if editing a booked service
+    if (isEditMode && editService?.booking_status === 'confirmed') {
+      const ok = confirm('This service has been booked. Editing may require re-confirmation with vendor. Continue?');
+      if (!ok) return;
+    }
+
     setSaving(true);
 
     try {
@@ -137,7 +147,51 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
 
       const effectiveRate = isPKR ? 1 : formData.exchange_rate;
 
-      // 1. Create query service with ROE columns
+      if (isEditMode) {
+        // ─── EDIT MODE: Update existing service ───
+        await updateQueryService(editService!.id, {
+          service_type: formData.service_type,
+          service_description: formData.service_description,
+          service_date: formData.service_date || null,
+          quantity: formData.quantity,
+          cost_price: formData.cost_price,
+          selling_price: formData.selling_price,
+          vendor_id: formData.vendor_id,
+          notes: formData.notes || null,
+          service_details: serviceDetails,
+          currency: formData.currency,
+          exchange_rate: effectiveRate,
+          cost_price_pkr: costPricePkr,
+          selling_price_pkr: sellingPricePkr,
+          profit_pkr: profitPkr,
+        });
+
+        // Also update vendor_transaction if it exists
+        const totalCostOriginal = formData.cost_price * formData.quantity;
+        const totalCostPkr = costPricePkr * formData.quantity;
+        const totalSellingOriginal = formData.selling_price * formData.quantity;
+        const totalSellingPkr = sellingPricePkr * formData.quantity;
+
+        await supabase
+          .from('vendor_transactions')
+          .update({
+            vendor_id: formData.vendor_id,
+            service_description: formData.service_description,
+            service_type: formData.service_type,
+            purchase_amount_original: totalCostOriginal,
+            purchase_amount_pkr: totalCostPkr,
+            selling_amount_original: totalSellingOriginal,
+            selling_amount_pkr: totalSellingPkr,
+            currency: formData.currency,
+            exchange_rate_to_pkr: effectiveRate,
+          })
+          .eq('service_id', editService!.id);
+
+        onSuccess();
+        return;
+      }
+
+      // ─── ADD MODE: Create new service ───
       const { data: service, error: serviceError } = await supabase
         .from('query_services')
         .insert({
@@ -221,7 +275,7 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               <Package className="w-5 h-5" />
-              Add Service to Package
+              {isEditMode ? 'Edit Service' : 'Add Service to Package'}
             </h3>
             <button
               onClick={onClose}
@@ -507,11 +561,11 @@ export default function ServiceAddModal({ queryId, onClose, onSuccess }: Props) 
                 disabled={saving}
               >
                 {saving ? (
-                  <>Adding...</>
+                  <>{isEditMode ? 'Saving...' : 'Adding...'}</>
                 ) : (
                   <>
                     <Package className="w-4 h-4" />
-                    Add Service
+                    {isEditMode ? 'Save Changes' : 'Add Service'}
                   </>
                 )}
               </button>

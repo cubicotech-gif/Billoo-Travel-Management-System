@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CreditCard, Upload, ExternalLink, Building2 } from 'lucide-react';
+import { CreditCard, Upload, ExternalLink, Building2, Pencil, Trash2 } from 'lucide-react';
 import { QueryService } from '../../types/query-workflow';
 import { supabase } from '../../lib/supabase';
 import BookingStatusBadge from './BookingStatusBadge';
@@ -11,6 +11,8 @@ interface Props {
   service: QueryService;
   index: number;
   onRefresh: () => void;
+  onEdit?: (service: QueryService) => void;
+  onDelete?: (service: QueryService) => void;
 }
 
 interface Vendor {
@@ -34,7 +36,7 @@ interface VendorTransaction {
   currency: string;
 }
 
-export default function ServiceCardBooking({ service, index, onRefresh }: Props) {
+export default function ServiceCardBooking({ service, index, onRefresh, onEdit, onDelete }: Props) {
   const [vendor, setVendor] = useState<Vendor | null>(null);
   const [transaction, setTransaction] = useState<VendorTransaction | null>(null);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -114,6 +116,20 @@ export default function ServiceCardBooking({ service, index, onRefresh }: Props)
               {service.service_type}
             </span>
             <BookingStatusBadge status={service.booking_status} />
+            <div className="ml-auto flex items-center gap-1">
+              {onEdit && (
+                <button onClick={() => onEdit(service)}
+                  className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {onDelete && (
+                <button onClick={() => onDelete(service)}
+                  className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Delete">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
           <h4 className="font-semibold text-gray-900 text-lg mb-1">{service.service_description}</h4>
 
