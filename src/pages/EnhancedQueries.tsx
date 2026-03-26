@@ -12,6 +12,8 @@ import AddCommunication from '@/components/AddCommunication'
 import QuickActions from '@/components/QuickActions'
 import TravelAlertBanner from '@/components/queries/TravelAlertBanner'
 import CreateFromTemplateModal from '@/components/queries/CreateFromTemplateModal'
+import QueryPassengerPicker from '@/components/queries/QueryPassengerPicker'
+import { linkPassengerToQuery, createPassengerAndLink } from '@/lib/api/queries'
 
 interface Query {
   id: string
@@ -83,7 +85,14 @@ export default function EnhancedQueries() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [viewMode, setViewMode] = useState<'all' | 'urgent' | 'awaiting'>('all')
   const [showTemplateModal, setShowTemplateModal] = useState(false)
-  
+  const [selectedPassenger, setSelectedPassenger] = useState<{
+    mode: 'existing' | 'new';
+    id?: string;
+    name: string;
+    phone: string;
+    email: string;
+  } | null>(null)
+
   const [formData, setFormData] = useState({
     client_name: '',
     client_email: '',
@@ -159,11 +168,34 @@ export default function EnhancedQueries() {
       if (!insertData.response_given) insertData.response_given = null
       if (!insertData.query_source) insertData.query_source = null
 
-      const { error } = await supabase.from('queries').insert([insertData])
+      const { data: newQuery, error } = await supabase
+        .from('queries')
+        .insert([insertData])
+        .select('id, query_number')
+        .single()
 
       if (error) throw error
 
+      // Auto-link passenger to the new query
+      if (newQuery && selectedPassenger) {
+        try {
+          if (selectedPassenger.mode === 'existing' && selectedPassenger.id) {
+            await linkPassengerToQuery(newQuery.id, selectedPassenger.id)
+          } else if (selectedPassenger.mode === 'new') {
+            await createPassengerAndLink(
+              newQuery.id,
+              selectedPassenger.name,
+              formData.client_phone,
+              formData.client_email || undefined
+            )
+          }
+        } catch (linkErr) {
+          console.error('Failed to link passenger (query created):', linkErr)
+        }
+      }
+
       setShowModal(false)
+      setSelectedPassenger(null)
       resetForm()
       loadQueries()
     } catch (error: any) {
@@ -636,17 +668,23 @@ export default function EnhancedQueries() {
                   <div className="mb-6">
                     <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Customer Information</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Customer Name *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={formData.client_name}
-                          onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
-                          className="input"
-                          placeholder="Muhammad Ahmed"
+                      {/* Passenger Picker — spans full width */}
+                      <div className="md:col-span-2">
+                        <QueryPassengerPicker
+                          onSelect={(passenger) => {
+                            setSelectedPassenger(passenger);
+                            if (passenger) {
+                              setFormData(prev => ({
+                                ...prev,
+                                client_name: passenger.name,
+                                client_phone: passenger.phone || prev.client_phone,
+                                client_email: passenger.email || prev.client_email,
+                              }));
+                            }
+                          }}
+                          initialName={formData.client_name}
+                          initialPhone={formData.client_phone}
+                          initialEmail={formData.client_email}
                         />
                       </div>
 
