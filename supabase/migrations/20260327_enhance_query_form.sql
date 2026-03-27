@@ -64,3 +64,6 @@ ALTER TABLE public.queries ADD COLUMN IF NOT EXISTS is_responded BOOLEAN DEFAULT
 ALTER TABLE public.queries ADD COLUMN IF NOT EXISTS response_given TEXT;
 ALTER TABLE public.queries ADD COLUMN IF NOT EXISTS priority_level TEXT DEFAULT 'normal';
 ALTER TABLE public.queries ADD COLUMN IF NOT EXISTS follow_up_date DATE;
+
+-- JSONB column for service-specific details (Visa, Flight, Hotel, Transport, Leisure, etc.)
+ALTER TABLE public.queries ADD COLUMN IF NOT EXISTS service_details JSONB DEFAULT '{}'::jsonb;
