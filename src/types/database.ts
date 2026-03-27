@@ -123,6 +123,14 @@ export interface Database {
           current_proposal_version: number | null
           advance_payment_amount: number | null
           advance_payment_date: string | null
+          package_days: number | null
+          city_order: 'makkah_first' | 'madinah_first' | null
+          makkah_nights: number | null
+          madinah_nights: number | null
+          hotel_preferences: string | null
+          budget_amount: number | null
+          budget_type: 'total' | 'per_person' | null
+          service_category: 'umrah' | 'hajj' | 'leisure' | 'visa_only' | 'flight_only' | 'other' | null
           created_at: string
           updated_at: string
         }
@@ -157,6 +165,14 @@ export interface Database {
           current_proposal_version?: number | null
           advance_payment_amount?: number | null
           advance_payment_date?: string | null
+          package_days?: number | null
+          city_order?: 'makkah_first' | 'madinah_first' | null
+          makkah_nights?: number | null
+          madinah_nights?: number | null
+          hotel_preferences?: string | null
+          budget_amount?: number | null
+          budget_type?: 'total' | 'per_person' | null
+          service_category?: 'umrah' | 'hajj' | 'leisure' | 'visa_only' | 'flight_only' | 'other' | null
           created_at?: string
           updated_at?: string
         }
@@ -191,6 +207,14 @@ export interface Database {
           current_proposal_version?: number | null
           advance_payment_amount?: number | null
           advance_payment_date?: string | null
+          package_days?: number | null
+          city_order?: 'makkah_first' | 'madinah_first' | null
+          makkah_nights?: number | null
+          madinah_nights?: number | null
+          hotel_preferences?: string | null
+          budget_amount?: number | null
+          budget_type?: 'total' | 'per_person' | null
+          service_category?: 'umrah' | 'hajj' | 'leisure' | 'visa_only' | 'flight_only' | 'other' | null
           created_at?: string
           updated_at?: string
         }
