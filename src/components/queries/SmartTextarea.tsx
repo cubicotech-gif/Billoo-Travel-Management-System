@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Loader2, Sparkles, Lightbulb, X } from 'lucide-react'
+import { Sparkles, Lightbulb, X } from 'lucide-react'
 import { localCleanup } from '@/lib/textUtils'
-import { supabase } from '@/lib/supabase'
 
 interface DetectedField {
   label: string
@@ -47,10 +46,9 @@ function detectApproxDate(text: string): { label: string; date: string } | null 
     if (monthIdx === undefined) return null
 
     let year = currentYear
-    // If month is before current month, assume next year
     if (monthIdx < now.getMonth()) year++
 
-    let day = 15 // default mid
+    let day = 15
     if (period.includes('start') || period.includes('beginning') || period.includes('early') || period.includes('first week')) day = 5
     if (period.includes('end') || period.includes('late') || period.includes('last week')) day = 25
 
@@ -183,7 +181,7 @@ function parseDetectedFields(text: string): DetectedField[] {
   }
 
   // 9. Detect NUMBER OF PASSENGERS
-  const paxMatch = lower.match(/(\d+)\s*(?:people|person|persons|pax|passengers?|adults?|log|banda|bande)/)
+  const paxMatch = lower.match(/(\d+)\s*(?:people|persons?|prson|prsn|pax|passengers?|adults?|log|banda|bande)/)
   if (paxMatch) {
     const count = parseInt(paxMatch[1])
     if (count >= 1 && count <= 50) {
@@ -192,78 +190,6 @@ function parseDetectedFields(text: string): DetectedField[] {
   }
 
   return fields
-}
-
-// ─── AI CLEANUP (3-tier fallback) ──────────────────────────────────
-
-/**
- * Tier 1: Supabase Edge Function (production — no CORS, key on server)
- * Tier 2: Vite dev proxy (local dev — proxied via /api/anthropic)
- * Tier 3: Local cleanup (no AI — spelling fixes + capitalization)
- */
-async function cleanUpText(text: string): Promise<{ cleaned: string; method: 'ai' | 'local' }> {
-  // Tier 1: Try Supabase Edge Function
-  try {
-    const { data, error } = await supabase.functions.invoke('ai-cleanup', {
-      body: { text },
-    })
-    if (!error && data?.cleaned) {
-      return { cleaned: data.cleaned, method: 'ai' }
-    }
-  } catch {
-    // Edge function not deployed or unreachable — try next tier
-  }
-
-  // Tier 2: Try Vite dev proxy (only works in local dev)
-  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (apiKey) {
-    try {
-      const response = await fetch('/api/anthropic/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
-          messages: [
-            {
-              role: 'user',
-              content: `You are a text cleanup assistant for a travel agency in Pakistan. Fix the following text:
-- Fix all spelling errors (common: umrh→Umrah, pkg→package, wat→want, ppl→people, nts→nights)
-- Fix punctuation (periods, commas)
-- Capitalize properly (names, cities like Makkah/Madinah/Jeddah, first letters of sentences)
-- Rewrite for clarity if messy, but keep the EXACT same meaning
-- Keep it concise — do not add extra information
-- Keep the same language (if Urdu/Roman Urdu words are mixed in, keep them)
-- Return ONLY the cleaned text. No explanations, no quotes, no markdown.
-
-Text to clean:
-${text}`,
-            },
-          ],
-        }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const cleanedText = data.content
-          ?.filter((block: any) => block.type === 'text')
-          ?.map((block: any) => block.text)
-          ?.join('')
-        if (cleanedText) {
-          return { cleaned: cleanedText, method: 'ai' }
-        }
-      }
-    } catch {
-      // Proxy not available — fall through
-    }
-  }
-
-  // Tier 3: Local cleanup (always works)
-  return { cleaned: localCleanup(text), method: 'local' }
 }
 
 // ─── COMPONENT ─────────────────────────────────────────────────────
@@ -278,44 +204,29 @@ export default function SmartTextarea({
   onAutoFill,
   showAutoFill: _showAutoFill = false,
 }: SmartTextareaProps) {
-  const [isLoading, setIsLoading] = useState(false)
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'warning' | 'error' } | null>(null)
   const [detectedFields, setDetectedFields] = useState<DetectedField[]>([])
   const [showDetected, setShowDetected] = useState(false)
 
-  const handleCleanup = async () => {
+  const handleCleanup = () => {
     if (!value || value.trim().length === 0) return
 
-    setIsLoading(true)
-    setStatusMsg(null)
+    const cleaned = localCleanup(value)
 
-    try {
-      const { cleaned, method } = await cleanUpText(value)
+    if (cleaned !== value) {
+      onChange(cleaned)
+    }
 
-      if (cleaned !== value) {
-        onChange(cleaned)
+    setStatusMsg({ text: 'Text cleaned up!', type: 'success' })
+    setTimeout(() => setStatusMsg(null), 4000)
+
+    // Detect fields from cleaned text
+    if (onAutoFill) {
+      const detected = parseDetectedFields(cleaned)
+      if (detected.length > 0) {
+        setDetectedFields(detected)
+        setShowDetected(true)
       }
-
-      if (method === 'ai') {
-        setStatusMsg({ text: 'Text cleaned up!', type: 'success' })
-      } else {
-        setStatusMsg({ text: 'Basic cleanup applied (AI unavailable)', type: 'warning' })
-      }
-      setTimeout(() => setStatusMsg(null), 4000)
-
-      // Detect fields from cleaned text (always runs, regardless of cleanup method)
-      if (onAutoFill) {
-        const detected = parseDetectedFields(cleaned)
-        if (detected.length > 0) {
-          setDetectedFields(detected)
-          setShowDetected(true)
-        }
-      }
-    } catch {
-      setStatusMsg({ text: "Couldn't clean up text. Try again.", type: 'error' })
-      setTimeout(() => setStatusMsg(null), 3000)
-    } finally {
-      setIsLoading(false)
     }
   }
 
@@ -344,22 +255,17 @@ export default function SmartTextarea({
         className="input w-full"
         rows={rows}
         placeholder={placeholder}
-        disabled={isLoading}
       />
       <div className="flex items-center gap-2 mt-1.5">
         <button
           type="button"
           onClick={handleCleanup}
-          disabled={isLoading || !value || value.trim().length === 0}
+          disabled={!value || value.trim().length === 0}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="Clean up text and detect fields"
         >
-          {isLoading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Sparkles className="w-3.5 h-3.5" />
-          )}
-          {isLoading ? 'Cleaning...' : 'Clean Up'}
+          <Sparkles className="w-3.5 h-3.5" />
+          Clean Up
         </button>
         {statusMsg && (
           <span className={`text-xs font-medium ${
