@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Loader2, Sparkles, Lightbulb, X } from 'lucide-react'
+import { Loader2, Sparkles, Lightbulb, X, AlertCircle } from 'lucide-react'
+import { localCleanup } from '@/lib/textUtils'
 
 interface DetectedField {
   label: string
@@ -41,13 +42,14 @@ function parseDetectedFields(text: string): DetectedField[] {
     fields.push({ label: 'Madinah First', field: 'city_order', value: 'madinah_first' })
   }
 
-  // Detect nights
+  // Detect Makkah nights
   const makkahNightsMatch = lower.match(/(\d+)\s*nights?\s*(?:in\s+)?(?:makkah|mecca)/i) ||
     lower.match(/(?:makkah|mecca)\s*(\d+)\s*nights?/i)
   if (makkahNightsMatch) {
     fields.push({ label: `${makkahNightsMatch[1]} nights Makkah`, field: 'makkah_nights', value: parseInt(makkahNightsMatch[1]) })
   }
 
+  // Detect Madinah nights
   const madinahNightsMatch = lower.match(/(\d+)\s*nights?\s*(?:in\s+)?(?:madinah|medina)/i) ||
     lower.match(/(?:madinah|medina)\s*(\d+)\s*nights?/i)
   if (madinahNightsMatch) {
@@ -70,6 +72,69 @@ function parseDetectedFields(text: string): DetectedField[] {
   return fields
 }
 
+/** Attempt AI cleanup via Anthropic API, fall back to local cleanup */
+async function cleanUpText(text: string): Promise<{ cleaned: string; method: 'ai' | 'local' }> {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
+
+  if (!apiKey) {
+    return { cleaned: localCleanup(text), method: 'local' }
+  }
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: `You are a text cleanup assistant for a travel agency in Pakistan. Fix the following text:
+- Fix all spelling errors
+- Fix punctuation (periods, commas, etc.)
+- Capitalize properly (names of people, cities, hotels, first letters of sentences)
+- Rewrite for clarity if the text is messy, but keep the EXACT same meaning
+- Keep it concise — do not add extra information
+- Keep the same language (if Urdu/Roman Urdu words are mixed in, keep them)
+- Return ONLY the cleaned text. No explanations, no quotes, no markdown.
+
+Text to clean:
+${text}`,
+          },
+        ],
+      }),
+    })
+
+    if (!response.ok) {
+      console.error('AI cleanup failed:', response.status, response.statusText)
+      return { cleaned: localCleanup(text), method: 'local' }
+    }
+
+    const data = await response.json()
+
+    if (data.content && data.content.length > 0) {
+      const cleanedText = data.content
+        .filter((block: any) => block.type === 'text')
+        .map((block: any) => block.text)
+        .join('')
+      if (cleanedText) {
+        return { cleaned: cleanedText, method: 'ai' }
+      }
+    }
+
+    return { cleaned: localCleanup(text), method: 'local' }
+  } catch (error) {
+    console.error('AI cleanup error:', error)
+    return { cleaned: localCleanup(text), method: 'local' }
+  }
+}
+
 export default function SmartTextarea({
   value,
   onChange,
@@ -81,72 +146,41 @@ export default function SmartTextarea({
   showAutoFill = false,
 }: SmartTextareaProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [toast, setToast] = useState(false)
+  const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'warning' | 'error' } | null>(null)
   const [detectedFields, setDetectedFields] = useState<DetectedField[]>([])
   const [showDetected, setShowDetected] = useState(false)
 
   const handleCleanup = async () => {
-    if (!value.trim()) return
+    if (!value || value.trim().length === 0) return
 
     setIsLoading(true)
-    setError(null)
+    setStatusMsg(null)
 
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': import.meta.env.VITE_ANTHROPIC_API_KEY || '',
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
-          messages: [
-            {
-              role: 'user',
-              content: `You are a text cleanup assistant for a travel agency.
-Fix the following text:
-- Fix spelling errors
-- Fix punctuation
-- Capitalize properly (names, places, first letters of sentences)
-- Rewrite for clarity if messy, but keep the meaning exactly the same
-- Keep it concise
-- Do NOT add information that isn't there
-- Return ONLY the cleaned text, nothing else
+      const { cleaned, method } = await cleanUpText(value)
 
-Text to clean:
-"${value}"`,
-            },
-          ],
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('API request failed')
+      if (cleaned !== value) {
+        onChange(cleaned)
       }
 
-      const data = await response.json()
-      const cleanedText = data.content?.[0]?.text || value
-      onChange(cleanedText)
-
-      // Show toast
-      setToast(true)
-      setTimeout(() => setToast(false), 2500)
+      if (method === 'ai') {
+        setStatusMsg({ text: 'Text cleaned up!', type: 'success' })
+      } else {
+        setStatusMsg({ text: 'Basic cleanup applied (AI unavailable)', type: 'warning' })
+      }
+      setTimeout(() => setStatusMsg(null), 3000)
 
       // Detect fields from cleaned text
       if (showAutoFill && onAutoFill) {
-        const detected = parseDetectedFields(cleanedText)
+        const detected = parseDetectedFields(cleaned)
         if (detected.length > 0) {
           setDetectedFields(detected)
           setShowDetected(true)
         }
       }
     } catch {
-      setError("Couldn't clean up text. Try again.")
-      setTimeout(() => setError(null), 3000)
+      setStatusMsg({ text: "Couldn't clean up text. Try again.", type: 'error' })
+      setTimeout(() => setStatusMsg(null), 3000)
     } finally {
       setIsLoading(false)
     }
@@ -162,6 +196,8 @@ Text to clean:
     setShowDetected(false)
     setDetectedFields([])
   }
+
+  const noApiKey = !import.meta.env.VITE_ANTHROPIC_API_KEY
 
   return (
     <div>
@@ -183,24 +219,29 @@ Text to clean:
         <button
           type="button"
           onClick={handleCleanup}
-          disabled={isLoading || !value.trim()}
+          disabled={isLoading || !value || value.trim().length === 0}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          title="Clean up text with AI"
+          title={noApiKey ? 'AI key not configured — will use basic cleanup' : 'Clean up text with AI'}
         >
           {isLoading ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
             <Sparkles className="w-3.5 h-3.5" />
           )}
-          Clean Up
+          {isLoading ? 'Cleaning...' : 'Clean Up'}
         </button>
-        {toast && (
-          <span className="text-xs text-green-600 animate-pulse">
-            Text cleaned up ✨
+        {noApiKey && !statusMsg && (
+          <span className="text-xs text-gray-400 flex items-center gap-1" title="Add VITE_ANTHROPIC_API_KEY to .env for AI cleanup">
+            <AlertCircle className="w-3 h-3" /> Basic mode
           </span>
         )}
-        {error && (
-          <span className="text-xs text-red-500">{error}</span>
+        {statusMsg && (
+          <span className={`text-xs font-medium ${
+            statusMsg.type === 'success' ? 'text-green-600' :
+            statusMsg.type === 'warning' ? 'text-amber-600' : 'text-red-600'
+          }`}>
+            {statusMsg.text}
+          </span>
         )}
       </div>
 

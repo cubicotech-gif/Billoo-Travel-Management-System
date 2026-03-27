@@ -131,6 +131,7 @@ export interface Database {
           budget_amount: number | null
           budget_type: 'total' | 'per_person' | null
           service_category: 'umrah' | 'hajj' | 'leisure' | 'visa_only' | 'flight_only' | 'other' | null
+          service_details: Record<string, any> | null
           created_at: string
           updated_at: string
         }
@@ -173,6 +174,7 @@ export interface Database {
           budget_amount?: number | null
           budget_type?: 'total' | 'per_person' | null
           service_category?: 'umrah' | 'hajj' | 'leisure' | 'visa_only' | 'flight_only' | 'other' | null
+          service_details?: Record<string, any> | null
           created_at?: string
           updated_at?: string
         }
@@ -215,6 +217,7 @@ export interface Database {
           budget_amount?: number | null
           budget_type?: 'total' | 'per_person' | null
           service_category?: 'umrah' | 'hajj' | 'leisure' | 'visa_only' | 'flight_only' | 'other' | null
+          service_details?: Record<string, any> | null
           created_at?: string
           updated_at?: string
         }

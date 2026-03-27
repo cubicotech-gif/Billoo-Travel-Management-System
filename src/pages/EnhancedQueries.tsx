@@ -8,6 +8,8 @@ import {
 import { format, differenceInDays, addDays } from 'date-fns'
 import DateRangePicker from '@/components/queries/DateRangePicker'
 import SmartTextarea from '@/components/queries/SmartTextarea'
+import CapitalizedInput from '@/components/shared/CapitalizedInput'
+import ServiceFieldsRouter from '@/components/queries/service-fields/ServiceFieldsRouter'
 import PassengerSelector from '@/components/PassengerSelector'
 import CommunicationLog from '@/components/CommunicationLog'
 import AddCommunication from '@/components/AddCommunication'
@@ -121,11 +123,8 @@ export default function EnhancedQueries() {
     hotel_preferences: '',
     budget_amount: '' as string | number,
     budget_type: 'total' as string,
+    service_details: {} as Record<string, any>,
   })
-
-  const autoCapitalize = (value: string): string => {
-    return value.replace(/\b\w/g, (char) => char.toUpperCase())
-  }
 
   const isUmrahHajj = ['Umrah Package', 'Umrah Plus Package', 'Hajj Package'].includes(formData.service_type)
   const totalPax = formData.adults + formData.children + formData.infants
@@ -134,14 +133,14 @@ export default function EnhancedQueries() {
     loadQueries()
   }, [])
 
-  // Auto-fill destination based on service type
+  // Auto-fill destination based on service type + reset service_details on type change
   useEffect(() => {
     if (formData.service_type === 'Umrah Package' || formData.service_type === 'Umrah Plus Package') {
-      setFormData(prev => ({ ...prev, destination: 'Makkah & Madinah' }))
+      setFormData(prev => ({ ...prev, destination: 'Makkah & Madinah', service_details: {} }))
     } else if (formData.service_type === 'Hajj Package') {
-      setFormData(prev => ({ ...prev, destination: 'Makkah, Madinah, Arafat' }))
-    } else if (!formData.destination) {
-      setFormData(prev => ({ ...prev, destination: '' }))
+      setFormData(prev => ({ ...prev, destination: 'Makkah, Madinah, Arafat', service_details: {} }))
+    } else {
+      setFormData(prev => ({ ...prev, service_details: {}, ...(prev.destination ? {} : { destination: '' }) }))
     }
   }, [formData.service_type])
 
@@ -220,6 +219,9 @@ export default function EnhancedQueries() {
       insertData.hotel_preferences = insertData.hotel_preferences || null
       insertData.budget_amount = insertData.budget_amount ? Number(insertData.budget_amount) : null
       insertData.budget_type = insertData.budget_amount ? insertData.budget_type : null
+      // Service-specific details JSONB — only save if there's data
+      const details = insertData.service_details
+      insertData.service_details = details && Object.keys(details).length > 0 ? details : null
 
       const { data: newQuery, error } = await supabase
         .from('queries')
@@ -283,6 +285,7 @@ export default function EnhancedQueries() {
       hotel_preferences: '',
       budget_amount: '',
       budget_type: 'total',
+      service_details: {},
     })
   }
 
@@ -841,11 +844,11 @@ export default function EnhancedQueries() {
                             <span className="text-xs text-green-600 ml-2">(Auto-filled)</span>
                           )}
                         </label>
-                        <input
+                        <CapitalizedInput
                           type="text"
                           required
                           value={formData.destination}
-                          onChange={(e) => setFormData({ ...formData, destination: autoCapitalize(e.target.value) })}
+                          onValueChange={(val) => setFormData({ ...formData, destination: val })}
                           className="input"
                           placeholder="Destination"
                         />
@@ -1056,16 +1059,29 @@ export default function EnhancedQueries() {
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Hotel Preferences</label>
-                          <input
+                          <CapitalizedInput
                             type="text"
                             value={formData.hotel_preferences}
-                            onChange={(e) => setFormData({ ...formData, hotel_preferences: autoCapitalize(e.target.value) })}
+                            onValueChange={(val) => setFormData({ ...formData, hotel_preferences: val })}
                             className="input"
                             placeholder='e.g. "5-star near Haram" or "budget, any area"'
                           />
                         </div>
                       </div>
                     </div>
+                  )}
+
+                  {/* Service-specific fields for non-Umrah types */}
+                  {formData.service_type && !['Umrah Package', 'Umrah Plus Package'].includes(formData.service_type) && (
+                    <ServiceFieldsRouter
+                      serviceType={formData.service_type}
+                      values={formData.service_details}
+                      onChange={(field, value) => setFormData(prev => ({
+                        ...prev,
+                        service_details: { ...prev.service_details, [field]: value },
+                      }))}
+                      totalPax={totalPax}
+                    />
                   )}
 
                   {/* Tentative Plan */}
