@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Sparkles, Lightbulb, X } from 'lucide-react'
 import { localCleanup } from '@/lib/textUtils'
 
@@ -16,7 +16,6 @@ interface SmartTextareaProps {
   label?: string
   sublabel?: string
   onAutoFill?: (fields: Record<string, string | number>) => void
-  showAutoFill?: boolean
 }
 
 // ─── MONTH DETECTION ───────────────────────────────────────────────
@@ -25,8 +24,6 @@ const MONTH_MAP: Record<string, number> = {
   apr: 3, april: 3, may: 4, jun: 5, june: 5,
   jul: 6, july: 6, aug: 7, august: 7, sep: 8, sept: 8, september: 8,
   oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
-  // Urdu / informal
-  muharram: 0, safar: 1, rabi: 2,
 }
 
 function detectApproxDate(text: string): { label: string; date: string } | null {
@@ -36,7 +33,7 @@ function detectApproxDate(text: string): { label: string; date: string } | null 
 
   // Match: "mid of may", "start of june", "end of march", "early april", "late july"
   const periodMatch = lower.match(
-    /(?:mid|middle|start|beginning|early|end|late|last week|first week|second week)\s*(?:of\s+)?(?:the\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)/i
+    /(?:mid|middle|start|beginning|early|end|late|last\s+week|first\s+week|second\s+week)\s*(?:of\s+)?(?:the\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)/i
   )
 
   if (periodMatch) {
@@ -46,7 +43,8 @@ function detectApproxDate(text: string): { label: string; date: string } | null 
     if (monthIdx === undefined) return null
 
     let year = currentYear
-    if (monthIdx < now.getMonth()) year++
+    // If month already passed this year, assume next year
+    if (monthIdx < now.getMonth() || (monthIdx === now.getMonth() && now.getDate() > 20)) year++
 
     let day = 15
     if (period.includes('start') || period.includes('beginning') || period.includes('early') || period.includes('first week')) day = 5
@@ -59,7 +57,7 @@ function detectApproxDate(text: string): { label: string; date: string } | null 
     return { label: `~${day} ${monthName} ${year}`, date: dateStr }
   }
 
-  // Match: "in may", "in june", "march", just month name standalone
+  // Match: "in may", "in june", "march" standalone
   const monthOnlyMatch = lower.match(
     /\b(?:in\s+)?(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i
   )
@@ -69,7 +67,7 @@ function detectApproxDate(text: string): { label: string; date: string } | null 
     if (monthIdx === undefined) return null
 
     let year = currentYear
-    if (monthIdx < now.getMonth()) year++
+    if (monthIdx < now.getMonth() || (monthIdx === now.getMonth() && now.getDate() > 20)) year++
 
     const dateStr = `${year}-${String(monthIdx + 1).padStart(2, '0')}-15`
     const monthName = new Date(year, monthIdx, 1).toLocaleString('default', { month: 'long' })
@@ -92,15 +90,15 @@ function parseDetectedFields(text: string): DetectedField[] {
     fields.push({ label: 'Umrah Package', field: 'service_type', value: 'Umrah Package' })
   } else if (hajjWords.some((w) => lower.includes(w))) {
     fields.push({ label: 'Hajj Package', field: 'service_type', value: 'Hajj Package' })
-  } else if (/\b(visa)\b/i.test(lower)) {
+  } else if (/\bvisa\b/i.test(lower)) {
     fields.push({ label: 'Visa Service', field: 'service_type', value: 'Visa Service' })
-  } else if (/\b(ticket|flight|fly|plane)\b/i.test(lower)) {
+  } else if (/\b(?:ticket|flight|fly|plane)\b/i.test(lower)) {
     fields.push({ label: 'Ticket Booking', field: 'service_type', value: 'Ticket Booking' })
-  } else if (/\b(hotel|room|stay|accommodation)\b/i.test(lower)) {
+  } else if (/\b(?:hotel|room|stay|accommodation)\b/i.test(lower)) {
     fields.push({ label: 'Hotel Only', field: 'service_type', value: 'Hotel Only' })
-  } else if (/\b(transport|transfer|pickup|drop)\b/i.test(lower)) {
+  } else if (/\b(?:transport|transfer|pickup|drop)\b/i.test(lower)) {
     fields.push({ label: 'Transport Service', field: 'service_type', value: 'Transport Service' })
-  } else if (/\b(tour|leisure|trip|holiday|vacation)\b/i.test(lower)) {
+  } else if (/\b(?:tour|leisure|holiday|vacation)\b/i.test(lower)) {
     fields.push({ label: 'Leisure Tourism', field: 'service_type', value: 'Leisure Tourism' })
   }
 
@@ -141,10 +139,11 @@ function parseDetectedFields(text: string): DetectedField[] {
 
   // 6. Detect BUDGET
   const budgetMatch = lower.match(
-    /(?:budget|rs\.?|pkr|amount|price|cost|around|approx|approximately)\s*[:.]?\s*([\d,]+(?:\.\d+)?)\s*(k|thousand|lac|lakh|lacs)?/i
+    /(?:budget|rs\.?|pkr|amount|price|cost|around|approx(?:imately)?)\s*[:.]?\s*([\d,]+(?:\.\d+)?)\s*(k|thousand|lac|lakh|lacs)?/i
   )
   if (budgetMatch) {
     let amount = parseFloat(budgetMatch[1].replace(/,/g, ''))
+    if (isNaN(amount) || amount <= 0) return fields
     const suffix = budgetMatch[2]?.toLowerCase()
     if (suffix === 'k' || suffix === 'thousand') amount *= 1000
     if (suffix === 'lac' || suffix === 'lakh' || suffix === 'lacs') amount *= 100000
@@ -167,8 +166,8 @@ function parseDetectedFields(text: string): DetectedField[] {
     hotelHints.push('5-star')
   } else if (/4\s*star|four\s*star/i.test(lower)) {
     hotelHints.push('4-star')
-  } else if (/3\s*star|three\s*star|budget|sasta|cheap|economy/i.test(lower)) {
-    hotelHints.push('Budget')
+  } else if (/3\s*star|three\s*star|sasta|cheap/i.test(lower)) {
+    hotelHints.push('Budget/Economy')
   }
   if (hotelHints.length > 0) {
     fields.push({ label: hotelHints.join(', '), field: 'hotel_preferences', value: hotelHints.join(', ') })
@@ -181,10 +180,10 @@ function parseDetectedFields(text: string): DetectedField[] {
   }
 
   // 9. Detect NUMBER OF PASSENGERS
-  const paxMatch = lower.match(/(\d+)\s*(?:people|persons?|prson|prsn|pax|passengers?|adults?|log|banda|bande)/)
+  const paxMatch = lower.match(/(\d+)\s*(?:people|persons?|prson|prsn|pax|passengers?|adults?|log|banda|bande|members?|family)/)
   if (paxMatch) {
     const count = parseInt(paxMatch[1])
-    if (count >= 1 && count <= 50) {
+    if (count >= 1 && count <= 99) {
       fields.push({ label: `${count} passengers`, field: 'adults', value: count })
     }
   }
@@ -202,11 +201,18 @@ export default function SmartTextarea({
   label,
   sublabel,
   onAutoFill,
-  showAutoFill: _showAutoFill = false,
 }: SmartTextareaProps) {
   const [statusMsg, setStatusMsg] = useState<{ text: string; type: 'success' | 'warning' | 'error' } | null>(null)
   const [detectedFields, setDetectedFields] = useState<DetectedField[]>([])
   const [showDetected, setShowDetected] = useState(false)
+  const statusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    }
+  }, [])
 
   const handleCleanup = () => {
     if (!value || value.trim().length === 0) return
@@ -218,7 +224,8 @@ export default function SmartTextarea({
     }
 
     setStatusMsg({ text: 'Text cleaned up!', type: 'success' })
-    setTimeout(() => setStatusMsg(null), 4000)
+    if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
+    statusTimerRef.current = setTimeout(() => setStatusMsg(null), 4000)
 
     // Detect fields from cleaned text
     if (onAutoFill) {
@@ -226,6 +233,9 @@ export default function SmartTextarea({
       if (detected.length > 0) {
         setDetectedFields(detected)
         setShowDetected(true)
+      } else {
+        setDetectedFields([])
+        setShowDetected(false)
       }
     }
   }

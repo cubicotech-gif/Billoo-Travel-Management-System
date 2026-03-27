@@ -24,6 +24,7 @@ export default function DateRangePicker({
   const startDate = departureDate ? new Date(departureDate + 'T00:00:00') : null
   const endDate = returnDate ? new Date(returnDate + 'T00:00:00') : null
 
+  // Close on outside click
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -34,11 +35,16 @@ export default function DateRangePicker({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Jump to start date month when opening
   useEffect(() => {
-    if (startDate && isOpen) {
-      setCurrentMonth(startOfMonth(startDate))
+    if (isOpen) {
+      if (startDate) {
+        setCurrentMonth(startOfMonth(startDate))
+      } else {
+        setCurrentMonth(startOfMonth(new Date()))
+      }
     }
-  }, [isOpen])
+  }, [isOpen, departureDate])
 
   const handleDateClick = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd')
@@ -49,6 +55,7 @@ export default function DateRangePicker({
       setSelectingEnd(true)
     } else {
       if (isBefore(date, startDate)) {
+        // Clicked before start — reset to this as new start
         onDepartureChange(dateStr)
         onReturnChange('')
       } else {

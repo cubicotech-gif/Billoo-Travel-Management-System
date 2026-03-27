@@ -74,6 +74,7 @@ export default function HotelFields({ values, onChange }: HotelFieldsProps) {
           <input
             type="date"
             value={values.check_out || ''}
+            min={values.check_in || ''}
             onChange={(e) => onChange('check_out', e.target.value)}
             className="input"
           />
@@ -97,7 +98,7 @@ export default function HotelFields({ values, onChange }: HotelFieldsProps) {
             type="number"
             min="1"
             value={values.number_of_rooms || ''}
-            onChange={(e) => onChange('number_of_rooms', e.target.value ? parseInt(e.target.value) : '')}
+            onChange={(e) => onChange('number_of_rooms', e.target.value ? parseInt(e.target.value) || 1 : '')}
             className="input"
             placeholder="1"
           />

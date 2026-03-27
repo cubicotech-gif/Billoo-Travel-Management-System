@@ -117,12 +117,29 @@ const SPELLING_FIXES: Record<string, string> = {
   'mashallah': 'Masha Allah', 'mashallh': 'Masha Allah',
 }
 
+// Precompile proper noun regexes once (avoid recreating on every cleanup call)
+const PROPER_NOUNS = [
+  'makkah', 'madinah', 'medina', 'jeddah', 'riyadh', 'karachi', 'lahore',
+  'islamabad', 'peshawar', 'multan', 'faisalabad', 'rawalpindi', 'quetta',
+  'dallah', 'hilton', 'movenpick', 'pullman', 'meridien', 'marriott', 'sheraton',
+  'sofitel', 'novotel', 'hyatt', 'raffles', 'swissotel', 'elaf', 'anjum',
+  'haram', 'nabawi', 'umrah', 'hajj', 'arafat', 'mina', 'muzdalifah',
+  'pakistan', 'saudi', 'arabia', 'dubai', 'turkey', 'istanbul', 'malaysia',
+  'pia', 'saudia', 'emirates', 'qatar', 'etihad', 'flynas', 'flyadeal',
+  'taif', 'abha', 'yanbu', 'tabuk', 'bahrain', 'oman', 'kuwait',
+]
+
+const PROPER_NOUN_REGEXES = PROPER_NOUNS.map((noun) => ({
+  regex: new RegExp(`\\b${noun}\\b`, 'gi'),
+  replacement: noun.charAt(0).toUpperCase() + noun.slice(1),
+}))
+
 /**
- * Local text cleanup fallback (no AI needed).
+ * Local text cleanup (no AI needed).
  * Fixes common misspellings, capitalization, spacing, and proper nouns.
  */
 export const localCleanup = (text: string): string => {
-  // Split into words, fix known misspellings
+  // Fix known misspellings word-by-word
   let cleaned = text.replace(/\b(\w+)\b/g, (match) => {
     const lower = match.toLowerCase()
     return SPELLING_FIXES[lower] || match
@@ -131,25 +148,15 @@ export const localCleanup = (text: string): string => {
   // Capitalize first letter of each sentence
   cleaned = cleaned.replace(/(^\s*\w|[.!?]\s+\w)/g, (match) => match.toUpperCase())
 
-  // Capitalize common proper nouns
-  const properNouns = [
-    'makkah', 'madinah', 'medina', 'jeddah', 'riyadh', 'karachi', 'lahore',
-    'islamabad', 'peshawar', 'multan', 'faisalabad', 'rawalpindi', 'quetta',
-    'dallah', 'hilton', 'movenpick', 'pullman', 'meridien', 'marriott', 'sheraton',
-    'sofitel', 'novotel', 'hyatt', 'raffles', 'swissotel', 'elaf', 'anjum',
-    'haram', 'nabawi', 'umrah', 'hajj', 'arafat', 'mina', 'muzdalifah',
-    'pakistan', 'saudi', 'arabia', 'dubai', 'turkey', 'istanbul', 'malaysia',
-    'pia', 'saudia', 'emirates', 'qatar', 'etihad', 'flynas', 'flyadeal',
-  ]
-  properNouns.forEach((noun) => {
-    const regex = new RegExp(`\\b${noun}\\b`, 'gi')
-    cleaned = cleaned.replace(regex, noun.charAt(0).toUpperCase() + noun.slice(1))
-  })
+  // Capitalize proper nouns using precompiled regexes
+  for (const { regex, replacement } of PROPER_NOUN_REGEXES) {
+    cleaned = cleaned.replace(regex, replacement)
+  }
 
-  // Fix common spacing issues
+  // Fix spacing issues
   cleaned = cleaned.replace(/\s+/g, ' ')              // Multiple spaces → single
   cleaned = cleaned.replace(/\s+([.,!?])/g, '$1')     // Remove space before punctuation
-  cleaned = cleaned.replace(/([.,!?])(\w)/g, '$1 $2') // Add space after punctuation
+  cleaned = cleaned.replace(/([.,!?])([A-Za-z])/g, '$1 $2') // Add space after punctuation (only before letters)
 
   return cleaned.trim()
 }

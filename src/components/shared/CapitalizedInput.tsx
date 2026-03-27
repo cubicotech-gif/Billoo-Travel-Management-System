@@ -9,14 +9,14 @@ interface CapitalizedInputProps extends Omit<React.InputHTMLAttributes<HTMLInput
 export default function CapitalizedInput({
   onValueChange,
   capitalizeMode = 'words',
-  value,
+  value = '',
   ...props
 }: CapitalizedInputProps) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let newValue = e.target.value
-    const cursorPos = e.target.selectionStart || 0
+    const cursorPos = e.target.selectionStart ?? newValue.length
 
     if (capitalizeMode === 'words') {
       newValue = capitalizeWords(newValue)
@@ -28,7 +28,9 @@ export default function CapitalizedInput({
 
     // Restore cursor position after React re-render
     requestAnimationFrame(() => {
-      inputRef.current?.setSelectionRange(cursorPos, cursorPos)
+      if (inputRef.current) {
+        inputRef.current.setSelectionRange(cursorPos, cursorPos)
+      }
     })
   }
 

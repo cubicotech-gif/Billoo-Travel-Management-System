@@ -69,7 +69,7 @@ export default function VisaFields({ values, onChange, totalPax }: VisaFieldsPro
             type="number"
             min="1"
             value={values.number_of_visas || totalPax || ''}
-            onChange={(e) => onChange('number_of_visas', e.target.value ? parseInt(e.target.value) : '')}
+            onChange={(e) => onChange('number_of_visas', e.target.value ? parseInt(e.target.value) || 1 : '')}
             className="input"
             placeholder={totalPax ? String(totalPax) : '1'}
           />
