@@ -114,7 +114,7 @@ export default function EnhancedQueries() {
     response_given: '',
     status: 'New Query - Not Responded',
     // New fields
-    package_days: '' as string | number,
+    package_nights: '' as string | number,
     city_order: '' as string,
     makkah_nights: '' as string | number,
     madinah_nights: '' as string | number,
@@ -154,29 +154,33 @@ export default function EnhancedQueries() {
     }
   }, [formData.is_responded])
 
-  // Date ↔ Package Days sync
+  // Date ↔ Package Nights sync (hotel standard: date diff = nights)
   useEffect(() => {
     if (formData.travel_date && formData.return_date) {
       const dep = new Date(formData.travel_date + 'T00:00:00')
       const ret = new Date(formData.return_date + 'T00:00:00')
-      const days = differenceInDays(ret, dep)
-      if (days > 0 && isUmrahHajj) {
-        setFormData(prev => ({ ...prev, package_days: days }))
+      const nights = differenceInDays(ret, dep)
+      if (nights > 0 && isUmrahHajj) {
+        setFormData(prev => ({ ...prev, package_nights: nights }))
       }
     }
   }, [formData.travel_date, formData.return_date])
 
-  // Auto-suggest return date from departure + package days
+  // Auto-suggest return date from departure + package nights
   useEffect(() => {
-    if (formData.travel_date && formData.package_days && !formData.return_date) {
-      const days = typeof formData.package_days === 'string' ? parseInt(formData.package_days) : formData.package_days
-      if (days > 0) {
+    if (formData.travel_date && formData.package_nights && !formData.return_date) {
+      const nights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
+      if (nights > 0) {
         const dep = new Date(formData.travel_date + 'T00:00:00')
-        const ret = addDays(dep, days)
+        const ret = addDays(dep, nights)
         setFormData(prev => ({ ...prev, return_date: format(ret, 'yyyy-MM-dd') }))
       }
     }
-  }, [formData.package_days, formData.travel_date])
+  }, [formData.package_nights, formData.travel_date])
+
+  // Computed: days from nights (hotel standard: days = nights - 1)
+  const packageNightsNum = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
+  const packageDaysNum = packageNightsNum ? packageNightsNum - 1 : null
 
   const loadQueries = async () => {
     try {
@@ -209,7 +213,7 @@ export default function EnhancedQueries() {
       if (!insertData.response_given) insertData.response_given = null
       if (!insertData.query_source) insertData.query_source = null
       // New fields — clean empties to null
-      insertData.package_days = insertData.package_days ? Number(insertData.package_days) : null
+      insertData.package_nights = insertData.package_nights ? Number(insertData.package_nights) : null
       insertData.city_order = insertData.city_order || null
       insertData.makkah_nights = insertData.makkah_nights ? Number(insertData.makkah_nights) : null
       insertData.madinah_nights = insertData.madinah_nights ? Number(insertData.madinah_nights) : null
@@ -272,7 +276,7 @@ export default function EnhancedQueries() {
       is_responded: false,
       response_given: '',
       status: 'New Query - Not Responded',
-      package_days: '',
+      package_nights: '',
       city_order: '',
       makkah_nights: '',
       madinah_nights: '',
@@ -287,11 +291,11 @@ export default function EnhancedQueries() {
   }
 
   const nightsSplitWarning = (() => {
-    const pkgDays = typeof formData.package_days === 'string' ? parseInt(formData.package_days) : formData.package_days
+    const pkgNights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
     const mNights = typeof formData.makkah_nights === 'string' ? parseInt(formData.makkah_nights) : formData.makkah_nights
     const mdNights = typeof formData.madinah_nights === 'string' ? parseInt(formData.madinah_nights) : formData.madinah_nights
-    if (pkgDays && mNights && mdNights && (mNights + mdNights !== pkgDays)) {
-      return `Makkah (${mNights}) + Madinah (${mdNights}) = ${mNights + mdNights} nights, but package is ${pkgDays} days`
+    if (pkgNights && mNights && mdNights && (mNights + mdNights !== pkgNights)) {
+      return `Makkah (${mNights}) + Madinah (${mdNights}) = ${mNights + mdNights} nights, but package is ${pkgNights} nights`
     }
     return null
   })()
@@ -956,18 +960,21 @@ export default function EnhancedQueries() {
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Package Days</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Package Nights</label>
                           <input
                             type="number"
                             min="1"
-                            value={formData.package_days}
+                            value={formData.package_nights}
                             onChange={(e) => {
-                              const days = e.target.value ? parseInt(e.target.value) : ''
-                              setFormData(prev => ({ ...prev, package_days: days }))
+                              const nights = e.target.value ? parseInt(e.target.value) : ''
+                              setFormData(prev => ({ ...prev, package_nights: nights }))
                             }}
                             className="input"
                             placeholder="e.g. 14"
                           />
+                          {packageDaysNum && packageNightsNum ? (
+                            <p className="mt-1 text-xs text-gray-500">{packageDaysNum} Days {packageNightsNum} Nights</p>
+                          ) : null}
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">City Order</label>
@@ -1007,11 +1014,11 @@ export default function EnhancedQueries() {
                                 value={formData.makkah_nights}
                                 onChange={(e) => {
                                   const val = e.target.value ? parseInt(e.target.value) : ''
-                                  const pkgDays = typeof formData.package_days === 'string' ? parseInt(formData.package_days) : formData.package_days
+                                  const pkgNights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
                                   const newState: any = { makkah_nights: val }
                                   // Auto-fill madinah nights
-                                  if (val && pkgDays && !formData.madinah_nights) {
-                                    newState.madinah_nights = pkgDays - (val as number)
+                                  if (val && pkgNights && !formData.madinah_nights) {
+                                    newState.madinah_nights = pkgNights - (val as number)
                                   }
                                   setFormData(prev => ({ ...prev, ...newState }))
                                 }}
@@ -1027,11 +1034,11 @@ export default function EnhancedQueries() {
                                 value={formData.madinah_nights}
                                 onChange={(e) => {
                                   const val = e.target.value ? parseInt(e.target.value) : ''
-                                  const pkgDays = typeof formData.package_days === 'string' ? parseInt(formData.package_days) : formData.package_days
+                                  const pkgNights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
                                   const newState: any = { madinah_nights: val }
                                   // Auto-fill makkah nights
-                                  if (val && pkgDays && !formData.makkah_nights) {
-                                    newState.makkah_nights = pkgDays - (val as number)
+                                  if (val && pkgNights && !formData.makkah_nights) {
+                                    newState.makkah_nights = pkgNights - (val as number)
                                   }
                                   setFormData(prev => ({ ...prev, ...newState }))
                                 }}

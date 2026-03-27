@@ -22,10 +22,16 @@ function parseDetectedFields(text: string): DetectedField[] {
   const fields: DetectedField[] = []
   const lower = text.toLowerCase()
 
-  // Detect package days
-  const daysMatch = lower.match(/(\d+)\s*days?/)
-  if (daysMatch) {
-    fields.push({ label: `${daysMatch[1]} days`, field: 'package_days', value: parseInt(daysMatch[1]) })
+  // Detect package nights (from "X nights" or "X days" — convert days to nights)
+  const nightsMatch = lower.match(/(\d+)\s*nights?/)
+  if (nightsMatch) {
+    fields.push({ label: `${nightsMatch[1]} nights`, field: 'package_nights', value: parseInt(nightsMatch[1]) })
+  } else {
+    const daysMatch = lower.match(/(\d+)\s*days?/)
+    if (daysMatch) {
+      const nights = parseInt(daysMatch[1]) + 1
+      fields.push({ label: `${nights} nights (from ${daysMatch[1]} days)`, field: 'package_nights', value: nights })
+    }
   }
 
   // Detect city order

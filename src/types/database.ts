@@ -123,7 +123,7 @@ export interface Database {
           current_proposal_version: number | null
           advance_payment_amount: number | null
           advance_payment_date: string | null
-          package_days: number | null
+          package_nights: number | null
           city_order: 'makkah_first' | 'madinah_first' | null
           makkah_nights: number | null
           madinah_nights: number | null
@@ -165,7 +165,7 @@ export interface Database {
           current_proposal_version?: number | null
           advance_payment_amount?: number | null
           advance_payment_date?: string | null
-          package_days?: number | null
+          package_nights?: number | null
           city_order?: 'makkah_first' | 'madinah_first' | null
           makkah_nights?: number | null
           madinah_nights?: number | null
@@ -207,7 +207,7 @@ export interface Database {
           current_proposal_version?: number | null
           advance_payment_amount?: number | null
           advance_payment_date?: string | null
-          package_days?: number | null
+          package_nights?: number | null
           city_order?: 'makkah_first' | 'madinah_first' | null
           makkah_nights?: number | null
           madinah_nights?: number | null
