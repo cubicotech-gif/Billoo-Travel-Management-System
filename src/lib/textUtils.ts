@@ -36,7 +36,7 @@ const SPELLING_FIXES: Record<string, string> = {
   'peshwar': 'Peshawar', 'peshawr': 'Peshawar',
   // Common abbreviations
   'pkg': 'package', 'pkge': 'package',
-  'ppl': 'people', 'prsn': 'person', 'prsns': 'persons',
+  'ppl': 'people', 'prsn': 'person', 'prson': 'person', 'prsns': 'persons',
   'nts': 'nights', 'nght': 'night', 'nghts': 'nights',
   'dys': 'days',
   'pax': 'pax', 'psngr': 'passenger', 'psngrs': 'passengers',

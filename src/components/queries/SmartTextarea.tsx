@@ -183,7 +183,7 @@ function parseDetectedFields(text: string): DetectedField[] {
   }
 
   // 9. Detect NUMBER OF PASSENGERS
-  const paxMatch = lower.match(/(\d+)\s*(?:people|person|persons|pax|passengers?|adults?|log|banda|bande)/)
+  const paxMatch = lower.match(/(\d+)\s*(?:people|persons?|prson|prsn|pax|passengers?|adults?|log|banda|bande)/)
   if (paxMatch) {
     const count = parseInt(paxMatch[1])
     if (count >= 1 && count <= 50) {
@@ -214,9 +214,10 @@ async function cleanUpText(text: string): Promise<{ cleaned: string; method: 'ai
     // Edge function not deployed or unreachable — try next tier
   }
 
-  // Tier 2: Try Vite dev proxy (only works in local dev)
+  // Tier 2: Try Vite dev proxy (only works in local dev, not on Vercel/production)
+  const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY
-  if (apiKey) {
+  if (apiKey && isLocalDev) {
     try {
       const response = await fetch('/api/anthropic/v1/messages', {
         method: 'POST',
