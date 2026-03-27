@@ -15,5 +15,12 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    proxy: {
+      '/api/anthropic': {
+        target: 'https://api.anthropic.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/anthropic/, ''),
+      },
+    },
   },
 })

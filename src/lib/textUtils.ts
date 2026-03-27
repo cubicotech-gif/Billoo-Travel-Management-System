@@ -1,5 +1,5 @@
 /**
- * Text utility functions for auto-capitalization
+ * Text utility functions for auto-capitalization and cleanup
  */
 
 /** Capitalize first letter of each word: "jawaid ahmed" → "Jawaid Ahmed" */
@@ -15,21 +15,67 @@ export const capitalizeFirst = (value: string): string => {
 }
 
 /**
+ * Common travel-industry misspellings/abbreviations → corrections.
+ * Applied word-by-word before proper noun capitalization.
+ */
+const SPELLING_FIXES: Record<string, string> = {
+  // Umrah / Hajj misspellings
+  'umrh': 'Umrah', 'umra': 'Umrah', 'umrha': 'Umrah', 'umraah': 'Umrah',
+  'umerah': 'Umrah', 'umraa': 'Umrah', 'ummrah': 'Umrah', 'omra': 'Umrah',
+  'omrah': 'Umrah', 'umre': 'Umrah',
+  'haj': 'Hajj', 'hajj': 'Hajj',
+  // City misspellings
+  'makka': 'Makkah', 'meca': 'Makkah', 'mecca': 'Makkah', 'makah': 'Makkah',
+  'makkh': 'Makkah', 'mekkah': 'Makkah', 'mkh': 'Makkah',
+  'madina': 'Madinah', 'medina': 'Madinah', 'madinah': 'Madinah',
+  'mdina': 'Madinah', 'medinah': 'Madinah',
+  'jedda': 'Jeddah', 'jeda': 'Jeddah', 'jiddah': 'Jeddah', 'jdh': 'Jeddah',
+  'krachi': 'Karachi', 'khi': 'Karachi',
+  'lhr': 'Lahore', 'lahor': 'Lahore',
+  'isb': 'Islamabad', 'islmabad': 'Islamabad', 'islamabd': 'Islamabad',
+  'peshwar': 'Peshawar', 'peshawr': 'Peshawar',
+  // Common abbreviations
+  'pkg': 'package', 'pkge': 'package',
+  'ppl': 'people', 'prsn': 'person', 'prsns': 'persons',
+  'nts': 'nights', 'nght': 'night', 'nghts': 'nights',
+  'dys': 'days',
+  'pax': 'pax', 'psngr': 'passenger', 'psngrs': 'passengers',
+  'htl': 'hotel', 'hotl': 'hotel',
+  'flt': 'flight', 'flght': 'flight',
+  'tkt': 'ticket', 'tckt': 'ticket',
+  'bgt': 'budget', 'bdgt': 'budget',
+  'wat': 'want', 'wnt': 'want', 'wnts': 'wants',
+  'wid': 'with', 'wth': 'with', 'wit': 'with',
+  'abt': 'about', 'arnd': 'around',
+  'nxt': 'next', 'pls': 'please', 'plz': 'please',
+  'trvl': 'travel', 'travl': 'travel',
+  'yr': 'year', 'yrs': 'years',
+  'nr': 'near', 'ner': 'near',
+  'str': 'star',
+  'fm': 'from', 'frm': 'from',
+}
+
+/**
  * Local text cleanup fallback (no AI needed).
- * Fixes basic capitalization, spacing, and common proper nouns.
+ * Fixes common misspellings, capitalization, spacing, and proper nouns.
  */
 export const localCleanup = (text: string): string => {
-  let cleaned = text
+  // Split into words, fix known misspellings
+  let cleaned = text.replace(/\b(\w+)\b/g, (match) => {
+    const lower = match.toLowerCase()
+    return SPELLING_FIXES[lower] || match
+  })
 
   // Capitalize first letter of each sentence
-  cleaned = cleaned.replace(/(^\w|[.!?]\s+\w)/g, (match) => match.toUpperCase())
+  cleaned = cleaned.replace(/(^\s*\w|[.!?]\s+\w)/g, (match) => match.toUpperCase())
 
   // Capitalize common proper nouns
   const properNouns = [
     'makkah', 'madinah', 'medina', 'jeddah', 'riyadh', 'karachi', 'lahore',
     'islamabad', 'peshawar', 'multan', 'faisalabad', 'rawalpindi', 'quetta',
     'dallah', 'hilton', 'movenpick', 'pullman', 'meridien', 'marriott', 'sheraton',
-    'haram', 'nabawi', 'umrah', 'hajj', 'arafat',
+    'sofitel', 'novotel', 'hyatt', 'raffles', 'swissotel', 'elaf', 'anjum',
+    'haram', 'nabawi', 'umrah', 'hajj', 'arafat', 'mina', 'muzdalifah',
     'pakistan', 'saudi', 'arabia', 'dubai', 'turkey', 'istanbul', 'malaysia',
     'pia', 'saudia', 'emirates', 'qatar', 'etihad', 'flynas', 'flyadeal',
   ]
