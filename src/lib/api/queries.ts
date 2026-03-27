@@ -557,6 +557,77 @@ export async function getQueryForItinerary(queryId: string): Promise<ItineraryDa
   }
 }
 
+// ─── Auto-link Passenger to Query ────────────────────────
+
+export async function linkPassengerToQuery(queryId: string, passengerId: string): Promise<void> {
+  // Check if already linked
+  const { data: existing } = await supabase
+    .from('query_passengers')
+    .select('id')
+    .eq('query_id', queryId)
+    .eq('passenger_id', passengerId)
+    .limit(1)
+
+  if (existing && existing.length > 0) return
+
+  // Check if any passenger is already linked (to determine is_primary)
+  const { data: anyLinked } = await supabase
+    .from('query_passengers')
+    .select('id')
+    .eq('query_id', queryId)
+    .limit(1)
+
+  await supabase
+    .from('query_passengers')
+    .insert({
+      query_id: queryId,
+      passenger_id: passengerId,
+      is_primary: !anyLinked || anyLinked.length === 0,
+      passenger_type: 'adult',
+    })
+}
+
+export async function createPassengerAndLink(
+  queryId: string,
+  name: string,
+  phone: string,
+  email?: string
+): Promise<string> {
+  // Split name into first/last
+  const parts = name.trim().split(/\s+/)
+  const firstName = parts[0] || name.trim()
+  const lastName = parts.slice(1).join(' ') || ''
+
+  // Create passenger with minimal info
+  const { data: passenger, error } = await supabase
+    .from('passengers')
+    .insert({
+      first_name: firstName,
+      last_name: lastName,
+      phone: phone || '0000000000',
+      email: email || null,
+      nationality: 'Pakistani',
+      status: 'active',
+    })
+    .select('id')
+    .single()
+
+  if (error) throw error
+
+  // Link to query
+  await linkPassengerToQuery(queryId, passenger.id)
+
+  // Log activity
+  await supabase.from('activities').insert({
+    entity_type: 'passenger',
+    entity_id: passenger.id,
+    action: 'created',
+    description: `Auto-created from new query`,
+  }).then(() => {})
+
+  return passenger.id
+}
+
 // ─── Query Cloning ──────────────────────────────────────
 
 export interface CloneQueryInput {
