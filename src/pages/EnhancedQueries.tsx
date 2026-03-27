@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import {
   Plus, Search, Calendar, Phone, MapPin, AlertCircle,
-  Users, MessageCircle, Clock, X, Eye, FileText
+  Users, MessageCircle, Clock, X, Eye, FileText, AlertTriangle
 } from 'lucide-react'
-import { format } from 'date-fns'
+import { format, differenceInDays, addDays } from 'date-fns'
+import DateRangePicker from '@/components/queries/DateRangePicker'
+import SmartTextarea from '@/components/queries/SmartTextarea'
 import PassengerSelector from '@/components/PassengerSelector'
 import CommunicationLog from '@/components/CommunicationLog'
 import AddCommunication from '@/components/AddCommunication'
@@ -111,7 +113,22 @@ export default function EnhancedQueries() {
     is_responded: false,
     response_given: '',
     status: 'New Query - Not Responded',
+    // New fields
+    package_days: '' as string | number,
+    city_order: '' as string,
+    makkah_nights: '' as string | number,
+    madinah_nights: '' as string | number,
+    hotel_preferences: '',
+    budget_amount: '' as string | number,
+    budget_type: 'total' as string,
   })
+
+  const autoCapitalize = (value: string): string => {
+    return value.replace(/\b\w/g, (char) => char.toUpperCase())
+  }
+
+  const isUmrahHajj = ['Umrah Package', 'Umrah Plus Package', 'Hajj Package'].includes(formData.service_type)
+  const totalPax = formData.adults + formData.children + formData.infants
 
   useEffect(() => {
     loadQueries()
@@ -136,6 +153,30 @@ export default function EnhancedQueries() {
       setFormData(prev => ({ ...prev, status: 'New Query - Not Responded' }))
     }
   }, [formData.is_responded])
+
+  // Date ↔ Package Days sync
+  useEffect(() => {
+    if (formData.travel_date && formData.return_date) {
+      const dep = new Date(formData.travel_date + 'T00:00:00')
+      const ret = new Date(formData.return_date + 'T00:00:00')
+      const days = differenceInDays(ret, dep)
+      if (days > 0 && isUmrahHajj) {
+        setFormData(prev => ({ ...prev, package_days: days }))
+      }
+    }
+  }, [formData.travel_date, formData.return_date])
+
+  // Auto-suggest return date from departure + package days
+  useEffect(() => {
+    if (formData.travel_date && formData.package_days && !formData.return_date) {
+      const days = typeof formData.package_days === 'string' ? parseInt(formData.package_days) : formData.package_days
+      if (days > 0) {
+        const dep = new Date(formData.travel_date + 'T00:00:00')
+        const ret = addDays(dep, days)
+        setFormData(prev => ({ ...prev, return_date: format(ret, 'yyyy-MM-dd') }))
+      }
+    }
+  }, [formData.package_days, formData.travel_date])
 
   const loadQueries = async () => {
     try {
@@ -167,6 +208,14 @@ export default function EnhancedQueries() {
       if (!insertData.internal_reminders) insertData.internal_reminders = null
       if (!insertData.response_given) insertData.response_given = null
       if (!insertData.query_source) insertData.query_source = null
+      // New fields — clean empties to null
+      insertData.package_days = insertData.package_days ? Number(insertData.package_days) : null
+      insertData.city_order = insertData.city_order || null
+      insertData.makkah_nights = insertData.makkah_nights ? Number(insertData.makkah_nights) : null
+      insertData.madinah_nights = insertData.madinah_nights ? Number(insertData.madinah_nights) : null
+      insertData.hotel_preferences = insertData.hotel_preferences || null
+      insertData.budget_amount = insertData.budget_amount ? Number(insertData.budget_amount) : null
+      insertData.budget_type = insertData.budget_amount ? insertData.budget_type : null
 
       const { data: newQuery, error } = await supabase
         .from('queries')
@@ -223,8 +272,29 @@ export default function EnhancedQueries() {
       is_responded: false,
       response_given: '',
       status: 'New Query - Not Responded',
+      package_days: '',
+      city_order: '',
+      makkah_nights: '',
+      madinah_nights: '',
+      hotel_preferences: '',
+      budget_amount: '',
+      budget_type: 'total',
     })
   }
+
+  const handleAutoFillFromText = (fields: Record<string, string | number>) => {
+    setFormData(prev => ({ ...prev, ...fields }))
+  }
+
+  const nightsSplitWarning = (() => {
+    const pkgDays = typeof formData.package_days === 'string' ? parseInt(formData.package_days) : formData.package_days
+    const mNights = typeof formData.makkah_nights === 'string' ? parseInt(formData.makkah_nights) : formData.makkah_nights
+    const mdNights = typeof formData.madinah_nights === 'string' ? parseInt(formData.madinah_nights) : formData.madinah_nights
+    if (pkgDays && mNights && mdNights && (mNights + mdNights !== pkgDays)) {
+      return `Makkah (${mNights}) + Madinah (${mdNights}) = ${mNights + mdNights} nights, but package is ${pkgDays} days`
+    }
+    return null
+  })()
 
   const updateStatus = async (id: string, newStatus: string) => {
     try {
@@ -771,7 +841,7 @@ export default function EnhancedQueries() {
                           type="text"
                           required
                           value={formData.destination}
-                          onChange={(e) => setFormData({ ...formData, destination: e.target.value })}
+                          onChange={(e) => setFormData({ ...formData, destination: autoCapitalize(e.target.value) })}
                           className="input"
                           placeholder="Destination"
                         />
@@ -817,72 +887,193 @@ export default function EnhancedQueries() {
                     </div>
                   </div>
 
+                  {/* Client Budget (Optional) */}
+                  <div className="mb-6">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Client Budget <span className="text-xs font-normal text-gray-400">(Optional)</span></h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Budget Amount</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">Rs</span>
+                          <input
+                            type="number"
+                            min="0"
+                            value={formData.budget_amount}
+                            onChange={(e) => setFormData({ ...formData, budget_amount: e.target.value })}
+                            className="input pl-9"
+                            placeholder="350,000"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Budget Type</label>
+                        <select
+                          value={formData.budget_type}
+                          onChange={(e) => setFormData({ ...formData, budget_type: e.target.value })}
+                          className="input"
+                        >
+                          <option value="total">Total Package</option>
+                          <option value="per_person">Per Person</option>
+                        </select>
+                      </div>
+                    </div>
+                    {formData.budget_amount && formData.budget_type === 'per_person' && totalPax > 0 && (
+                      <p className="mt-2 text-sm text-primary-700 bg-primary-50 px-3 py-1.5 rounded-lg">
+                        Per Person: Rs {Number(formData.budget_amount).toLocaleString()} × {totalPax} pax = Total: Rs {(Number(formData.budget_amount) * totalPax).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+
                   {/* Travel Dates */}
                   <div className="mb-6">
                     <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Travel Dates</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Departure Date
-                        </label>
+                    <DateRangePicker
+                      departureDate={formData.travel_date}
+                      returnDate={formData.return_date}
+                      onDepartureChange={(date) => setFormData(prev => ({ ...prev, travel_date: date }))}
+                      onReturnChange={(date) => setFormData(prev => ({ ...prev, return_date: date }))}
+                    />
+                    <div className="mt-3">
+                      <label className="flex items-center">
                         <input
-                          type="date"
-                          value={formData.travel_date}
-                          onChange={(e) => setFormData({ ...formData, travel_date: e.target.value })}
-                          className="input"
+                          type="checkbox"
+                          checked={formData.is_tentative_dates}
+                          onChange={(e) => setFormData({ ...formData, is_tentative_dates: e.target.checked })}
+                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
                         />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Return Date
-                        </label>
-                        <input
-                          type="date"
-                          value={formData.return_date}
-                          onChange={(e) => setFormData({ ...formData, return_date: e.target.value })}
-                          className="input"
-                        />
-                      </div>
-
-                      <div className="md:col-span-2">
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={formData.is_tentative_dates}
-                            onChange={(e) => setFormData({ ...formData, is_tentative_dates: e.target.checked })}
-                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                          <span className="ml-2 text-sm text-gray-700">
-                            Dates are tentative / not confirmed yet
-                          </span>
-                        </label>
-                      </div>
+                        <span className="ml-2 text-sm text-gray-700">
+                          Dates are tentative / not confirmed yet
+                        </span>
+                      </label>
                     </div>
                   </div>
+
+                  {/* Package Details — Umrah/Hajj only */}
+                  {isUmrahHajj && (
+                    <div className="mb-6 overflow-hidden transition-all duration-300">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
+                        Package Details <span className="text-xs font-normal text-gray-400">(Optional)</span>
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Package Days</label>
+                          <input
+                            type="number"
+                            min="1"
+                            value={formData.package_days}
+                            onChange={(e) => {
+                              const days = e.target.value ? parseInt(e.target.value) : ''
+                              setFormData(prev => ({ ...prev, package_days: days }))
+                            }}
+                            className="input"
+                            placeholder="e.g. 14"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">City Order</label>
+                          <div className="flex items-center gap-4 mt-2">
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="city_order"
+                                value="makkah_first"
+                                checked={formData.city_order === 'makkah_first'}
+                                onChange={(e) => setFormData({ ...formData, city_order: e.target.value })}
+                                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">Makkah First</span>
+                            </label>
+                            <label className="flex items-center cursor-pointer">
+                              <input
+                                type="radio"
+                                name="city_order"
+                                value="madinah_first"
+                                checked={formData.city_order === 'madinah_first'}
+                                onChange={(e) => setFormData({ ...formData, city_order: e.target.value })}
+                                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">Madinah First</span>
+                            </label>
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Nights Split</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-xs text-gray-500">Makkah Nights</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formData.makkah_nights}
+                                onChange={(e) => {
+                                  const val = e.target.value ? parseInt(e.target.value) : ''
+                                  const pkgDays = typeof formData.package_days === 'string' ? parseInt(formData.package_days) : formData.package_days
+                                  const newState: any = { makkah_nights: val }
+                                  // Auto-fill madinah nights
+                                  if (val && pkgDays && !formData.madinah_nights) {
+                                    newState.madinah_nights = pkgDays - (val as number)
+                                  }
+                                  setFormData(prev => ({ ...prev, ...newState }))
+                                }}
+                                className="input"
+                                placeholder="8"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-xs text-gray-500">Madinah Nights</label>
+                              <input
+                                type="number"
+                                min="0"
+                                value={formData.madinah_nights}
+                                onChange={(e) => {
+                                  const val = e.target.value ? parseInt(e.target.value) : ''
+                                  const pkgDays = typeof formData.package_days === 'string' ? parseInt(formData.package_days) : formData.package_days
+                                  const newState: any = { madinah_nights: val }
+                                  // Auto-fill makkah nights
+                                  if (val && pkgDays && !formData.makkah_nights) {
+                                    newState.makkah_nights = pkgDays - (val as number)
+                                  }
+                                  setFormData(prev => ({ ...prev, ...newState }))
+                                }}
+                                className="input"
+                                placeholder="6"
+                              />
+                            </div>
+                          </div>
+                          {nightsSplitWarning && (
+                            <p className="mt-1.5 text-xs text-amber-600 flex items-center gap-1">
+                              <AlertTriangle className="w-3 h-3" />
+                              {nightsSplitWarning}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Hotel Preferences</label>
+                          <input
+                            type="text"
+                            value={formData.hotel_preferences}
+                            onChange={(e) => setFormData({ ...formData, hotel_preferences: autoCapitalize(e.target.value) })}
+                            className="input"
+                            placeholder='e.g. "5-star near Haram" or "budget, any area"'
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Tentative Plan */}
                   <div className="mb-6">
                     <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Customer Plan</h4>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Tentative Plan
-                        <span className="text-xs text-gray-500 ml-2">(Paste WhatsApp message or write from call)</span>
-                      </label>
-                      <textarea
-                        value={formData.tentative_plan}
-                        onChange={(e) => setFormData({ ...formData, tentative_plan: e.target.value })}
-                        className="input"
-                        rows={6}
-                        placeholder="Paste customer's query/plan here...
-
-Example:
-Salam, I want Umrah package for 4 people
-Travel dates: March 15-25
-Need 5-star hotel near Haram
-Budget: Rs 250,000 per person"
-                      />
-                    </div>
+                    <SmartTextarea
+                      value={formData.tentative_plan}
+                      onChange={(val) => setFormData({ ...formData, tentative_plan: val })}
+                      label="Tentative Plan"
+                      sublabel="(Paste WhatsApp message or write from call)"
+                      rows={6}
+                      placeholder={"Paste customer's query/plan here...\n\nExample:\nSalam, I want Umrah package for 4 people\nTravel dates: March 15-25\nNeed 5-star hotel near Haram\nBudget: Rs 250,000 per person"}
+                      showAutoFill={isUmrahHajj}
+                      onAutoFill={handleAutoFillFromText}
+                    />
                   </div>
 
                   {/* Response Section */}
@@ -920,19 +1111,13 @@ Budget: Rs 250,000 per person"
 
                   {/* Internal Notes */}
                   <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Internal Reminders / Notes
-                      <span className="text-xs text-gray-500 ml-2">(Only visible to team)</span>
-                    </label>
-                    <textarea
+                    <SmartTextarea
                       value={formData.internal_reminders}
-                      onChange={(e) => setFormData({ ...formData, internal_reminders: e.target.value })}
-                      className="input"
+                      onChange={(val) => setFormData({ ...formData, internal_reminders: val })}
+                      label="Internal Reminders / Notes"
+                      sublabel="(Only visible to team)"
                       rows={3}
-                      placeholder="Internal notes for team:
-- Customer wants budget options
-- Follow up if no response by tomorrow
-- Prefer 5-star hotels only"
+                      placeholder={"Internal notes for team:\n- Customer wants budget options\n- Follow up if no response by tomorrow\n- Prefer 5-star hotels only"}
                     />
                   </div>
                 </div>
