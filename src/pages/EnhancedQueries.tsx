@@ -178,8 +178,8 @@ export default function EnhancedQueries() {
   }, [formData.package_nights, formData.travel_date])
 
   // Computed: days from nights (hotel standard: days = nights - 1)
-  const packageNightsNum = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
-  const packageDaysNum = packageNightsNum ? packageNightsNum - 1 : null
+  const packageNightsNum = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) || 0 : (formData.package_nights || 0)
+  const packageDaysNum = packageNightsNum > 0 ? packageNightsNum - 1 : null
 
   const loadQueries = async () => {
     try {
@@ -294,10 +294,10 @@ export default function EnhancedQueries() {
   }
 
   const nightsSplitWarning = (() => {
-    const pkgNights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
-    const mNights = typeof formData.makkah_nights === 'string' ? parseInt(formData.makkah_nights) : formData.makkah_nights
-    const mdNights = typeof formData.madinah_nights === 'string' ? parseInt(formData.madinah_nights) : formData.madinah_nights
-    if (pkgNights && mNights && mdNights && (mNights + mdNights !== pkgNights)) {
+    const pkgNights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) || 0 : (formData.package_nights || 0)
+    const mNights = typeof formData.makkah_nights === 'string' ? parseInt(formData.makkah_nights) || 0 : (formData.makkah_nights || 0)
+    const mdNights = typeof formData.madinah_nights === 'string' ? parseInt(formData.madinah_nights) || 0 : (formData.madinah_nights || 0)
+    if (pkgNights > 0 && (mNights > 0 || mdNights > 0) && (mNights + mdNights !== pkgNights)) {
       return `Makkah (${mNights}) + Madinah (${mdNights}) = ${mNights + mdNights} nights, but package is ${pkgNights} nights`
     }
     return null
@@ -975,7 +975,7 @@ export default function EnhancedQueries() {
                             className="input"
                             placeholder="e.g. 14"
                           />
-                          {packageDaysNum && packageNightsNum ? (
+                          {packageDaysNum !== null && packageNightsNum > 0 ? (
                             <p className="mt-1 text-xs text-gray-500">{packageDaysNum} Days {packageNightsNum} Nights</p>
                           ) : null}
                         </div>
@@ -1094,7 +1094,6 @@ export default function EnhancedQueries() {
                       sublabel="(Paste WhatsApp message or write from call)"
                       rows={6}
                       placeholder={"Paste customer's query/plan here...\n\nExample:\nSalam, I want Umrah package for 4 people\nTravel dates: March 15-25\nNeed 5-star hotel near Haram\nBudget: Rs 250,000 per person"}
-                      showAutoFill={isUmrahHajj}
                       onAutoFill={handleAutoFillFromText}
                     />
                   </div>

@@ -24,6 +24,7 @@ export default function HajjFields({ values, onChange }: HajjFieldsProps) {
             <option value="">Select Year</option>
             <option value={String(currentYear)}>{currentYear}</option>
             <option value={String(currentYear + 1)}>{currentYear + 1}</option>
+            <option value={String(currentYear + 2)}>{currentYear + 2}</option>
           </select>
         </div>
         <div>
