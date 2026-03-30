@@ -5,6 +5,8 @@ import { queryApi, queryServiceApi, queryPassengerApi } from '@/lib/api/queries'
 import type { Query, QueryService, QueryPassenger, QueryStage } from '@/types/query';
 import WorkspaceTopBar from '@/components/queries/workspace/WorkspaceTopBar';
 import WorkspaceBottomBar from '@/components/queries/workspace/WorkspaceBottomBar';
+import Stage1NewInquiry from '@/components/queries/workspace/Stage1NewInquiry';
+import Stage2BuildingPackage from '@/components/queries/workspace/Stage2BuildingPackage';
 import WorkspaceTabs from '@/components/queries/workspace/WorkspaceTabs';
 
 export default function QueryWorkspacePage() {
@@ -69,6 +71,43 @@ export default function QueryWorkspacePage() {
     );
   }
 
+  const renderStageContent = () => {
+    switch (query.stage) {
+      case 'new_inquiry':
+        return (
+          <Stage1NewInquiry
+            query={query}
+            passengers={passengers}
+            onStageChange={handleStageChange}
+            onRefresh={loadData}
+          />
+        );
+
+      case 'building_package':
+      case 'negotiating':
+        return (
+          <Stage2BuildingPackage
+            query={query}
+            services={services}
+            passengers={passengers}
+            onStageChange={handleStageChange}
+            onRefresh={loadData}
+          />
+        );
+
+      // Stages 3-8: use generic tab layout for now
+      default:
+        return (
+          <WorkspaceTabs
+            query={query}
+            services={services}
+            passengers={passengers}
+            onRefresh={loadData}
+          />
+        );
+    }
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Back button */}
@@ -82,17 +121,16 @@ export default function QueryWorkspacePage() {
         </button>
       </div>
 
-      {/* Top bar */}
-      <WorkspaceTopBar query={query} services={services} />
+      {/* Top bar with stage dropdown */}
+      <WorkspaceTopBar
+        query={query}
+        services={services}
+        onStageChange={handleStageChange}
+      />
 
-      {/* Main content */}
+      {/* Main content — stage-specific */}
       <div className="flex-1 overflow-auto px-6 py-4">
-        <WorkspaceTabs
-          query={query}
-          services={services}
-          passengers={passengers}
-          onRefresh={loadData}
-        />
+        {renderStageContent()}
       </div>
 
       {/* Bottom bar */}
