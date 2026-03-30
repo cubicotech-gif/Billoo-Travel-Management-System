@@ -13,8 +13,9 @@ import {
 import { format, subDays } from 'date-fns'
 import { formatCurrency } from '@/lib/formatCurrency'
 import DocumentExpiryAlerts from '@/components/DocumentExpiryAlerts'
-import TravelAlertBanner from '@/components/queries/TravelAlertBanner'
-import TravelAlertsDashboard from '@/components/queries/TravelAlertsDashboard'
+// TODO: Re-add after query module rebuild
+// import TravelAlertBanner from '@/components/queries/TravelAlertBanner'
+// import TravelAlertsDashboard from '@/components/queries/TravelAlertsDashboard'
 import QuickActionBar from '@/components/finance/QuickActionBar'
 import SmartPassengerSelector from '@/components/finance/SmartPassengerSelector'
 import SmartVendorSelector from '@/components/finance/SmartVendorSelector'
@@ -200,8 +201,7 @@ export default function EnhancedDashboard() {
         </div>
       </div>
 
-      {/* Travel Proximity Alerts */}
-      <TravelAlertBanner />
+      {/* Travel Proximity Alerts — TODO: re-add after query rebuild */}
 
       {/* Mini Alerts */}
       {hasAlerts && (
@@ -542,8 +542,7 @@ export default function EnhancedDashboard() {
         </ResponsiveContainer>
       </div>
 
-      {/* Pending Reminders */}
-      <TravelAlertsDashboard />
+      {/* Pending Reminders — TODO: re-add after query rebuild */}
 
       {/* Document Expiry Alerts */}
       <DocumentExpiryAlerts />

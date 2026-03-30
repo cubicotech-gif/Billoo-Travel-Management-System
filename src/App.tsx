@@ -3,8 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import Login from '@/pages/Login'
 import EnhancedDashboard from '@/pages/EnhancedDashboard'
-import EnhancedQueries from '@/pages/EnhancedQueries'
-import QueryWorkspace from '@/components/queries/QueryWorkspace'
+import Queries from '@/pages/Queries'
+import QueryWorkspacePage from '@/pages/QueryWorkspacePage'
 import Passengers from '@/pages/Passengers'
 import PassengerProfile from '@/pages/PassengerProfile'
 import Vendors from '@/pages/Vendors'
@@ -48,8 +48,8 @@ function App() {
           element={user ? <Layout /> : <Navigate to="/login" />}
         >
           <Route index element={<EnhancedDashboard />} />
-          <Route path="queries" element={<EnhancedQueries />} />
-          <Route path="queries/:queryId" element={<QueryWorkspace />} />
+          <Route path="queries" element={<Queries />} />
+          <Route path="queries/:id" element={<QueryWorkspacePage />} />
           <Route path="passengers" element={<Passengers />} />
           <Route path="passengers/:id" element={<PassengerProfile />} />
           <Route path="vendors" element={<Vendors />} />
