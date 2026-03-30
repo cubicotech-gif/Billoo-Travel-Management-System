@@ -218,16 +218,19 @@ export default function SmartTextarea({
     if (!value || value.trim().length === 0) return
 
     const cleaned = localCleanup(value)
+    const wasChanged = cleaned !== value
 
-    if (cleaned !== value) {
+    if (wasChanged) {
       onChange(cleaned)
+      setStatusMsg({ text: 'Text cleaned up!', type: 'success' })
+    } else {
+      setStatusMsg({ text: 'Text looks good — no changes needed', type: 'success' })
     }
 
-    setStatusMsg({ text: 'Text cleaned up!', type: 'success' })
     if (statusTimerRef.current) clearTimeout(statusTimerRef.current)
     statusTimerRef.current = setTimeout(() => setStatusMsg(null), 4000)
 
-    // Detect fields from cleaned text
+    // Detect fields from cleaned text (use cleaned version either way)
     if (onAutoFill) {
       const detected = parseDetectedFields(cleaned)
       if (detected.length > 0) {
