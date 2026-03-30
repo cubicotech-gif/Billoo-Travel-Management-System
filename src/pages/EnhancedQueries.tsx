@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import {
@@ -128,6 +128,7 @@ export default function EnhancedQueries() {
 
   const isUmrahHajj = ['Umrah Package', 'Umrah Plus Package', 'Hajj Package'].includes(formData.service_type)
   const totalPax = formData.adults + formData.children + formData.infants
+  const syncSourceRef = useRef<'dates' | 'nights' | null>(null)
 
   useEffect(() => {
     loadQueries()
@@ -153,26 +154,38 @@ export default function EnhancedQueries() {
     }
   }, [formData.is_responded])
 
-  // Date ↔ Package Nights sync (hotel standard: date diff = nights)
+  // Date → Package Nights sync (hotel standard: date diff = nights)
   useEffect(() => {
-    if (formData.travel_date && formData.return_date) {
+    if (syncSourceRef.current === 'nights') {
+      syncSourceRef.current = null
+      return
+    }
+    if (formData.travel_date && formData.return_date && isUmrahHajj) {
       const dep = new Date(formData.travel_date + 'T00:00:00')
       const ret = new Date(formData.return_date + 'T00:00:00')
       const nights = differenceInDays(ret, dep)
-      if (nights > 0 && isUmrahHajj) {
+      if (nights > 0) {
+        syncSourceRef.current = 'dates'
         setFormData(prev => ({ ...prev, package_nights: nights }))
       }
     }
   }, [formData.travel_date, formData.return_date])
 
-  // Auto-suggest return date from departure + package nights
+  // Package Nights → Return Date sync (always update when nights change)
   useEffect(() => {
-    if (formData.travel_date && formData.package_nights && !formData.return_date) {
-      const nights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
-      if (nights > 0) {
-        const dep = new Date(formData.travel_date + 'T00:00:00')
-        const ret = addDays(dep, nights)
-        setFormData(prev => ({ ...prev, return_date: format(ret, 'yyyy-MM-dd') }))
+    if (syncSourceRef.current === 'dates') {
+      syncSourceRef.current = null
+      return
+    }
+    if (!formData.travel_date || !isUmrahHajj) return
+    const nights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
+    if (nights && nights > 0) {
+      const dep = new Date(formData.travel_date + 'T00:00:00')
+      const ret = addDays(dep, nights)
+      const retStr = format(ret, 'yyyy-MM-dd')
+      if (retStr !== formData.return_date) {
+        syncSourceRef.current = 'nights'
+        setFormData(prev => ({ ...prev, return_date: retStr }))
       }
     }
   }, [formData.package_nights, formData.travel_date])
@@ -1017,13 +1030,15 @@ export default function EnhancedQueries() {
                                 value={formData.makkah_nights}
                                 onChange={(e) => {
                                   const val = e.target.value ? parseInt(e.target.value) : ''
-                                  const pkgNights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
-                                  const newState: any = { makkah_nights: val }
-                                  // Auto-fill madinah nights
-                                  if (val && pkgNights && !formData.madinah_nights) {
-                                    newState.madinah_nights = pkgNights - (val as number)
-                                  }
-                                  setFormData(prev => ({ ...prev, ...newState }))
+                                  setFormData(prev => {
+                                    const pkgNights = typeof prev.package_nights === 'string' ? parseInt(prev.package_nights) || 0 : (prev.package_nights || 0)
+                                    const newState: any = { makkah_nights: val }
+                                    // Auto-fill madinah nights if empty
+                                    if (val && pkgNights && !prev.madinah_nights) {
+                                      newState.madinah_nights = pkgNights - (val as number)
+                                    }
+                                    return { ...prev, ...newState }
+                                  })
                                 }}
                                 className="input"
                                 placeholder="8"
@@ -1037,13 +1052,15 @@ export default function EnhancedQueries() {
                                 value={formData.madinah_nights}
                                 onChange={(e) => {
                                   const val = e.target.value ? parseInt(e.target.value) : ''
-                                  const pkgNights = typeof formData.package_nights === 'string' ? parseInt(formData.package_nights) : formData.package_nights
-                                  const newState: any = { madinah_nights: val }
-                                  // Auto-fill makkah nights
-                                  if (val && pkgNights && !formData.makkah_nights) {
-                                    newState.makkah_nights = pkgNights - (val as number)
-                                  }
-                                  setFormData(prev => ({ ...prev, ...newState }))
+                                  setFormData(prev => {
+                                    const pkgNights = typeof prev.package_nights === 'string' ? parseInt(prev.package_nights) || 0 : (prev.package_nights || 0)
+                                    const newState: any = { madinah_nights: val }
+                                    // Auto-fill makkah nights if empty
+                                    if (val && pkgNights && !prev.makkah_nights) {
+                                      newState.makkah_nights = pkgNights - (val as number)
+                                    }
+                                    return { ...prev, ...newState }
+                                  })
                                 }}
                                 className="input"
                                 placeholder="6"
@@ -1089,7 +1106,7 @@ export default function EnhancedQueries() {
                     <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">Customer Plan</h4>
                     <SmartTextarea
                       value={formData.tentative_plan}
-                      onChange={(val) => setFormData({ ...formData, tentative_plan: val })}
+                      onChange={(val) => setFormData(prev => ({ ...prev, tentative_plan: val }))}
                       label="Tentative Plan"
                       sublabel="(Paste WhatsApp message or write from call)"
                       rows={6}
@@ -1135,7 +1152,7 @@ export default function EnhancedQueries() {
                   <div className="mb-6">
                     <SmartTextarea
                       value={formData.internal_reminders}
-                      onChange={(val) => setFormData({ ...formData, internal_reminders: val })}
+                      onChange={(val) => setFormData(prev => ({ ...prev, internal_reminders: val }))}
                       label="Internal Reminders / Notes"
                       sublabel="(Only visible to team)"
                       rows={3}

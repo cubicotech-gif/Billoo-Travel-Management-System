@@ -127,6 +127,10 @@ const PROPER_NOUNS = [
   'pakistan', 'saudi', 'arabia', 'dubai', 'turkey', 'istanbul', 'malaysia',
   'pia', 'saudia', 'emirates', 'qatar', 'etihad', 'flynas', 'flyadeal',
   'taif', 'abha', 'yanbu', 'tabuk', 'bahrain', 'oman', 'kuwait',
+  // Month names (need capitalization)
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+  'jan', 'feb', 'mar', 'apr', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec',
 ]
 
 const PROPER_NOUN_REGEXES = PROPER_NOUNS.map((noun) => ({
@@ -136,27 +140,38 @@ const PROPER_NOUN_REGEXES = PROPER_NOUNS.map((noun) => ({
 
 /**
  * Local text cleanup (no AI needed).
- * Fixes common misspellings, capitalization, spacing, and proper nouns.
+ * Fixes common misspellings, grammar, capitalization, spacing, and proper nouns.
  */
 export const localCleanup = (text: string): string => {
-  // Fix known misspellings word-by-word
+  // Step 1: Fix known misspellings word-by-word
   let cleaned = text.replace(/\b(\w+)\b/g, (match) => {
     const lower = match.toLowerCase()
     return SPELLING_FIXES[lower] || match
   })
 
-  // Capitalize first letter of each sentence
+  // Step 2: Fix number + singular noun grammar (e.g., "8 night" → "8 nights", "4 person" → "4 persons")
+  cleaned = cleaned.replace(/(\d+)\s+(night|day|person|passenger|ticket|room|hotel|flight)(?![s\w])/gi,
+    (_m, num, word) => `${num} ${word.toLowerCase()}s`
+  )
+
+  // Step 3: Capitalize first letter of each sentence
   cleaned = cleaned.replace(/(^\s*\w|[.!?]\s+\w)/g, (match) => match.toUpperCase())
 
-  // Capitalize proper nouns using precompiled regexes
+  // Step 4: Capitalize proper nouns (cities, months, religious terms) using precompiled regexes
   for (const { regex, replacement } of PROPER_NOUN_REGEXES) {
     cleaned = cleaned.replace(regex, replacement)
   }
 
-  // Fix spacing issues
+  // Step 5: Fix spacing issues
   cleaned = cleaned.replace(/\s+/g, ' ')              // Multiple spaces → single
   cleaned = cleaned.replace(/\s+([.,!?])/g, '$1')     // Remove space before punctuation
-  cleaned = cleaned.replace(/([.,!?])([A-Za-z])/g, '$1 $2') // Add space after punctuation (only before letters)
+  cleaned = cleaned.replace(/([.,!?])([A-Za-z])/g, '$1 $2') // Add space after punctuation
 
-  return cleaned.trim()
+  // Step 6: Ensure sentence ends with period if no punctuation at end
+  cleaned = cleaned.trim()
+  if (cleaned.length > 0 && !/[.!?]$/.test(cleaned)) {
+    cleaned += '.'
+  }
+
+  return cleaned
 }
