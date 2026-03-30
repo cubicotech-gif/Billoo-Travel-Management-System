@@ -12,6 +12,7 @@ import StageIndicator from './StageIndicator';
 
 // Import all stage components
 import StageServiceBuilding from './stages/StageServiceBuilding';
+import QueryWorkspaceStage2 from './workspace/QueryWorkspaceStage2';
 import StageProposalSent from './stages/StageProposalSent';
 import StageRevisions from './stages/StageRevisions';
 import StageBooking from './stages/StageBooking';
@@ -478,12 +479,11 @@ export default function QueryWorkspace() {
   function renderStageContent() {
     const status = query?.status;
 
-    // STAGES 1-3: Initial Contact & Service Building
+    // STAGES 1-2: Initial Contact & Response
     if (
       [
         'New Query - Not Responded',
         'Responded - Awaiting Reply',
-        'Working on Proposal'
       ].includes(status!)
     ) {
       return (
@@ -492,6 +492,18 @@ export default function QueryWorkspace() {
           services={services}
           onRefresh={loadQueryData}
           onSendProposal={() => updateStatus('Proposal Sent')}
+        />
+      );
+    }
+
+    // STAGE 3: Building Package (Working on Proposal)
+    if (status === 'Working on Proposal') {
+      return (
+        <QueryWorkspaceStage2
+          query={query!}
+          services={services}
+          onRefresh={loadQueryData}
+          onStatusChange={updateStatus}
         />
       );
     }
