@@ -1,185 +1,82 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { QueryStatus } from '../../types/query-workflow';
-
-interface Stage {
-  key: QueryStatus;
-  label: string;
-  icon: string;
-  color: string;
-}
+import { CheckCircle2 } from 'lucide-react';
+import { STAGE_CONFIG, type QueryStage } from '@/types/query';
 
 interface Props {
-  onStageClick: (stage: QueryStatus) => void;
-  currentFilter?: QueryStatus | null;
+  currentStage: QueryStage;
 }
 
-const STAGES: Stage[] = [
-  { key: 'New Query - Not Responded', label: 'New', icon: '🔴', color: 'red' },
-  { key: 'Responded - Awaiting Reply', label: 'Responded', icon: '🟡', color: 'yellow' },
-  { key: 'Working on Proposal', label: 'Building', icon: '🔵', color: 'blue' },
-  { key: 'Proposal Sent', label: 'Proposal', icon: '🟢', color: 'green' },
-  { key: 'Revisions Requested', label: 'Revisions', icon: '🟣', color: 'purple' },
-  { key: 'Finalized & Booking', label: 'Booking', icon: '✅', color: 'teal' },
-  { key: 'Services Booked', label: 'Booked', icon: '📦', color: 'indigo' },
-  { key: 'In Delivery', label: 'Delivery', icon: '🚚', color: 'cyan' },
-  { key: 'Completed', label: 'Done', icon: '✅', color: 'emerald' },
+const PIPELINE_STAGES: QueryStage[] = [
+  'new_inquiry',
+  'building_package',
+  'quote_sent',
+  'negotiating',
+  'confirmed_paying',
+  'booking_docs',
+  'ready_to_travel',
+  'completed',
 ];
 
-export default function StagePipeline({ onStageClick, currentFilter }: Props) {
-  const [stageCounts, setStageCounts] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadStageCounts();
-
-    // Refresh every 30 seconds
-    const interval = setInterval(loadStageCounts, 30000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  const loadStageCounts = async () => {
-    try {
-      const counts: Record<string, number> = {};
-
-      for (const stage of STAGES) {
-        const { count, error } = await supabase
-          .from('queries')
-          .select('*', { count: 'exact', head: true })
-          .eq('status', stage.key);
-
-        if (error) {
-          console.error(`Error loading count for ${stage.key}:`, error);
-          counts[stage.key] = 0;
-        } else {
-          counts[stage.key] = count || 0;
-        }
-      }
-
-      setStageCounts(counts);
-    } catch (error) {
-      console.error('Error loading stage counts:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getColorClasses = (color: string, hasCount: boolean, isActive: boolean) => {
-    if (isActive) {
-      return {
-        bg: `bg-${color}-100 border-${color}-500`,
-        text: `text-${color}-900`,
-        badge: `bg-${color}-600 text-white`
-      };
-    }
-
-    if (hasCount) {
-      return {
-        bg: `bg-${color}-50 border-${color}-300`,
-        text: `text-${color}-800`,
-        badge: `bg-${color}-500 text-white`
-      };
-    }
-
-    return {
-      bg: 'bg-gray-50 border-gray-200',
-      text: 'text-gray-600',
-      badge: 'bg-gray-400 text-white'
-    };
-  };
-
-  const totalQueries = Object.values(stageCounts).reduce((sum, count) => sum + count, 0);
+export default function StagePipeline({ currentStage }: Props) {
+  const currentOrder = STAGE_CONFIG[currentStage]?.order ?? 0;
+  const isCancelled = currentStage === 'cancelled';
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">Query Pipeline</h3>
-        <div className="text-sm text-gray-600">
-          Total Queries: <span className="font-semibold text-gray-900">{totalQueries}</span>
-        </div>
-      </div>
+    <div className="flex items-center w-full">
+      {PIPELINE_STAGES.map((stage, index) => {
+        const config = STAGE_CONFIG[stage];
+        const stageOrder = config.order;
+        const isActive = stage === currentStage;
+        const isPast = !isCancelled && stageOrder < currentOrder;
+        const isLast = index === PIPELINE_STAGES.length - 1;
 
-      {loading ? (
-        <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          {STAGES.map((_, index) => (
-            <div key={index} className="flex items-center">
-              <div className="min-w-[120px] h-20 bg-gray-100 rounded-xl animate-pulse" />
-              {index < STAGES.length - 1 && <div className="w-4 h-0.5 bg-gray-200 mx-1" />}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          {STAGES.map((stage, index) => {
-            const count = stageCounts[stage.key] || 0;
-            const isActive = currentFilter === stage.key;
-            const colors = getColorClasses(stage.color, count > 0, isActive);
-
-            return (
-              <div key={stage.key} className="flex items-center">
-                <button
-                  onClick={() => onStageClick(stage.key)}
-                  className={`
-                    relative px-4 py-3 rounded-xl border-2 transition-all
-                    hover:scale-105 hover:shadow-md active:scale-95
-                    ${colors.bg}
-                    ${isActive ? 'shadow-lg ring-2 ring-offset-2 ring-' + stage.color + '-500' : ''}
-                    min-w-[120px]
-                  `}
-                  title={`${stage.label}: ${count} queries`}
-                >
-                  <div className="text-center">
-                    <div className="text-2xl mb-1">{stage.icon}</div>
-                    <div className={`text-xs font-medium ${colors.text}`}>
-                      {stage.label}
-                    </div>
-
-                    {/* COUNT BADGE */}
-                    {count > 0 && (
-                      <div
-                        className={`
-                          absolute -top-2 -right-2
-                          w-7 h-7 rounded-full
-                          ${colors.badge}
-                          flex items-center justify-center
-                          text-xs font-bold
-                          shadow-lg
-                          animate-pulse
-                        `}
-                      >
-                        {count}
-                      </div>
-                    )}
-                  </div>
-                </button>
-
-                {index < STAGES.length - 1 && (
-                  <div className="w-4 h-0.5 bg-gray-300 mx-1 flex-shrink-0" />
+        return (
+          <div key={stage} className="flex items-center flex-1 last:flex-none">
+            {/* Stage dot / icon */}
+            <div className="relative group">
+              <div
+                className={`flex items-center justify-center rounded-full transition-all ${
+                  isActive
+                    ? `w-8 h-8 ${config.bgColor} ${config.borderColor} border-2 ring-2 ring-offset-1 ring-${config.color.replace('text-', '')}/30`
+                    : isPast
+                      ? 'w-6 h-6 bg-emerald-100 border border-emerald-300'
+                      : 'w-6 h-6 bg-gray-100 border border-gray-300'
+                }`}
+              >
+                {isPast ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                ) : isActive ? (
+                  <div className={`w-2.5 h-2.5 rounded-full ${config.color.replace('text-', 'bg-')}`} />
+                ) : (
+                  <div className="w-2 h-2 rounded-full bg-gray-300" />
                 )}
               </div>
-            );
-          })}
+
+              {/* Tooltip */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                {config.label}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-gray-900" />
+              </div>
+            </div>
+
+            {/* Connector line */}
+            {!isLast && (
+              <div
+                className={`flex-1 h-0.5 mx-1 ${
+                  isPast && !isCancelled ? 'bg-emerald-300' : 'bg-gray-200'
+                }`}
+              />
+            )}
+          </div>
+        );
+      })}
+
+      {/* Cancelled indicator */}
+      {isCancelled && (
+        <div className="ml-3 flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-red-50 border border-red-200">
+          <div className="w-2 h-2 rounded-full bg-red-500" />
+          <span className="text-xs font-medium text-red-700">Cancelled</span>
         </div>
       )}
-
-      {/* Legend */}
-      <div className="mt-4 pt-4 border-t border-gray-200">
-        <div className="flex flex-wrap gap-3 text-xs text-gray-600">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-blue-500" />
-            <span>Active stage has blue ring</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-full bg-gray-200" />
-            <span>Empty stages are grayed out</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="font-semibold">Click any stage</span>
-            <span>to filter queries</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
