@@ -1,20 +1,26 @@
-'use client';
-
-import { CalendarDays, MapPin, Phone, Users } from 'lucide-react';
+import { useState } from 'react';
+import { CalendarDays, MapPin, Phone, Users, ChevronDown } from 'lucide-react';
 import { format } from 'date-fns';
-import type { Query, QueryService } from '@/types/query';
+import type { Query, QueryService, QueryStage } from '@/types/query';
+import { STAGE_CONFIG } from '@/types/query';
 import { formatCurrency } from '@/lib/formatCurrency';
 import StageBadge from '../StageBadge';
 
 interface Props {
   query: Query;
   services: QueryService[];
+  onStageChange?: (stage: QueryStage) => void;
 }
 
-export default function WorkspaceTopBar({ query, services }: Props) {
+const STAGE_ORDER: QueryStage[] = [
+  'new_inquiry', 'building_package', 'quote_sent', 'negotiating',
+  'confirmed_paying', 'booking_docs', 'ready_to_travel', 'completed', 'cancelled',
+];
+
+export default function WorkspaceTopBar({ query, services, onStageChange }: Props) {
+  const [showStageMenu, setShowStageMenu] = useState(false);
   const hasServices = services.length > 0;
-  const perPerson =
-    query.total_pax > 0 ? query.total_selling_pkr / query.total_pax : 0;
+  const perPerson = query.total_pax > 0 ? query.total_selling_pkr / query.total_pax : 0;
 
   return (
     <div className="sticky top-0 z-10 bg-white border-b">
@@ -25,7 +31,49 @@ export default function WorkspaceTopBar({ query, services }: Props) {
             <h1 className="text-lg font-semibold text-gray-900 truncate">
               {query.query_number}
             </h1>
-            <StageBadge stage={query.stage} size="md" />
+
+            {/* Stage badge with dropdown */}
+            {onStageChange ? (
+              <div className="relative">
+                <button
+                  onClick={() => setShowStageMenu(!showStageMenu)}
+                  className="flex items-center gap-1 hover:opacity-80 transition-opacity"
+                >
+                  <StageBadge stage={query.stage} size="md" />
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                </button>
+                {showStageMenu && (
+                  <>
+                    <div className="fixed inset-0 z-20" onClick={() => setShowStageMenu(false)} />
+                    <div className="absolute top-full left-0 mt-1 z-30 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[200px]">
+                      {STAGE_ORDER.map(stage => {
+                        const cfg = STAGE_CONFIG[stage];
+                        const isCurrent = stage === query.stage;
+                        return (
+                          <button
+                            key={stage}
+                            onClick={() => {
+                              if (!isCurrent) onStageChange(stage);
+                              setShowStageMenu(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors ${
+                              isCurrent
+                                ? `${cfg.bgColor} ${cfg.color} font-medium`
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span className={`w-2 h-2 rounded-full ${isCurrent ? 'bg-current' : 'bg-gray-300'}`} />
+                            {cfg.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <StageBadge stage={query.stage} size="md" />
+            )}
           </div>
 
           <div className="flex items-center gap-4 text-sm text-gray-600">
@@ -89,8 +137,8 @@ export default function WorkspaceTopBar({ query, services }: Props) {
                 query.total_profit_pkr > 0
                   ? 'text-green-700'
                   : query.total_profit_pkr < 0
-                  ? 'text-red-700'
-                  : 'text-gray-900'
+                    ? 'text-red-700'
+                    : 'text-gray-900'
               }
             />
             <FinancialCard
