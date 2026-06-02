@@ -37,15 +37,11 @@ CREATE TABLE IF NOT EXISTS public.queries (
   adults INTEGER DEFAULT 1 CHECK (adults >= 1),
   children INTEGER DEFAULT 0 CHECK (children >= 0),
   infants INTEGER DEFAULT 0 CHECK (infants >= 0),
-  status TEXT DEFAULT 'New Query - Not Responded' CHECK (status IN (
-    'New Query - Not Responded',
-    'Responded - Awaiting Reply',
-    'Working on Proposal',
-    'Proposal Sent',
-    'Revisions Requested',
-    'Finalized & Booking',
-    'Services Booked',
-    'In Delivery',
+  status TEXT DEFAULT 'Inquiry' CHECK (status IN (
+    'Inquiry',
+    'Proposal',
+    'Booking',
+    'Delivery',
     'Completed',
     'Cancelled'
   )),

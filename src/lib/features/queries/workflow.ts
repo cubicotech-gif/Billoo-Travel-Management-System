@@ -1,89 +1,52 @@
 import type { QueryStatus } from '$lib/database.types';
 
-// The 10-stage query lifecycle. Order matters: it drives the pipeline board
-// and the "advance to next stage" action. Each stage carries display metadata.
+// The compact 5-stage query lifecycle (+ Cancelled side-exit). Each stage is a
+// real unit of work with its own action panel on the detail page. The DB
+// queries.status CHECK constraint is the source of truth (see
+// database/migrations/20260602_compact_5_stage_workflow.sql).
+
+export type StageTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
 export interface WorkflowStage {
 	status: QueryStatus;
 	label: string;
-	/** Short description of what happens in this stage. */
+	/** One-line summary of what you do in this stage. */
 	hint: string;
-	tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+	tone: StageTone;
 }
 
 export const WORKFLOW_STAGES: WorkflowStage[] = [
-	{
-		status: 'New Query - Not Responded',
-		label: 'New',
-		hint: 'Fresh inquiry, not yet contacted.',
-		tone: 'warning'
-	},
-	{
-		status: 'Responded - Awaiting Reply',
-		label: 'Responded',
-		hint: 'We replied, waiting on the client.',
-		tone: 'info'
-	},
-	{
-		status: 'Working on Proposal',
-		label: 'Proposal WIP',
-		hint: 'Building the quote and service breakdown.',
-		tone: 'info'
-	},
-	{
-		status: 'Proposal Sent',
-		label: 'Proposal Sent',
-		hint: 'Quote delivered, awaiting decision.',
-		tone: 'info'
-	},
-	{
-		status: 'Revisions Requested',
-		label: 'Revisions',
-		hint: 'Client asked for changes.',
-		tone: 'warning'
-	},
-	{
-		status: 'Finalized & Booking',
-		label: 'Finalized',
-		hint: 'Accepted, collecting advance & booking.',
-		tone: 'success'
-	},
-	{
-		status: 'Services Booked',
-		label: 'Booked',
-		hint: 'Vendors confirmed, services secured.',
-		tone: 'success'
-	},
-	{
-		status: 'In Delivery',
-		label: 'In Delivery',
-		hint: 'Travel in progress / documents issued.',
-		tone: 'info'
-	},
-	{
-		status: 'Completed',
-		label: 'Completed',
-		hint: 'Trip done, fully settled.',
-		tone: 'success'
-	},
-	{
-		status: 'Cancelled',
-		label: 'Cancelled',
-		hint: 'Query closed without booking.',
-		tone: 'danger'
-	}
+	{ status: 'Inquiry', label: 'Inquiry', hint: 'Log the client and their requirements.', tone: 'warning' },
+	{ status: 'Proposal', label: 'Proposal', hint: 'Build the package and send the quote.', tone: 'info' },
+	{ status: 'Booking', label: 'Booking', hint: 'Collect advance and book with vendors.', tone: 'info' },
+	{ status: 'Delivery', label: 'Delivery', hint: 'Issue tickets, vouchers and documents.', tone: 'info' },
+	{ status: 'Completed', label: 'Completed', hint: 'Trip done and fully settled.', tone: 'success' },
+	{ status: 'Cancelled', label: 'Cancelled', hint: 'Closed without booking.', tone: 'danger' }
 ];
+
+/** The ordered pipeline, excluding the Cancelled side-exit (board columns). */
+export const MAIN_STAGES: WorkflowStage[] = WORKFLOW_STAGES.filter((s) => s.status !== 'Cancelled');
 
 export const STAGE_BY_STATUS: Record<QueryStatus, WorkflowStage> = Object.fromEntries(
 	WORKFLOW_STAGES.map((s) => [s.status, s])
 ) as Record<QueryStatus, WorkflowStage>;
 
-/** The next status in the linear flow, or null at the terminal stages. */
+const ORDER: QueryStatus[] = MAIN_STAGES.map((s) => s.status);
+
+/** Next stage in the linear flow, or null at Completed/Cancelled. */
 export function nextStatus(current: QueryStatus): QueryStatus | null {
-	if (current === 'Completed' || current === 'Cancelled') return null;
-	const idx = WORKFLOW_STAGES.findIndex((s) => s.status === current);
-	// Stop before 'Cancelled' (the last entry) — cancelling is a manual action.
-	const next = WORKFLOW_STAGES[idx + 1];
-	if (!next || next.status === 'Cancelled') return null;
-	return next.status;
+	const idx = ORDER.indexOf(current);
+	if (idx === -1) return null; // Cancelled
+	return ORDER[idx + 1] ?? null;
+}
+
+/** Previous stage, or null at the first stage / Cancelled. */
+export function prevStatus(current: QueryStatus): QueryStatus | null {
+	const idx = ORDER.indexOf(current);
+	if (idx <= 0) return null;
+	return ORDER[idx - 1] ?? null;
+}
+
+export function isCancelled(status: QueryStatus): boolean {
+	return status === 'Cancelled';
 }

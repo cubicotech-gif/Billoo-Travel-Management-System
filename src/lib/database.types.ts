@@ -9,14 +9,10 @@
 // but all money *math* must go through $lib/money — never raw arithmetic.
 
 export type QueryStatus =
-	| 'New Query - Not Responded'
-	| 'Responded - Awaiting Reply'
-	| 'Working on Proposal'
-	| 'Proposal Sent'
-	| 'Revisions Requested'
-	| 'Finalized & Booking'
-	| 'Services Booked'
-	| 'In Delivery'
+	| 'Inquiry'
+	| 'Proposal'
+	| 'Booking'
+	| 'Delivery'
 	| 'Completed'
 	| 'Cancelled';
 
@@ -98,6 +94,14 @@ export interface Database {
 					notes?: string | null;
 					cost_price?: number;
 					selling_price?: number;
+					// Stage-action fields (written as a query moves through the pipeline).
+					proposal_sent_date?: string | null;
+					current_proposal_version?: number | null;
+					finalized_date?: string | null;
+					advance_payment_amount?: number | null;
+					advance_payment_date?: string | null;
+					completed_date?: string | null;
+					customer_feedback?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['queries']['Insert']>;
 				Relationships: [];
