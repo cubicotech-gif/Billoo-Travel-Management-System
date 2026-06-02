@@ -85,8 +85,12 @@
 				{#each $queries.data ?? [] as q (q.id)}
 					{@const next = nextStatus(q.status)}
 					<tr class="hover:bg-slate-50">
-						<td class="px-4 py-3 font-mono text-xs text-slate-500">{q.query_number}</td>
-						<td class="px-4 py-3 font-medium text-slate-700">{q.client_name}</td>
+						<td class="px-4 py-3 font-mono text-xs">
+							<a href="/queries/{q.id}" class="text-brand-600 hover:underline">{q.query_number}</a>
+						</td>
+						<td class="px-4 py-3 font-medium text-slate-700">
+							<a href="/queries/{q.id}" class="hover:text-brand-600">{q.client_name}</a>
+						</td>
 						<td class="px-4 py-3 text-slate-600">{q.destination}</td>
 						<td class="px-4 py-3">
 							<Badge tone={STAGE_BY_STATUS[q.status].tone}>{STAGE_BY_STATUS[q.status].label}</Badge>

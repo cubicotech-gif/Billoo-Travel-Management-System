@@ -1,6 +1,14 @@
 import { supabase } from '$lib/supabase';
 import type { QueryStatus } from '$lib/database.types';
-import type { NewQuery, Query, QueryUpdate } from './types';
+import { rollupNumbers } from './totals';
+import type {
+	NewQuery,
+	NewQueryService,
+	Query,
+	QueryService,
+	QueryServiceUpdate,
+	QueryUpdate
+} from './types';
 
 // Thin data-access layer for queries. No UI, no caching — just typed Supabase
 // calls that throw on error so TanStack Query can surface failures.
@@ -31,4 +39,53 @@ export async function updateQuery(id: string, patch: QueryUpdate): Promise<Query
 
 export async function setQueryStatus(id: string, status: QueryStatus): Promise<Query> {
 	return updateQuery(id, { status });
+}
+
+// --- Services ------------------------------------------------------------
+
+export async function listServices(queryId: string): Promise<QueryService[]> {
+	return unwrap(
+		await supabase
+			.from('query_services')
+			.select('*')
+			.eq('query_id', queryId)
+			.order('created_at', { ascending: true })
+	);
+}
+
+/**
+ * Recompute the parent query's cost/selling from its services and persist it,
+ * so dashboard totals and the queries list stay in sync. profit/profit_margin
+ * are generated columns in Postgres and update automatically.
+ */
+async function syncQueryTotals(queryId: string): Promise<void> {
+	const services = await listServices(queryId);
+	const { cost, selling } = rollupNumbers(services);
+	await updateQuery(queryId, { cost_price: cost, selling_price: selling });
+}
+
+export async function createService(input: NewQueryService): Promise<QueryService> {
+	const service = unwrap<QueryService>(
+		await supabase.from('query_services').insert(input).select().single()
+	);
+	await syncQueryTotals(input.query_id);
+	return service;
+}
+
+export async function updateService(
+	id: string,
+	queryId: string,
+	patch: QueryServiceUpdate
+): Promise<QueryService> {
+	const service = unwrap<QueryService>(
+		await supabase.from('query_services').update(patch).eq('id', id).select().single()
+	);
+	await syncQueryTotals(queryId);
+	return service;
+}
+
+export async function deleteService(id: string, queryId: string): Promise<void> {
+	const { error } = await supabase.from('query_services').delete().eq('id', id);
+	if (error) throw new Error(error.message);
+	await syncQueryTotals(queryId);
 }

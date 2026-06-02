@@ -24,6 +24,12 @@ export type Currency = 'PKR' | 'SAR' | 'USD' | 'AED' | 'EUR' | 'GBP';
 
 export type UserRole = 'admin' | 'manager' | 'agent' | 'finance' | 'viewer';
 
+export type ServiceType = 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other';
+
+export type ServiceStatus = 'pending' | 'confirmed' | 'cancelled';
+
+export type BookingStatus = 'pending' | 'payment_sent' | 'confirmed' | 'cancelled';
+
 export interface Database {
 	public: {
 		Tables: {
@@ -90,6 +96,8 @@ export interface Database {
 					status?: QueryStatus;
 					assigned_to?: string | null;
 					notes?: string | null;
+					cost_price?: number;
+					selling_price?: number;
 				};
 				Update: Partial<Database['public']['Tables']['queries']['Insert']>;
 				Relationships: [];
@@ -161,6 +169,45 @@ export interface Database {
 					email?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['passengers']['Insert']>;
+				Relationships: [];
+			};
+			query_services: {
+				Row: {
+					id: string;
+					query_id: string;
+					service_type: ServiceType;
+					service_description: string;
+					vendor: string | null;
+					vendor_id: string | null;
+					quantity: number;
+					cost_price: number;
+					selling_price: number;
+					pnr: string | null;
+					booking_reference: string | null;
+					status: ServiceStatus;
+					booking_status: BookingStatus;
+					service_date: string | null;
+					service_details: Record<string, unknown>;
+					notes: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					service_type: ServiceType;
+					service_description: string;
+					vendor?: string | null;
+					vendor_id?: string | null;
+					quantity?: number;
+					cost_price?: number;
+					selling_price?: number;
+					status?: ServiceStatus;
+					booking_status?: BookingStatus;
+					service_date?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['query_services']['Insert']>;
 				Relationships: [];
 			};
 		};
