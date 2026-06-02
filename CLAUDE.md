@@ -80,7 +80,16 @@ Copy `.env.example` → `.env` and set `PUBLIC_SUPABASE_URL` /
 
 ## Roadmap
 
-- **Phase 0/1 (done):** SvelteKit shell, auth, money layer, Queries wired end-to-end.
-- **Phase 2:** full Queries detail + services, Passengers, Vendors, Finance.
+- **Phase 0/1 (done):** SvelteKit shell, money layer, Queries wired end-to-end.
+- **Phase 2 (in progress):** full Queries detail + services, Passengers, Vendors, Finance.
 - **Phase 3:** Realtime notifications + PWA + Web Push.
-- **Phase 4:** squash migrations to one baseline, e2e tests.
+- **Phase 4:** squash migrations to one baseline, e2e tests, **re-enable auth**.
+
+## Auth (temporarily disabled)
+
+To build/test the whole system without login friction, auth is **off**: the
+layout renders the app directly, there's no login route, and the DB is opened to
+the `anon` role via `database/dev-open-access.sql`. The auth store still lives at
+`src/lib/stores/auth.svelte.ts`. Re-enable in Phase 4 by restoring the layout
+guard + a login route and running the REVERT block in `dev-open-access.sql`.
+
