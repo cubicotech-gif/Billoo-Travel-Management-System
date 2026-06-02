@@ -17,6 +17,7 @@ lerna-debug.log*
 dist/
 dist-ssr/
 build/
+.svelte-kit/
 *.local
 
 # Editor directories and files
