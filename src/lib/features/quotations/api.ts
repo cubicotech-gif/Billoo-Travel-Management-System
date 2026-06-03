@@ -112,6 +112,16 @@ export async function setQuotationStatus(
 	);
 }
 
+/** Edit a saved quotation's message text and/or label. */
+export async function updateQuotation(
+	id: string,
+	patch: { whatsapp_text?: string; label?: string | null }
+): Promise<Quotation> {
+	return unwrap<Quotation>(
+		await supabase.from('quotations').update(patch).eq('id', id).select().single()
+	);
+}
+
 /**
  * Accept a quotation: mark it accepted and copy its PKR totals onto the query
  * so the booking auto-populates and dashboard figures reflect the deal.

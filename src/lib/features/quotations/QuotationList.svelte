@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Calculator, Copy, Check, Send, ThumbsUp, Trash2 } from 'lucide-svelte';
+	import { Calculator, Copy, Check, Send, ThumbsUp, Trash2, Eye } from 'lucide-svelte';
 	import { Badge, Button } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import {
@@ -10,6 +10,7 @@
 		useRemoveQuotation
 	} from './queries';
 	import { QUOTATION_STATUS_TONE, type Quotation } from './types';
+	import QuotationViewModal from './QuotationViewModal.svelte';
 
 	let { queryId }: { queryId: string } = $props();
 
@@ -17,6 +18,8 @@
 	const setStatus = untrack(() => useSetQuotationStatus(queryId));
 	const accept = untrack(() => useAcceptQuotation(queryId));
 	const remove = untrack(() => useRemoveQuotation(queryId));
+
+	let viewing = $state<Quotation | null>(null);
 
 	let copiedId = $state<string | null>(null);
 	async function copy(q: Quotation) {
@@ -62,7 +65,8 @@
 					</div>
 				</div>
 				<div class="mt-3 flex flex-wrap gap-2">
-					<Button variant="secondary" size="sm" onclick={() => copy(q)}>
+					<Button variant="secondary" size="sm" onclick={() => (viewing = q)}><Eye class="h-4 w-4" /> View</Button>
+						<Button variant="secondary" size="sm" onclick={() => copy(q)}>
 						{#if copiedId === q.id}<Check class="h-4 w-4" /> Copied{:else}<Copy class="h-4 w-4" /> Copy{/if}
 					</Button>
 					{#if q.status === 'draft'}
@@ -87,3 +91,5 @@
 		{/each}
 	</div>
 {/if}
+
+<QuotationViewModal quotation={viewing} {queryId} onClose={() => (viewing = null)} />

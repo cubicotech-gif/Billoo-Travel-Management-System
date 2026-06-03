@@ -6,6 +6,7 @@ import {
 	listQuotations,
 	removeQuotation,
 	setQuotationStatus,
+	updateQuotation,
 	type SaveQuotationArgs
 } from './api';
 import type { Quotation } from './types';
@@ -51,6 +52,15 @@ export function useAcceptQuotation(queryId: string) {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (quotation: Quotation) => acceptQuotation(quotation),
+		onSuccess: () => invalidate(client, queryId)
+	});
+}
+
+export function useUpdateQuotation(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ id, patch }: { id: string; patch: { whatsapp_text?: string; label?: string | null } }) =>
+			updateQuotation(id, patch),
 		onSuccess: () => invalidate(client, queryId)
 	});
 }
