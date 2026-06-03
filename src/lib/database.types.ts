@@ -418,6 +418,72 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['quotation_lines']['Insert']>;
 				Relationships: [];
 			};
+			bookings: {
+				Row: {
+					id: string;
+					query_id: string;
+					quotation_id: string | null;
+					roe: number;
+					quoted_cost_pkr: number;
+					quoted_sell_pkr: number;
+					actual_cost_pkr: number;
+					actual_sell_pkr: number;
+					profit_pkr: number;
+					notes: string | null;
+					is_deleted: boolean;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					quotation_id?: string | null;
+					roe?: number;
+					quoted_cost_pkr?: number;
+					quoted_sell_pkr?: number;
+					actual_cost_pkr?: number;
+					actual_sell_pkr?: number;
+					profit_pkr?: number;
+					notes?: string | null;
+					is_deleted?: boolean;
+				};
+				Update: Partial<Database['public']['Tables']['bookings']['Insert']>;
+				Relationships: [];
+			};
+			booking_items: {
+				Row: {
+					id: string;
+					booking_id: string;
+					line_type: QuotationLineType;
+					label: string;
+					vendor_id: string | null;
+					currency: Currency;
+					quoted_cost: number;
+					quoted_sell: number;
+					actual_cost: number;
+					actual_sell: number;
+					booking_reference: string | null;
+					notes: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					booking_id: string;
+					line_type: QuotationLineType;
+					label: string;
+					vendor_id?: string | null;
+					currency: Currency;
+					quoted_cost?: number;
+					quoted_sell?: number;
+					actual_cost?: number;
+					actual_sell?: number;
+					booking_reference?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['booking_items']['Insert']>;
+				Relationships: [];
+			};
 		};
 		Views: Record<string, never>;
 		Functions: Record<string, never>;
