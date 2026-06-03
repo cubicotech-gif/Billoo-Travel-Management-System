@@ -22,6 +22,7 @@
 	import Stepper from './Stepper.svelte';
 	import StageActions from './StageActions.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
+	import BookingPanel from '$features/bookings/BookingPanel.svelte';
 	import type { QueryService } from './types';
 
 	// `id` is stable for this component instance: the route keys on it, so a
@@ -124,6 +125,12 @@
 	<div class="mb-8">
 		<QuotationList queryId={id} />
 	</div>
+
+	{#if q.status === 'Booking'}
+		<div class="mb-8">
+			<BookingPanel queryId={id} />
+		</div>
+	{/if}
 
 	<!-- Financial summary, derived live from services -->
 	<div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
