@@ -1,9 +1,9 @@
-import type { QueryStatus } from '$lib/database.types';
+import type { BookingStatus, QueryStatus } from '$lib/database.types';
 
-// The compact 5-stage query lifecycle (+ Cancelled side-exit). Each stage is a
-// real unit of work with its own action panel on the detail page. The DB
-// queries.status CHECK constraint is the source of truth (see
-// database/migrations/20260602_compact_5_stage_workflow.sql).
+// The 4-stage query pipeline (+ Cancelled side-exit), per docs/SPEC.md:
+//   New Query -> Working -> Quoted -> Booking
+// "Completed" is a booking status (below), not a stage. The DB
+// queries.status CHECK constraint is the source of truth.
 
 export type StageTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
@@ -16,15 +16,24 @@ export interface WorkflowStage {
 }
 
 export const WORKFLOW_STAGES: WorkflowStage[] = [
-	{ status: 'Inquiry', label: 'Inquiry', hint: 'Log the client and their requirements.', tone: 'warning' },
-	{ status: 'Proposal', label: 'Proposal', hint: 'Build the package and send the quote.', tone: 'info' },
-	{ status: 'Booking', label: 'Booking', hint: 'Collect advance and book with vendors.', tone: 'info' },
-	{ status: 'Delivery', label: 'Delivery', hint: 'Issue tickets, vouchers and documents.', tone: 'info' },
-	{ status: 'Completed', label: 'Completed', hint: 'Trip done and fully settled.', tone: 'success' },
+	{ status: 'New Query', label: 'New Query', hint: 'Logged, not yet priced.', tone: 'warning' },
+	{ status: 'Working', label: 'Working', hint: 'Building the quotation.', tone: 'info' },
+	{
+		status: 'Quoted',
+		label: 'Quoted',
+		hint: 'Quotation sent, awaiting the client.',
+		tone: 'info'
+	},
+	{
+		status: 'Booking',
+		label: 'Booking',
+		hint: 'Vendor booking, documents and payment.',
+		tone: 'success'
+	},
 	{ status: 'Cancelled', label: 'Cancelled', hint: 'Closed without booking.', tone: 'danger' }
 ];
 
-/** The ordered pipeline, excluding the Cancelled side-exit (board columns). */
+/** Ordered pipeline, excluding the Cancelled side-exit (board columns / stepper). */
 export const MAIN_STAGES: WorkflowStage[] = WORKFLOW_STAGES.filter((s) => s.status !== 'Cancelled');
 
 export const STAGE_BY_STATUS: Record<QueryStatus, WorkflowStage> = Object.fromEntries(
@@ -33,7 +42,7 @@ export const STAGE_BY_STATUS: Record<QueryStatus, WorkflowStage> = Object.fromEn
 
 const ORDER: QueryStatus[] = MAIN_STAGES.map((s) => s.status);
 
-/** Next stage in the linear flow, or null at Completed/Cancelled. */
+/** Next stage in the linear flow, or null at Booking / Cancelled. */
 export function nextStatus(current: QueryStatus): QueryStatus | null {
 	const idx = ORDER.indexOf(current);
 	if (idx === -1) return null; // Cancelled
@@ -49,4 +58,28 @@ export function prevStatus(current: QueryStatus): QueryStatus | null {
 
 export function isCancelled(status: QueryStatus): boolean {
 	return status === 'Cancelled';
+}
+
+// --- Booking payment / check-in status -----------------------------------
+
+export interface BookingStatusMeta {
+	status: BookingStatus;
+	tone: StageTone;
+}
+
+export const BOOKING_STATUSES: BookingStatusMeta[] = [
+	{ status: 'Pending Payment', tone: 'warning' },
+	{ status: 'Payment Done - Check-in Pending', tone: 'info' },
+	{ status: 'Check-in Done - Payment Pending', tone: 'warning' },
+	{ status: 'Partial Payment', tone: 'warning' },
+	{ status: 'Completed', tone: 'success' }
+];
+
+export const BOOKING_STATUS_TONE: Record<BookingStatus, StageTone> = Object.fromEntries(
+	BOOKING_STATUSES.map((b) => [b.status, b.tone])
+) as Record<BookingStatus, StageTone>;
+
+/** A booking is settled/closed once it reaches Completed. */
+export function isSettled(status: QueryStatus, bookingStatus: BookingStatus | null): boolean {
+	return status === 'Booking' && bookingStatus === 'Completed';
 }

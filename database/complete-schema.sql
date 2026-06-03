@@ -37,13 +37,19 @@ CREATE TABLE IF NOT EXISTS public.queries (
   adults INTEGER DEFAULT 1 CHECK (adults >= 1),
   children INTEGER DEFAULT 0 CHECK (children >= 0),
   infants INTEGER DEFAULT 0 CHECK (infants >= 0),
-  status TEXT DEFAULT 'Inquiry' CHECK (status IN (
-    'Inquiry',
-    'Proposal',
+  status TEXT DEFAULT 'New Query' CHECK (status IN (
+    'New Query',
+    'Working',
+    'Quoted',
     'Booking',
-    'Delivery',
-    'Completed',
     'Cancelled'
+  )),
+  booking_status TEXT CHECK (booking_status IS NULL OR booking_status IN (
+    'Pending Payment',
+    'Payment Done - Check-in Pending',
+    'Check-in Done - Payment Pending',
+    'Partial Payment',
+    'Completed'
   )),
   assigned_to UUID REFERENCES public.users(id) ON DELETE SET NULL,
   notes TEXT,

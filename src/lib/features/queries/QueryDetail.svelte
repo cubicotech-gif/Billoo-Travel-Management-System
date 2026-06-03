@@ -9,7 +9,13 @@
 		useSetQueryStatus,
 		useDeleteService
 	} from './queries';
-	import { STAGE_BY_STATUS, nextStatus, prevStatus, isCancelled } from './workflow';
+	import {
+		STAGE_BY_STATUS,
+		BOOKING_STATUS_TONE,
+		nextStatus,
+		prevStatus,
+		isCancelled
+	} from './workflow';
 	import { rollupServices } from './totals';
 	import ServiceModal from './ServiceModal.svelte';
 	import Stepper from './Stepper.svelte';
@@ -72,6 +78,9 @@
 			<div class="flex items-center gap-3">
 				<h1 class="text-2xl font-bold text-slate-800">{q.client_name}</h1>
 				<Badge tone={STAGE_BY_STATUS[q.status].tone}>{STAGE_BY_STATUS[q.status].label}</Badge>
+				{#if q.status === 'Booking' && q.booking_status}
+					<Badge tone={BOOKING_STATUS_TONE[q.booking_status]}>{q.booking_status}</Badge>
+				{/if}
 			</div>
 			<p class="mt-1 font-mono text-xs text-slate-400">{q.query_number}</p>
 			<p class="mt-1 text-sm text-slate-500">
@@ -83,8 +92,8 @@
 		<!-- Guided controls: back / advance / cancel (or restore) -->
 		<div class="flex items-center gap-2">
 			{#if isCancelled(q.status)}
-				<Button variant="secondary" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: 'Inquiry' })}>
-					Restore to Inquiry
+				<Button variant="secondary" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: 'New Query' })}>
+					Restore to New Query
 				</Button>
 			{:else}
 				{#if prev}

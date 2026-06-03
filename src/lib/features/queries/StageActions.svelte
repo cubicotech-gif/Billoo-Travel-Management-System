@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Send, Wallet, MessageSquare, CheckCircle2 } from 'lucide-svelte';
-	import { Button, Card, Input } from '$ui';
+	import { Wallet, Calculator, Clock, FileCheck } from 'lucide-svelte';
+	import { Badge, Button, Card, Input, Select } from '$ui';
+	import type { BookingStatus } from '$lib/database.types';
 	import { formatAmount } from '$lib/money';
+	import { BOOKING_STATUSES, BOOKING_STATUS_TONE } from './workflow';
 	import { useUpdateQuery } from './queries';
 	import type { Query } from './types';
 
@@ -14,19 +16,7 @@
 		return iso ? new Date(iso).toLocaleDateString() : '—';
 	}
 
-	// --- Proposal: send / re-send -----------------------------------------
-	function sendProposal() {
-		$update.mutate({
-			id: query.id,
-			patch: {
-				proposal_sent_date: new Date().toISOString(),
-				current_proposal_version: (query.current_proposal_version ?? 0) + 1
-			}
-		});
-	}
-
-	// --- Booking: record advance payment ----------------------------------
-	// Seed the form once from the query (untrack: don't clobber input on refetch).
+	// --- Booking: advance payment -----------------------------------------
 	let advance = $state(
 		untrack(() => ({
 			amount: Number(query.advance_payment_amount ?? 0),
@@ -46,89 +36,90 @@
 		});
 	}
 
-	// --- Completed: feedback ----------------------------------------------
-	let feedback = $state(untrack(() => query.customer_feedback ?? ''));
+	// --- Booking: payment / check-in status -------------------------------
+	const bookingStatusOptions: string[] = BOOKING_STATUSES.map((b) => b.status);
+	let bookingStatus = $state<string>(untrack(() => query.booking_status ?? 'Pending Payment'));
 
-	function saveFeedback(e: SubmitEvent) {
-		e.preventDefault();
+	function saveBookingStatus() {
+		const next = bookingStatus as BookingStatus;
+		const completedDate =
+			next === 'Completed' ? (query.completed_date ?? new Date().toISOString()) : query.completed_date;
 		$update.mutate({
 			id: query.id,
-			patch: {
-				customer_feedback: feedback || null,
-				completed_date: query.completed_date ?? new Date().toISOString()
-			}
+			patch: { booking_status: next, completed_date: completedDate }
 		});
 	}
 </script>
 
-{#if query.status === 'Inquiry'}
-	<Card title="Inquiry">
-		<p class="text-sm text-slate-500">
-			Respond to the client and capture their requirements. When you're ready to build the package,
-			advance to <span class="font-medium text-slate-700">Proposal</span> and start adding services.
-		</p>
+{#if query.status === 'New Query'}
+	<Card title="New Query — intake">
+		<div class="flex items-start gap-3 text-sm text-slate-500">
+			<Clock class="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+			<p>
+				Logged, not yet priced. Capture the client's request (full intake form coming in the CRM
+				phase), then advance to <span class="font-medium text-slate-700">Working</span> to build the
+				quotation.
+			</p>
+		</div>
 	</Card>
-{:else if query.status === 'Proposal'}
-	<Card title="Proposal">
-		<div class="flex flex-wrap items-center justify-between gap-3">
-			<div class="text-sm text-slate-500">
-				{#if query.proposal_sent_date}
-					Last sent <span class="font-medium text-slate-700">{fmtDate(query.proposal_sent_date)}</span>
-					· version {query.current_proposal_version ?? 1}
-				{:else}
-					No proposal sent yet. Add the services below, then send the quote.
-				{/if}
-			</div>
-			<Button onclick={sendProposal} disabled={$update.isPending}>
-				<Send class="h-4 w-4" />
-				{query.proposal_sent_date ? 'Re-send (new version)' : 'Send proposal'}
-			</Button>
+{:else if query.status === 'Working'}
+	<Card title="Working — build the quotation">
+		<div class="flex items-start gap-3 text-sm text-slate-500">
+			<Calculator class="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+			<p>
+				Price the package below (the SAR/PKR rate calculator arrives in a later phase). When the
+				quote is ready, advance to <span class="font-medium text-slate-700">Quoted</span> to send it
+				to the client.
+			</p>
+		</div>
+	</Card>
+{:else if query.status === 'Quoted'}
+	<Card title="Quoted — awaiting client">
+		<div class="flex items-start gap-3 text-sm text-slate-500">
+			<FileCheck class="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+			<p>
+				Quotation shared; awaiting the client's decision. If they want changes, move
+				<span class="font-medium text-slate-700">Back</span> to Working; if they approve, advance to
+				<span class="font-medium text-slate-700">Booking</span>.
+			</p>
 		</div>
 	</Card>
 {:else if query.status === 'Booking'}
-	<Card title="Booking — advance payment">
-		<form onsubmit={recordAdvance} class="flex flex-wrap items-end gap-3">
-			<div class="w-40">
-				<Input label="Advance (PKR)" type="number" min="0" step="0.01" bind:value={advance.amount} />
+	<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+		<Card title="Payment & check-in status">
+			<div class="space-y-3">
+				{#if query.booking_status}
+					<Badge tone={BOOKING_STATUS_TONE[query.booking_status]}>{query.booking_status}</Badge>
+				{/if}
+				<div class="flex items-end gap-2">
+					<div class="flex-1">
+						<Select bind:value={bookingStatus} options={bookingStatusOptions} />
+					</div>
+					<Button onclick={saveBookingStatus} disabled={$update.isPending}>Update</Button>
+				</div>
 			</div>
-			<div class="w-44">
-				<Input label="Date" type="date" bind:value={advance.date} />
-			</div>
-			<Button type="submit" disabled={$update.isPending}>
-				<Wallet class="h-4 w-4" /> Record advance
-			</Button>
+		</Card>
+		<Card title="Advance payment">
+			<form onsubmit={recordAdvance} class="flex flex-wrap items-end gap-3">
+				<div class="w-32">
+					<Input label="Advance (PKR)" type="number" min="0" step="0.01" bind:value={advance.amount} />
+				</div>
+				<div class="w-40">
+					<Input label="Date" type="date" bind:value={advance.date} />
+				</div>
+				<Button type="submit" disabled={$update.isPending}>
+					<Wallet class="h-4 w-4" /> Record
+				</Button>
+			</form>
 			{#if query.advance_payment_amount}
-				<span class="pb-2 text-sm text-slate-500">
-					Recorded: <span class="font-semibold text-green-600"
+				<p class="mt-2 text-sm text-slate-500">
+					Recorded
+					<span class="font-semibold text-green-600"
 						>{formatAmount(Number(query.advance_payment_amount))}</span
 					>
 					on {fmtDate(query.advance_payment_date)}
-				</span>
+				</p>
 			{/if}
-		</form>
-	</Card>
-{:else if query.status === 'Delivery'}
-	<Card title="Delivery">
-		<p class="text-sm text-slate-500">
-			Booking confirmed. Issue tickets, vouchers and documents to the client, then advance to
-			<span class="font-medium text-slate-700">Completed</span> once the trip is delivered.
-		</p>
-	</Card>
-{:else if query.status === 'Completed'}
-	<Card title="Completed — customer feedback">
-		<form onsubmit={saveFeedback} class="space-y-3">
-			<div class="flex items-center gap-2 text-sm text-green-700">
-				<CheckCircle2 class="h-4 w-4" /> Completed on {fmtDate(query.completed_date)}
-			</div>
-			<textarea
-				bind:value={feedback}
-				rows="3"
-				placeholder="How did the trip go? Any notes for next time…"
-				class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-			></textarea>
-			<Button type="submit" disabled={$update.isPending}>
-				<MessageSquare class="h-4 w-4" /> Save feedback
-			</Button>
-		</form>
-	</Card>
+		</Card>
+	</div>
 {/if}

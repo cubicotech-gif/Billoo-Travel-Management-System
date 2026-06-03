@@ -8,13 +8,15 @@
 // Money columns are NUMERIC in Postgres and arrive as `number` over the wire,
 // but all money *math* must go through $lib/money — never raw arithmetic.
 
-export type QueryStatus =
-	| 'Inquiry'
-	| 'Proposal'
-	| 'Booking'
-	| 'Delivery'
-	| 'Completed'
-	| 'Cancelled';
+export type QueryStatus = 'New Query' | 'Working' | 'Quoted' | 'Booking' | 'Cancelled';
+
+// Payment + check-in status, only meaningful while a query is in the Booking stage.
+export type BookingStatus =
+	| 'Pending Payment'
+	| 'Payment Done - Check-in Pending'
+	| 'Check-in Done - Payment Pending'
+	| 'Partial Payment'
+	| 'Completed';
 
 export type Currency = 'PKR' | 'SAR' | 'USD' | 'AED' | 'EUR' | 'GBP';
 
@@ -24,7 +26,9 @@ export type ServiceType = 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | '
 
 export type ServiceStatus = 'pending' | 'confirmed' | 'cancelled';
 
-export type BookingStatus = 'pending' | 'payment_sent' | 'confirmed' | 'cancelled';
+// Per-service booking status (on query_services). Distinct from the
+// query-level BookingStatus (payment/check-in) defined above.
+export type ServiceBookingStatus = 'pending' | 'payment_sent' | 'confirmed' | 'cancelled';
 
 export interface Database {
 	public: {
@@ -61,6 +65,7 @@ export interface Database {
 					children: number;
 					infants: number;
 					status: QueryStatus;
+					booking_status: BookingStatus | null;
 					assigned_to: string | null;
 					notes: string | null;
 					cost_price: number;
@@ -90,6 +95,7 @@ export interface Database {
 					children?: number;
 					infants?: number;
 					status?: QueryStatus;
+					booking_status?: BookingStatus | null;
 					assigned_to?: string | null;
 					notes?: string | null;
 					cost_price?: number;
@@ -189,7 +195,7 @@ export interface Database {
 					pnr: string | null;
 					booking_reference: string | null;
 					status: ServiceStatus;
-					booking_status: BookingStatus;
+					booking_status: ServiceBookingStatus;
 					service_date: string | null;
 					service_details: Record<string, unknown>;
 					notes: string | null;
@@ -207,7 +213,7 @@ export interface Database {
 					cost_price?: number;
 					selling_price?: number;
 					status?: ServiceStatus;
-					booking_status?: BookingStatus;
+					booking_status?: ServiceBookingStatus;
 					service_date?: string | null;
 					notes?: string | null;
 				};
