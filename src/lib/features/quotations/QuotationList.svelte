@@ -1,0 +1,85 @@
+<script lang="ts">
+	import { untrack } from 'svelte';
+	import { Calculator, Copy, Check, Send, ThumbsUp, Trash2 } from 'lucide-svelte';
+	import { Badge, Button } from '$ui';
+	import { formatAmount } from '$lib/money';
+	import {
+		useQuotations,
+		useSetQuotationStatus,
+		useAcceptQuotation,
+		useRemoveQuotation
+	} from './queries';
+	import { QUOTATION_STATUS_TONE, type Quotation } from './types';
+
+	let { queryId }: { queryId: string } = $props();
+
+	const quotations = untrack(() => useQuotations(queryId));
+	const setStatus = untrack(() => useSetQuotationStatus(queryId));
+	const accept = untrack(() => useAcceptQuotation(queryId));
+	const remove = untrack(() => useRemoveQuotation(queryId));
+
+	let copiedId = $state<string | null>(null);
+	async function copy(q: Quotation) {
+		if (!q.whatsapp_text) return;
+		await navigator.clipboard.writeText(q.whatsapp_text);
+		copiedId = q.id;
+		setTimeout(() => (copiedId = null), 1500);
+	}
+
+	function fmtDate(iso: string): string {
+		return new Date(iso).toLocaleDateString();
+	}
+</script>
+
+<div class="mb-3 flex items-center justify-between">
+	<h2 class="text-lg font-semibold text-slate-800">Quotations</h2>
+	<Button size="sm" href="/queries/{queryId}/quote"><Calculator class="h-4 w-4" /> Build quotation</Button>
+</div>
+
+{#if $quotations.isLoading}
+	<p class="text-slate-400">Loading…</p>
+{:else if ($quotations.data ?? []).filter((q) => q.status !== 'archived').length === 0}
+	<div class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-400">
+		No quotations yet. Build one from the daily rates.
+	</div>
+{:else}
+	<div class="space-y-2">
+		{#each ($quotations.data ?? []).filter((q) => q.status !== 'archived') as q (q.id)}
+			<div class="rounded-xl border border-slate-200 bg-white p-4">
+				<div class="flex flex-wrap items-center justify-between gap-3">
+					<div class="flex items-center gap-3">
+						<span class="text-sm font-semibold text-slate-700">v{q.version}</span>
+						<Badge tone={QUOTATION_STATUS_TONE[q.status]}>{q.status}</Badge>
+						<span class="text-xs text-slate-400">{fmtDate(q.created_at)}</span>
+					</div>
+					<div class="flex items-center gap-4 text-sm">
+						<span class="text-slate-700">{formatAmount(Number(q.total_sell_pkr), 'PKR')}</span>
+						<span class="font-medium text-green-600">+{formatAmount(Number(q.profit_pkr), 'PKR')}</span>
+					</div>
+				</div>
+				<div class="mt-3 flex flex-wrap gap-2">
+					<Button variant="secondary" size="sm" onclick={() => copy(q)}>
+						{#if copiedId === q.id}<Check class="h-4 w-4" /> Copied{:else}<Copy class="h-4 w-4" /> Copy{/if}
+					</Button>
+					{#if q.status === 'draft'}
+						<Button variant="secondary" size="sm" onclick={() => $setStatus.mutate({ id: q.id, status: 'sent' })}>
+							<Send class="h-4 w-4" /> Mark sent
+						</Button>
+					{/if}
+					{#if q.status !== 'accepted'}
+						<Button variant="secondary" size="sm" onclick={() => $accept.mutate(q)}>
+							<ThumbsUp class="h-4 w-4" /> Accept
+						</Button>
+					{/if}
+					<button
+						onclick={() => confirm('Remove this quotation?') && $remove.mutate(q)}
+						class="ml-auto rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+						aria-label="Remove"
+					>
+						<Trash2 class="h-4 w-4" />
+					</button>
+				</div>
+			</div>
+		{/each}
+	</div>
+{/if}

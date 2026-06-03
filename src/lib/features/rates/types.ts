@@ -30,3 +30,19 @@ export const RATE_TYPE_BY_KEY: Record<RateItemType, RateTypeConfig> = Object.fro
 ) as Record<RateItemType, RateTypeConfig>;
 
 export const HOTEL_CITIES = ['Makkah', 'Madinah'] as const;
+
+/**
+ * Collapse the date-stamped rate history to the latest row per logical item
+ * (item_type + name + city), keeping only active rates. This is what the
+ * quotation calculator should choose from.
+ */
+export function latestRates(rates: RateCard[]): RateCard[] {
+	const byKey = new Map<string, RateCard>();
+	for (const r of rates) {
+		if (!r.active) continue;
+		const key = `${r.item_type}|${r.name}|${r.city ?? ''}`;
+		const existing = byKey.get(key);
+		if (!existing || r.rate_date > existing.rate_date) byKey.set(key, r);
+	}
+	return [...byKey.values()];
+}

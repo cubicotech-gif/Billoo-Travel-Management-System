@@ -20,6 +20,7 @@
 	import ServiceModal from './ServiceModal.svelte';
 	import Stepper from './Stepper.svelte';
 	import StageActions from './StageActions.svelte';
+	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import type { QueryService } from './types';
 
 	// `id` is stable for this component instance: the route keys on it, so a
@@ -117,6 +118,10 @@
 
 	<div class="mb-6">
 		<StageActions query={q} />
+	</div>
+
+	<div class="mb-8">
+		<QuotationList queryId={id} />
 	</div>
 
 	<!-- Financial summary, derived live from services -->
