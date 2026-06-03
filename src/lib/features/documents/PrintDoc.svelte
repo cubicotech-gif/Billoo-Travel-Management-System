@@ -1,0 +1,133 @@
+<script lang="ts">
+	import { ArrowLeft, Printer } from 'lucide-svelte';
+	import { Button } from '$ui';
+	import { formatAmount } from '$lib/money';
+	import type { Currency } from '$lib/database.types';
+	import { getQuery } from '$features/queries/api';
+	import { getBookingForQuery, listBookingItems } from '$features/bookings/api';
+	import { listQuotations, getQuotationLines } from '$features/quotations/api';
+	import type { Query } from '$features/queries/types';
+
+	let { queryId, kind }: { queryId: string; kind: 'voucher' | 'itinerary' } = $props();
+
+	interface Row {
+		label: string;
+		currency: Currency;
+		amount: number;
+	}
+
+	let query = $state<Query | null>(null);
+	let rows = $state<Row[]>([]);
+	let totalPkr = $state(0);
+	let loaded = $state(false);
+	let error = $state<string | null>(null);
+
+	$effect(() => {
+		if (loaded) return;
+		loaded = true;
+		(async () => {
+			try {
+				query = await getQuery(queryId);
+				// Prefer actual booking; otherwise fall back to the accepted quotation.
+				const booking = await getBookingForQuery(queryId);
+				if (booking) {
+					const items = await listBookingItems(booking.id);
+					rows = items.map((i) => ({ label: i.label, currency: i.currency, amount: Number(i.actual_sell) }));
+					totalPkr = Number(booking.actual_sell_pkr);
+				} else {
+					const quotes = await listQuotations(queryId);
+					const accepted = quotes.find((q) => q.status === 'accepted') ?? quotes[0];
+					if (accepted) {
+						const lines = await getQuotationLines(accepted.id);
+						rows = lines.map((l) => ({ label: l.label, currency: l.currency, amount: Number(l.line_sell) }));
+						totalPkr = Number(accepted.total_sell_pkr);
+					}
+				}
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to load';
+			}
+		})();
+	});
+
+	const title = $derived(kind === 'voucher' ? 'Booking Voucher' : 'Travel Itinerary');
+</script>
+
+<div class="no-print mb-4 flex items-center justify-between">
+	<a href="/queries/{queryId}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+		<ArrowLeft class="h-4 w-4" /> Back to query
+	</a>
+	<Button onclick={() => window.print()}><Printer class="h-4 w-4" /> Print / Save PDF</Button>
+</div>
+
+{#if error}
+	<p class="text-red-600">{error}</p>
+{:else if !query}
+	<p class="text-slate-400">Loading…</p>
+{:else}
+	<div class="mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white p-8">
+		<div class="mb-6 flex items-start justify-between border-b border-slate-200 pb-4">
+			<div>
+				<div class="text-xl font-bold text-brand-700">Billoo Travel</div>
+				<div class="text-xs text-slate-400">Umrah & Travel Services</div>
+			</div>
+			<div class="text-right">
+				<div class="text-lg font-semibold text-slate-800">{title}</div>
+				<div class="font-mono text-xs text-slate-400">{query.query_number}</div>
+			</div>
+		</div>
+
+		<div class="mb-6 grid grid-cols-2 gap-4 text-sm">
+			<div>
+				<div class="text-xs uppercase tracking-wide text-slate-400">Passenger</div>
+				<div class="font-medium text-slate-800">{query.client_name}</div>
+				<div class="text-slate-500">{query.client_phone}</div>
+			</div>
+			<div>
+				<div class="text-xs uppercase tracking-wide text-slate-400">Package</div>
+				<div class="font-medium text-slate-800">{query.package_type ?? query.destination}</div>
+				<div class="text-slate-500">
+					{query.adults} adult{query.adults === 1 ? '' : 's'}{query.children ? `, ${query.children} child` : ''}{query.infants ? `, ${query.infants} infant` : ''}
+				</div>
+				{#if query.nights_makkah || query.nights_madinah}
+					<div class="text-slate-500">
+						{query.nights_makkah ? `Makkah ${query.nights_makkah}N` : ''}
+						{query.nights_madinah ? `· Madinah ${query.nights_madinah}N` : ''}
+					</div>
+				{/if}
+			</div>
+		</div>
+
+		<table class="mb-6 w-full text-sm">
+			<thead class="border-b border-slate-200 text-left text-xs uppercase text-slate-400">
+				<tr>
+					<th class="py-2 font-medium">Component</th>
+					{#if kind === 'voucher'}<th class="py-2 text-right font-medium">Amount</th>{/if}
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-100">
+				{#each rows as r, i (i)}
+					<tr>
+						<td class="py-2 text-slate-700">{r.label}</td>
+						{#if kind === 'voucher'}<td class="py-2 text-right text-slate-600">{formatAmount(r.amount, r.currency)}</td>{/if}
+					</tr>
+				{/each}
+				{#if rows.length === 0}
+					<tr><td class="py-3 text-slate-400">No items — create a booking or accept a quotation first.</td></tr>
+				{/if}
+			</tbody>
+		</table>
+
+		{#if kind === 'voucher'}
+			<div class="flex justify-end border-t border-slate-200 pt-3">
+				<div class="text-right">
+					<div class="text-xs uppercase tracking-wide text-slate-400">Total</div>
+					<div class="text-xl font-bold text-slate-800">{formatAmount(totalPkr, 'PKR')}</div>
+				</div>
+			</div>
+		{/if}
+
+		<p class="mt-8 text-center text-xs text-slate-400">
+			Generated by Billoo Travel · {new Date().toLocaleDateString()}
+		</p>
+	</div>
+{/if}
