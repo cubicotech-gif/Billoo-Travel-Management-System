@@ -22,6 +22,8 @@ export type Currency = 'PKR' | 'SAR' | 'USD' | 'AED' | 'EUR' | 'GBP';
 
 export type UserRole = 'admin' | 'manager' | 'agent' | 'finance' | 'viewer';
 
+export type PackageType = 'Umrah' | 'Tour' | 'Leisure';
+
 export type ServiceType = 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other';
 
 // Daily rate cards: hotel/transfer/visa are SAR, airline is PKR.
@@ -83,6 +85,20 @@ export interface Database {
 					advance_payment_date: string | null;
 					customer_feedback: string | null;
 					stage_notes: Record<string, unknown>;
+					// Intake (Phase C)
+					passenger_id: string | null;
+					created_by_staff: string | null;
+					package_type: PackageType | null;
+					duration_days: number | null;
+					nights_makkah: number | null;
+					nights_madinah: number | null;
+					hotel_preference: string | null;
+					client_preference: string | null;
+					customer_plan: string | null;
+					quick_note: string | null;
+					responded: boolean | null;
+					response_text: string | null;
+					initial_quotation: string | null;
 					created_at: string;
 					updated_at: string;
 				};
@@ -111,6 +127,20 @@ export interface Database {
 					advance_payment_date?: string | null;
 					completed_date?: string | null;
 					customer_feedback?: string | null;
+					// Intake (Phase C)
+					passenger_id?: string | null;
+					created_by_staff?: string | null;
+					package_type?: PackageType | null;
+					duration_days?: number | null;
+					nights_makkah?: number | null;
+					nights_madinah?: number | null;
+					hotel_preference?: string | null;
+					client_preference?: string | null;
+					customer_plan?: string | null;
+					quick_note?: string | null;
+					responded?: boolean | null;
+					response_text?: string | null;
+					initial_quotation?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['queries']['Insert']>;
 				Relationships: [];
@@ -177,6 +207,7 @@ export interface Database {
 					nationality: string | null;
 					tags: string[];
 					status: 'active' | 'inactive';
+					is_deleted: boolean;
 					notes: string | null;
 					created_at: string;
 					updated_at: string;
@@ -187,8 +218,31 @@ export interface Database {
 					last_name: string;
 					phone: string;
 					email?: string | null;
+					whatsapp?: string | null;
+					cnic?: string | null;
+					gender?: 'male' | 'female' | null;
+					city?: string | null;
+					country?: string;
+					passport_number?: string | null;
+					passport_expiry?: string | null;
+					date_of_birth?: string | null;
+					nationality?: string | null;
+					notes?: string | null;
+					status?: 'active' | 'inactive';
+					is_deleted?: boolean;
 				};
 				Update: Partial<Database['public']['Tables']['passengers']['Insert']>;
+				Relationships: [];
+			};
+			staff: {
+				Row: {
+					id: string;
+					name: string;
+					active: boolean;
+					created_at: string;
+				};
+				Insert: { id?: string; name: string; active?: boolean };
+				Update: Partial<Database['public']['Tables']['staff']['Insert']>;
 				Relationships: [];
 			};
 			query_services: {
