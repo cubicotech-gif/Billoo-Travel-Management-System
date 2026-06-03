@@ -14,7 +14,10 @@
 	const columns = $derived.by(() => {
 		const map = new Map<QueryStatus, Query[]>();
 		for (const s of WORKFLOW_STAGES) map.set(s.status, []);
-		for (const q of $queries.data ?? []) map.get(q.status)?.push(q);
+		for (const q of $queries.data ?? []) {
+			// Unknown/legacy statuses fall into New Query so nothing disappears.
+			(map.get(q.status) ?? map.get('New Query'))?.push(q);
+		}
 		return WORKFLOW_STAGES.map((stage) => ({ stage, items: map.get(stage.status) ?? [] }));
 	});
 

@@ -12,6 +12,7 @@
 	import {
 		STAGE_BY_STATUS,
 		BOOKING_STATUS_TONE,
+		stageFor,
 		nextStatus,
 		prevStatus,
 		isCancelled
@@ -78,7 +79,7 @@
 		<div>
 			<div class="flex items-center gap-3">
 				<h1 class="text-2xl font-bold text-slate-800">{q.client_name}</h1>
-				<Badge tone={STAGE_BY_STATUS[q.status].tone}>{STAGE_BY_STATUS[q.status].label}</Badge>
+				<Badge tone={stageFor(q.status).tone}>{stageFor(q.status).label}</Badge>
 				{#if q.status === 'Booking' && q.booking_status}
 					<Badge tone={BOOKING_STATUS_TONE[q.booking_status]}>{q.booking_status}</Badge>
 				{/if}
