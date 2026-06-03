@@ -23,6 +23,8 @@
 	import StageActions from './StageActions.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingPanel from '$features/bookings/BookingPanel.svelte';
+	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
+	import { FileText, Map } from 'lucide-svelte';
 	import type { QueryService } from './types';
 
 	// `id` is stable for this component instance: the route keys on it, so a
@@ -129,6 +131,19 @@
 	{#if q.status === 'Booking'}
 		<div class="mb-8">
 			<BookingPanel queryId={id} />
+		</div>
+
+		<div class="mb-4 flex gap-2">
+			<Button variant="secondary" size="sm" href="/queries/{id}/voucher">
+				<FileText class="h-4 w-4" /> Voucher
+			</Button>
+			<Button variant="secondary" size="sm" href="/queries/{id}/itinerary">
+				<Map class="h-4 w-4" /> Itinerary
+			</Button>
+		</div>
+
+		<div class="mb-8">
+			<DocumentsPanel entityType="query" entityId={id} />
 		</div>
 	{/if}
 

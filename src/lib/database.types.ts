@@ -484,6 +484,35 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['booking_items']['Insert']>;
 				Relationships: [];
 			};
+			documents: {
+				Row: {
+					id: string;
+					entity_type: 'query' | 'passenger' | 'vendor' | 'invoice';
+					entity_id: string;
+					document_type: 'passport' | 'visa' | 'ticket' | 'voucher' | 'invoice' | 'receipt' | 'other';
+					file_name: string;
+					file_url: string;
+					file_size: number | null;
+					mime_type: string | null;
+					expiry_date: string | null;
+					uploaded_by: string | null;
+					notes: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					entity_type: 'query' | 'passenger' | 'vendor' | 'invoice';
+					entity_id: string;
+					document_type: 'passport' | 'visa' | 'ticket' | 'voucher' | 'invoice' | 'receipt' | 'other';
+					file_name: string;
+					file_url: string;
+					file_size?: number | null;
+					mime_type?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['documents']['Insert']>;
+				Relationships: [];
+			};
 		};
 		Views: Record<string, never>;
 		Functions: Record<string, never>;
