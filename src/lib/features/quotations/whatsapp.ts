@@ -1,53 +1,56 @@
-import type { PaxCounts, QuotationResult } from './calculator';
+// Renders the client-facing WhatsApp quotation as a clean, emoji-structured
+// template, built from the quote inputs. The result is editable before sending
+// and stored on the quotation.
 
-// Renders the client-facing WhatsApp quotation. Per the chosen format this is
-// a *bundled* total — a package summary and one PKR price, no line prices.
+export interface WhatsAppHotel {
+	hotel: string;
+	roomLines: string[]; // one line per room type, e.g. "Quad (4) ×1"
+	nights: number;
+}
 
-export interface QuoteContext {
+export interface WhatsAppData {
+	totalNights: number;
 	packageType: string;
-	passengerName: string;
-	pax: PaxCounts;
-	nightsMakkah?: number | null;
-	nightsMadinah?: number | null;
+	perPersonPkr: number;
 	label?: string | null;
-	perPersonPkr?: number | null;
+	makkah: WhatsAppHotel | null;
+	madinah: WhatsAppHotel | null;
+	visaType: string | null;
+	transferRoutes: string[];
+	ticketsIncluded: boolean;
 }
 
 function pkr(amount: number): string {
-	return `PKR ${Math.round(amount).toLocaleString('en-US')}`;
+	return Math.round(amount).toLocaleString('en-US');
 }
 
-function paxLine(pax: PaxCounts): string {
-	const parts: string[] = [];
-	if (pax.adults) parts.push(`${pax.adults} adult${pax.adults === 1 ? '' : 's'}`);
-	if (pax.children) parts.push(`${pax.children} child${pax.children === 1 ? '' : 'ren'}`);
-	if (pax.infants) parts.push(`${pax.infants} infant${pax.infants === 1 ? '' : 's'}`);
-	return parts.join(' · ');
+function hotelBlock(emoji: string, heading: string, h: WhatsAppHotel): string[] {
+	const out = [`${emoji} ${heading}`, `🏨 ${h.hotel}`];
+	for (const line of h.roomLines) out.push(`🛏️ ${line}`);
+	out.push(`📅 ${h.nights} Nights Stay`);
+	return out;
 }
 
-function nightsLine(ctx: QuoteContext): string {
-	const parts: string[] = [];
-	if (ctx.nightsMakkah) parts.push(`Makkah ${ctx.nightsMakkah}N`);
-	if (ctx.nightsMadinah) parts.push(`Madinah ${ctx.nightsMadinah}N`);
-	return parts.join(' · ');
-}
+export function renderStructured(d: WhatsAppData): string {
+	const tier = d.label ? ` (${d.label})` : '';
+	const lines: string[] = [
+		`🌙 ${d.totalNights} Nights ${d.packageType} Package${tier} 🌙`,
+		`Package Cost: PKR ${pkr(d.perPersonPkr)}/- Per Person`,
+		''
+	];
 
-export function renderWhatsApp(ctx: QuoteContext, result: QuotationResult): string {
-	const tier = ctx.label ? ` (${ctx.label})` : '';
-	const lines = [`*${ctx.packageType} Package — ${ctx.passengerName}${tier}*`];
+	if (d.makkah) lines.push(...hotelBlock('🕋', 'Makkah Accommodation', d.makkah), '');
+	if (d.madinah) lines.push(...hotelBlock('🕌', 'Madinah Accommodation', d.madinah), '');
 
-	const pax = paxLine(ctx.pax);
-	if (pax) lines.push(pax);
-
-	const nights = nightsLine(ctx);
-	if (nights) lines.push(nights);
-
-	lines.push('Includes hotels, transfers, visa & tickets');
+	lines.push('✅ Package Includes:');
 	lines.push('');
-	lines.push(`Total: *${pkr(result.totalSellPkr)}*`);
-	if (ctx.perPersonPkr && ctx.perPersonPkr > 0) {
-		lines.push(`Per person: *${pkr(ctx.perPersonPkr)}*`);
-	}
+	if (d.visaType) lines.push(`${d.visaType} Visa`);
+	for (const route of d.transferRoutes) lines.push(route);
+	if (d.ticketsIncluded) lines.push('Air Tickets');
+
+	lines.push('');
+	lines.push('📞 Contact us for booking and further details.');
+	lines.push('Terms & Conditions Apply');
 
 	return lines.join('\n');
 }
