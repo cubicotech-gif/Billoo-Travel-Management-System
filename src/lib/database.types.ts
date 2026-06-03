@@ -24,6 +24,9 @@ export type UserRole = 'admin' | 'manager' | 'agent' | 'finance' | 'viewer';
 
 export type ServiceType = 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other';
 
+// Daily rate cards: hotel/transfer/visa are SAR, airline is PKR.
+export type RateItemType = 'hotel' | 'transfer' | 'visa' | 'airline';
+
 export type ServiceStatus = 'pending' | 'confirmed' | 'cancelled';
 
 // Per-service booking status (on query_services). Distinct from the
@@ -145,6 +148,13 @@ export interface Database {
 					contact_person?: string | null;
 					email?: string | null;
 					phone?: string | null;
+					whatsapp_number?: string | null;
+					address?: string | null;
+					location?: string | null;
+					country?: string | null;
+					notes?: string | null;
+					is_active?: boolean;
+					is_deleted?: boolean;
 				};
 				Update: Partial<Database['public']['Tables']['vendors']['Insert']>;
 				Relationships: [];
@@ -218,6 +228,59 @@ export interface Database {
 					notes?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['query_services']['Insert']>;
+				Relationships: [];
+			};
+			rate_cards: {
+				Row: {
+					id: string;
+					rate_date: string;
+					item_type: RateItemType;
+					name: string;
+					city: string | null;
+					vendor_id: string | null;
+					currency: Currency;
+					cost_price: number;
+					selling_price: number;
+					unit: string | null;
+					occupancy: number | null;
+					active: boolean;
+					notes: string | null;
+					meta: Record<string, unknown>;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					rate_date?: string;
+					item_type: RateItemType;
+					name: string;
+					city?: string | null;
+					vendor_id?: string | null;
+					currency: Currency;
+					cost_price?: number;
+					selling_price?: number;
+					unit?: string | null;
+					occupancy?: number | null;
+					active?: boolean;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['rate_cards']['Insert']>;
+				Relationships: [];
+			};
+			exchange_rates: {
+				Row: {
+					id: string;
+					rate_date: string;
+					sar_to_pkr: number;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					rate_date?: string;
+					sar_to_pkr: number;
+				};
+				Update: Partial<Database['public']['Tables']['exchange_rates']['Insert']>;
 				Relationships: [];
 			};
 		};
