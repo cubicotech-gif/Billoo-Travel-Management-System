@@ -49,11 +49,15 @@
 				<div class="flex flex-wrap items-center justify-between gap-3">
 					<div class="flex items-center gap-3">
 						<span class="text-sm font-semibold text-slate-700">v{q.version}</span>
+						{#if q.label}<Badge tone="info">{q.label}</Badge>{/if}
 						<Badge tone={QUOTATION_STATUS_TONE[q.status]}>{q.status}</Badge>
 						<span class="text-xs text-slate-400">{fmtDate(q.created_at)}</span>
 					</div>
 					<div class="flex items-center gap-4 text-sm">
 						<span class="text-slate-700">{formatAmount(Number(q.total_sell_pkr), 'PKR')}</span>
+						{#if Number(q.per_person_pkr) > 0}
+							<span class="text-xs text-slate-400">{formatAmount(Number(q.per_person_pkr), 'PKR')}/pp</span>
+						{/if}
 						<span class="font-medium text-green-600">+{formatAmount(Number(q.profit_pkr), 'PKR')}</span>
 					</div>
 				</div>

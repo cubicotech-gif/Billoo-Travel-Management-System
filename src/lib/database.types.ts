@@ -358,6 +358,9 @@ export interface Database {
 					total_cost_pkr: number;
 					total_sell_pkr: number;
 					profit_pkr: number;
+					per_person_pkr: number;
+					pp_include_infants: boolean;
+					label: string | null;
 					whatsapp_text: string | null;
 					notes: string | null;
 					created_at: string;
@@ -379,6 +382,9 @@ export interface Database {
 					total_cost_pkr?: number;
 					total_sell_pkr?: number;
 					profit_pkr?: number;
+					per_person_pkr?: number;
+					pp_include_infants?: boolean;
+					label?: string | null;
 					whatsapp_text?: string | null;
 					notes?: string | null;
 				};
@@ -392,6 +398,7 @@ export interface Database {
 					line_type: QuotationLineType;
 					label: string;
 					rate_card_id: string | null;
+					vendor_id: string | null;
 					currency: Currency;
 					unit_cost: number;
 					unit_sell: number;
@@ -407,6 +414,7 @@ export interface Database {
 					line_type: QuotationLineType;
 					label: string;
 					rate_card_id?: string | null;
+					vendor_id?: string | null;
 					currency: Currency;
 					unit_cost?: number;
 					unit_sell?: number;
