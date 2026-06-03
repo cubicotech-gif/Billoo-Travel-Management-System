@@ -9,6 +9,8 @@ export interface QuoteContext {
 	pax: PaxCounts;
 	nightsMakkah?: number | null;
 	nightsMadinah?: number | null;
+	label?: string | null;
+	perPersonPkr?: number | null;
 }
 
 function pkr(amount: number): string {
@@ -31,7 +33,8 @@ function nightsLine(ctx: QuoteContext): string {
 }
 
 export function renderWhatsApp(ctx: QuoteContext, result: QuotationResult): string {
-	const lines = [`*${ctx.packageType} Package — ${ctx.passengerName}*`];
+	const tier = ctx.label ? ` (${ctx.label})` : '';
+	const lines = [`*${ctx.packageType} Package — ${ctx.passengerName}${tier}*`];
 
 	const pax = paxLine(ctx.pax);
 	if (pax) lines.push(pax);
@@ -42,6 +45,9 @@ export function renderWhatsApp(ctx: QuoteContext, result: QuotationResult): stri
 	lines.push('Includes hotels, transfers, visa & tickets');
 	lines.push('');
 	lines.push(`Total: *${pkr(result.totalSellPkr)}*`);
+	if (ctx.perPersonPkr && ctx.perPersonPkr > 0) {
+		lines.push(`Per person: *${pkr(ctx.perPersonPkr)}*`);
+	}
 
 	return lines.join('\n');
 }

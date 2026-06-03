@@ -47,6 +47,9 @@ export interface SaveQuotationArgs {
 	pax: PaxCounts;
 	result: QuotationResult;
 	whatsappText: string;
+	label?: string | null;
+	perPersonPkr?: number;
+	ppIncludeInfants?: boolean;
 }
 
 /** Persist a calculated quotation as a new version, with its line breakdown. */
@@ -69,6 +72,9 @@ export async function createQuotation(args: SaveQuotationArgs): Promise<Quotatio
 				total_cost_pkr: args.result.totalCostPkr,
 				total_sell_pkr: args.result.totalSellPkr,
 				profit_pkr: args.result.profitPkr,
+				per_person_pkr: args.perPersonPkr ?? 0,
+				pp_include_infants: args.ppIncludeInfants ?? false,
+				label: args.label ?? null,
 				whatsapp_text: args.whatsappText
 			})
 			.select()
@@ -81,6 +87,7 @@ export async function createQuotation(args: SaveQuotationArgs): Promise<Quotatio
 			line_type: l.line_type,
 			label: l.label,
 			rate_card_id: l.rateCardId,
+			vendor_id: l.vendorId,
 			currency: l.currency,
 			unit_cost: l.unitCost,
 			unit_sell: l.unitSell,

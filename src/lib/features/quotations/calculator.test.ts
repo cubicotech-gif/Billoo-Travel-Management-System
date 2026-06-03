@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { calculateQuotation, roomsFor, totalPersons, type QuotationInput } from './calculator';
+import {
+	calculateQuotation,
+	perPerson,
+	perPersonDivisor,
+	roomsFor,
+	totalPersons,
+	type QuotationInput
+} from './calculator';
+import { addDays, nightsBetween } from './dates';
 
 const base: QuotationInput = {
 	roe: 75,
@@ -70,6 +78,19 @@ describe('quotation calculator', () => {
 		expect(r.totalSellPkr).toBe(0);
 		expect(r.profitPkr).toBe(0);
 		expect(r.lines).toHaveLength(0);
+	});
+
+	it('per-person divisor counts adults+children, infants optional', () => {
+		const pax = { adults: 6, children: 1, infants: 2 };
+		expect(perPersonDivisor(pax, false)).toBe(7);
+		expect(perPersonDivisor(pax, true)).toBe(9);
+		expect(perPerson(700000, 7)).toBe(100000);
+	});
+
+	it('nights/date helpers stay in sync', () => {
+		expect(nightsBetween('2026-03-03', '2026-03-08')).toBe(5);
+		expect(addDays('2026-03-03', 5)).toBe('2026-03-08');
+		expect(nightsBetween('2026-03-08', '2026-03-03')).toBe(0);
 	});
 
 	it('keeps precision through ROE conversion', () => {

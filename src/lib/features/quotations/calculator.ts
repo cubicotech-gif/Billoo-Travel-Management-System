@@ -26,15 +26,19 @@ export interface HotelInput {
 	city: string;
 	name: string;
 	rateCardId?: string | null;
+	vendorId?: string | null;
 	costSar: number;
 	sellSar: number; // per room per night
 	nights: number;
 	rooms: number;
+	checkIn?: string | null;
+	checkOut?: string | null;
 }
 
 export interface TransferInput {
 	name: string;
 	rateCardId?: string | null;
+	vendorId?: string | null;
 	costSar: number;
 	sellSar: number; // per vehicle
 	vehicles: number;
@@ -43,6 +47,7 @@ export interface TransferInput {
 export interface VisaInput {
 	name: string;
 	rateCardId?: string | null;
+	vendorId?: string | null;
 	costSar: number;
 	sellSar: number; // per person (infant = adult rate)
 }
@@ -50,6 +55,7 @@ export interface VisaInput {
 export interface TicketsInput {
 	airlineName: string;
 	rateCardId?: string | null;
+	vendorId?: string | null;
 	adultCost: number;
 	adultSell: number;
 	childCost: number;
@@ -71,6 +77,7 @@ export interface QuotationLineResult {
 	line_type: 'hotel' | 'transfer' | 'visa' | 'ticket';
 	label: string;
 	rateCardId: string | null;
+	vendorId: string | null;
 	currency: 'SAR' | 'PKR';
 	unitCost: number;
 	unitSell: number;
@@ -96,6 +103,17 @@ export function totalPersons(pax: PaxCounts): number {
 	return pax.adults + pax.children + pax.infants;
 }
 
+/** Divisor for per-person pricing: adults + children, optionally + infants. */
+export function perPersonDivisor(pax: PaxCounts, includeInfants: boolean): number {
+	const n = pax.adults + pax.children + (includeInfants ? pax.infants : 0);
+	return n > 0 ? n : 1;
+}
+
+/** Per-person PKR = total / divisor (informational; rounded to 2dp). */
+export function perPerson(totalPkr: number, divisor: number): number {
+	return Math.round((totalPkr / (divisor || 1)) * 100) / 100;
+}
+
 /** Rooms needed for N persons at a given occupancy, rounded up. */
 export function roomsFor(persons: number, occupancy: number): number {
 	if (occupancy <= 0) return persons;
@@ -119,13 +137,20 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			line_type: 'hotel',
 			label: `${h.city} — ${h.name}`,
 			rateCardId: h.rateCardId ?? null,
+			vendorId: h.vendorId ?? null,
 			currency: 'SAR',
 			unitCost: h.costSar,
 			unitSell: h.sellSar,
 			quantity: qty,
 			lineCost: toNumber(lineCost),
 			lineSell: toNumber(lineSell),
-			meta: { city: h.city, nights: h.nights, rooms: h.rooms }
+			meta: {
+				city: h.city,
+				nights: h.nights,
+				rooms: h.rooms,
+				check_in: h.checkIn ?? null,
+				check_out: h.checkOut ?? null
+			}
 		});
 	}
 
@@ -139,6 +164,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			line_type: 'transfer',
 			label: t.name,
 			rateCardId: t.rateCardId ?? null,
+			vendorId: t.vendorId ?? null,
 			currency: 'SAR',
 			unitCost: t.costSar,
 			unitSell: t.sellSar,
@@ -160,6 +186,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			line_type: 'visa',
 			label: v.name,
 			rateCardId: v.rateCardId ?? null,
+			vendorId: v.vendorId ?? null,
 			currency: 'SAR',
 			unitCost: v.costSar,
 			unitSell: v.sellSar,
@@ -190,6 +217,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 				line_type: 'ticket',
 				label: `${t.airlineName} (${ty.key} ×${ty.count})`,
 				rateCardId: t.rateCardId ?? null,
+				vendorId: t.vendorId ?? null,
 				currency: 'PKR',
 				unitCost: ty.cost,
 				unitSell: ty.sell,

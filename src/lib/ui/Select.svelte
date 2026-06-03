@@ -4,9 +4,11 @@
 		value: string;
 		options: readonly string[] | { value: string; label: string }[];
 		class?: string;
+		/** Fired after the value changes (e.g. to auto-fill related fields). */
+		onchange?: () => void;
 	}
 
-	let { label, value = $bindable(), options, class: klass = '' }: Props = $props();
+	let { label, value = $bindable(), options, class: klass = '', onchange }: Props = $props();
 
 	const normalized = $derived(
 		options.map((o) => (typeof o === 'string' ? { value: o, label: o } : o))
@@ -19,6 +21,7 @@
 	{/if}
 	<select
 		bind:value
+		onchange={() => onchange?.()}
 		class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 {klass}"
 	>
 		{#each normalized as opt (opt.value)}
