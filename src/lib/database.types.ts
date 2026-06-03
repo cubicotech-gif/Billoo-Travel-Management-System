@@ -29,6 +29,10 @@ export type ServiceType = 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | '
 // Daily rate cards: hotel/transfer/visa are SAR, airline is PKR.
 export type RateItemType = 'hotel' | 'transfer' | 'visa' | 'airline';
 
+export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'archived';
+
+export type QuotationLineType = 'hotel' | 'transfer' | 'visa' | 'ticket';
+
 export type ServiceStatus = 'pending' | 'confirmed' | 'cancelled';
 
 // Per-service booking status (on query_services). Distinct from the
@@ -335,6 +339,83 @@ export interface Database {
 					sar_to_pkr: number;
 				};
 				Update: Partial<Database['public']['Tables']['exchange_rates']['Insert']>;
+				Relationships: [];
+			};
+			quotations: {
+				Row: {
+					id: string;
+					query_id: string;
+					version: number;
+					status: QuotationStatus;
+					roe: number;
+					adults: number;
+					children: number;
+					infants: number;
+					sar_cost: number;
+					sar_sell: number;
+					tickets_cost_pkr: number;
+					tickets_sell_pkr: number;
+					total_cost_pkr: number;
+					total_sell_pkr: number;
+					profit_pkr: number;
+					whatsapp_text: string | null;
+					notes: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					version?: number;
+					status?: QuotationStatus;
+					roe: number;
+					adults?: number;
+					children?: number;
+					infants?: number;
+					sar_cost?: number;
+					sar_sell?: number;
+					tickets_cost_pkr?: number;
+					tickets_sell_pkr?: number;
+					total_cost_pkr?: number;
+					total_sell_pkr?: number;
+					profit_pkr?: number;
+					whatsapp_text?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['quotations']['Insert']>;
+				Relationships: [];
+			};
+			quotation_lines: {
+				Row: {
+					id: string;
+					quotation_id: string;
+					line_type: QuotationLineType;
+					label: string;
+					rate_card_id: string | null;
+					currency: Currency;
+					unit_cost: number;
+					unit_sell: number;
+					quantity: number;
+					line_cost: number;
+					line_sell: number;
+					meta: Record<string, unknown>;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					quotation_id: string;
+					line_type: QuotationLineType;
+					label: string;
+					rate_card_id?: string | null;
+					currency: Currency;
+					unit_cost?: number;
+					unit_sell?: number;
+					quantity?: number;
+					line_cost?: number;
+					line_sell?: number;
+					meta?: Record<string, unknown>;
+				};
+				Update: Partial<Database['public']['Tables']['quotation_lines']['Insert']>;
 				Relationships: [];
 			};
 		};
