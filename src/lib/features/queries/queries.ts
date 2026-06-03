@@ -8,9 +8,10 @@ import {
 	listQueries,
 	listServices,
 	setQueryStatus,
+	updateQuery as apiUpdateQuery,
 	updateService
 } from './api';
-import type { NewQuery, NewQueryService, QueryServiceUpdate } from './types';
+import type { NewQuery, NewQueryService, QueryServiceUpdate, QueryUpdate } from './types';
 
 // TanStack Query hooks for the queries feature. Components consume these and
 // stay free of data-fetching plumbing.
@@ -45,6 +46,18 @@ export function useSetQueryStatus() {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: ({ id, status }: { id: string; status: QueryStatus }) => setQueryStatus(id, status),
+		onSuccess: (q) => {
+			client.invalidateQueries({ queryKey: QUERIES_KEY });
+			client.invalidateQueries({ queryKey: queryKey(q.id) });
+		}
+	});
+}
+
+/** Patch arbitrary query fields — used by the per-stage action panels. */
+export function useUpdateQuery() {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ id, patch }: { id: string; patch: QueryUpdate }) => apiUpdateQuery(id, patch),
 		onSuccess: (q) => {
 			client.invalidateQueries({ queryKey: QUERIES_KEY });
 			client.invalidateQueries({ queryKey: queryKey(q.id) });

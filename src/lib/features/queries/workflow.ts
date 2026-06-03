@@ -1,89 +1,85 @@
-import type { QueryStatus } from '$lib/database.types';
+import type { BookingStatus, QueryStatus } from '$lib/database.types';
 
-// The 10-stage query lifecycle. Order matters: it drives the pipeline board
-// and the "advance to next stage" action. Each stage carries display metadata.
+// The 4-stage query pipeline (+ Cancelled side-exit), per docs/SPEC.md:
+//   New Query -> Working -> Quoted -> Booking
+// "Completed" is a booking status (below), not a stage. The DB
+// queries.status CHECK constraint is the source of truth.
+
+export type StageTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger';
 
 export interface WorkflowStage {
 	status: QueryStatus;
 	label: string;
-	/** Short description of what happens in this stage. */
+	/** One-line summary of what you do in this stage. */
 	hint: string;
-	tone: 'neutral' | 'info' | 'success' | 'warning' | 'danger';
+	tone: StageTone;
 }
 
 export const WORKFLOW_STAGES: WorkflowStage[] = [
+	{ status: 'New Query', label: 'New Query', hint: 'Logged, not yet priced.', tone: 'warning' },
+	{ status: 'Working', label: 'Working', hint: 'Building the quotation.', tone: 'info' },
 	{
-		status: 'New Query - Not Responded',
-		label: 'New',
-		hint: 'Fresh inquiry, not yet contacted.',
-		tone: 'warning'
-	},
-	{
-		status: 'Responded - Awaiting Reply',
-		label: 'Responded',
-		hint: 'We replied, waiting on the client.',
+		status: 'Quoted',
+		label: 'Quoted',
+		hint: 'Quotation sent, awaiting the client.',
 		tone: 'info'
 	},
 	{
-		status: 'Working on Proposal',
-		label: 'Proposal WIP',
-		hint: 'Building the quote and service breakdown.',
-		tone: 'info'
-	},
-	{
-		status: 'Proposal Sent',
-		label: 'Proposal Sent',
-		hint: 'Quote delivered, awaiting decision.',
-		tone: 'info'
-	},
-	{
-		status: 'Revisions Requested',
-		label: 'Revisions',
-		hint: 'Client asked for changes.',
-		tone: 'warning'
-	},
-	{
-		status: 'Finalized & Booking',
-		label: 'Finalized',
-		hint: 'Accepted, collecting advance & booking.',
+		status: 'Booking',
+		label: 'Booking',
+		hint: 'Vendor booking, documents and payment.',
 		tone: 'success'
 	},
-	{
-		status: 'Services Booked',
-		label: 'Booked',
-		hint: 'Vendors confirmed, services secured.',
-		tone: 'success'
-	},
-	{
-		status: 'In Delivery',
-		label: 'In Delivery',
-		hint: 'Travel in progress / documents issued.',
-		tone: 'info'
-	},
-	{
-		status: 'Completed',
-		label: 'Completed',
-		hint: 'Trip done, fully settled.',
-		tone: 'success'
-	},
-	{
-		status: 'Cancelled',
-		label: 'Cancelled',
-		hint: 'Query closed without booking.',
-		tone: 'danger'
-	}
+	{ status: 'Cancelled', label: 'Cancelled', hint: 'Closed without booking.', tone: 'danger' }
 ];
+
+/** Ordered pipeline, excluding the Cancelled side-exit (board columns / stepper). */
+export const MAIN_STAGES: WorkflowStage[] = WORKFLOW_STAGES.filter((s) => s.status !== 'Cancelled');
 
 export const STAGE_BY_STATUS: Record<QueryStatus, WorkflowStage> = Object.fromEntries(
 	WORKFLOW_STAGES.map((s) => [s.status, s])
 ) as Record<QueryStatus, WorkflowStage>;
 
-/** The next status in the linear flow, or null at the terminal stages. */
+const ORDER: QueryStatus[] = MAIN_STAGES.map((s) => s.status);
+
+/** Next stage in the linear flow, or null at Booking / Cancelled. */
 export function nextStatus(current: QueryStatus): QueryStatus | null {
-	if (current === 'Completed' || current === 'Cancelled') return null;
-	const idx = WORKFLOW_STAGES.findIndex((s) => s.status === current);
-	// Stop before 'Cancelled' (the last entry) — cancelling is a manual action.
-	const next = WORKFLOW_STAGES[idx + 1];
-	if (!next || next.status === 'Cancelled') return null;
-	return next.status;
+	const idx = ORDER.indexOf(current);
+	if (idx === -1) return null; // Cancelled
+	return ORDER[idx + 1] ?? null;
+}
+
+/** Previous stage, or null at the first stage / Cancelled. */
+export function prevStatus(current: QueryStatus): QueryStatus | null {
+	const idx = ORDER.indexOf(current);
+	if (idx <= 0) return null;
+	return ORDER[idx - 1] ?? null;
+}
+
+export function isCancelled(status: QueryStatus): boolean {
+	return status === 'Cancelled';
+}
+
+// --- Booking payment / check-in status -----------------------------------
+
+export interface BookingStatusMeta {
+	status: BookingStatus;
+	tone: StageTone;
+}
+
+export const BOOKING_STATUSES: BookingStatusMeta[] = [
+	{ status: 'Pending Payment', tone: 'warning' },
+	{ status: 'Payment Done - Check-in Pending', tone: 'info' },
+	{ status: 'Check-in Done - Payment Pending', tone: 'warning' },
+	{ status: 'Partial Payment', tone: 'warning' },
+	{ status: 'Completed', tone: 'success' }
+];
+
+export const BOOKING_STATUS_TONE: Record<BookingStatus, StageTone> = Object.fromEntries(
+	BOOKING_STATUSES.map((b) => [b.status, b.tone])
+) as Record<BookingStatus, StageTone>;
+
+/** A booking is settled/closed once it reaches Completed. */
+export function isSettled(status: QueryStatus, bookingStatus: BookingStatus | null): boolean {
+	return status === 'Booking' && bookingStatus === 'Completed';
 }

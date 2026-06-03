@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ArrowLeft, Pencil, Plus, Trash2 } from 'lucide-svelte';
+	import { ArrowLeft, ArrowRight, Ban, Pencil, Plus, Trash2 } from 'lucide-svelte';
 	import { Badge, Button, Card } from '$ui';
 	import { formatMoney, formatAmount } from '$lib/money';
 	import {
@@ -9,9 +9,17 @@
 		useSetQueryStatus,
 		useDeleteService
 	} from './queries';
-	import { STAGE_BY_STATUS, nextStatus } from './workflow';
+	import {
+		STAGE_BY_STATUS,
+		BOOKING_STATUS_TONE,
+		nextStatus,
+		prevStatus,
+		isCancelled
+	} from './workflow';
 	import { rollupServices } from './totals';
 	import ServiceModal from './ServiceModal.svelte';
+	import Stepper from './Stepper.svelte';
+	import StageActions from './StageActions.svelte';
 	import type { QueryService } from './types';
 
 	// `id` is stable for this component instance: the route keys on it, so a
@@ -43,6 +51,11 @@
 	function remove(s: QueryService) {
 		if (confirm(`Delete "${s.service_description}"?`)) $deleteService.mutate(s.id);
 	}
+
+	function cancelQuery() {
+		if (confirm('Cancel this query? You can move it back into the pipeline later.'))
+			$setStatus.mutate({ id, status: 'Cancelled' });
+	}
 </script>
 
 <a
@@ -59,11 +72,15 @@
 {:else if $query.data}
 	{@const q = $query.data}
 	{@const next = nextStatus(q.status)}
+	{@const prev = prevStatus(q.status)}
 	<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
 		<div>
 			<div class="flex items-center gap-3">
 				<h1 class="text-2xl font-bold text-slate-800">{q.client_name}</h1>
 				<Badge tone={STAGE_BY_STATUS[q.status].tone}>{STAGE_BY_STATUS[q.status].label}</Badge>
+				{#if q.status === 'Booking' && q.booking_status}
+					<Badge tone={BOOKING_STATUS_TONE[q.booking_status]}>{q.booking_status}</Badge>
+				{/if}
 			</div>
 			<p class="mt-1 font-mono text-xs text-slate-400">{q.query_number}</p>
 			<p class="mt-1 text-sm text-slate-500">
@@ -72,14 +89,34 @@
 					: ''}{q.infants ? `, ${q.infants} infant` : ''} · {q.client_phone}
 			</p>
 		</div>
-		{#if next}
-			<Button
-				disabled={$setStatus.isPending}
-				onclick={() => $setStatus.mutate({ id, status: next })}
-			>
-				Advance → {STAGE_BY_STATUS[next].label}
-			</Button>
-		{/if}
+		<!-- Guided controls: back / advance / cancel (or restore) -->
+		<div class="flex items-center gap-2">
+			{#if isCancelled(q.status)}
+				<Button variant="secondary" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: 'New Query' })}>
+					Restore to New Query
+				</Button>
+			{:else}
+				{#if prev}
+					<Button variant="ghost" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: prev })}>
+						<ArrowLeft class="h-4 w-4" /> Back
+					</Button>
+				{/if}
+				{#if next}
+					<Button disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: next })}>
+						Advance to {STAGE_BY_STATUS[next].label} <ArrowRight class="h-4 w-4" />
+					</Button>
+				{/if}
+				<Button variant="ghost" disabled={$setStatus.isPending} onclick={cancelQuery}>
+					<Ban class="h-4 w-4" /> Cancel
+				</Button>
+			{/if}
+		</div>
+	</div>
+
+	<Stepper status={q.status} />
+
+	<div class="mb-6">
+		<StageActions query={q} />
 	</div>
 
 	<!-- Financial summary, derived live from services -->

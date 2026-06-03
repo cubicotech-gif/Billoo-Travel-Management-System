@@ -53,12 +53,20 @@ src/
 Path aliases: `$features` → `src/lib/features`, `$ui` → `src/lib/ui`,
 `$lib` → `src/lib` (built in).
 
-## The 10-stage query workflow
+## Product spec
+
+The canonical product spec lives in **`docs/SPEC.md`** — read it for the full
+domain (entities, pipeline, quotation calculator, daily rates, CRM, bookings,
+documents). Build sequence is tracked there.
+
+## The 4-stage query pipeline
 
 Defined in `src/lib/features/queries/workflow.ts`:
-New → Responded → Working on Proposal → Proposal Sent → Revisions Requested →
-Finalized & Booking → Services Booked → In Delivery → Completed (Cancelled is a
-manual side-exit). The DB `queries.status` CHECK constraint is the source of truth.
+**New Query → Working → Quoted → Booking** (Cancelled is a manual side-exit).
+`Completed` is NOT a stage — it's a **booking status** (payment/check-in) on a
+query in the Booking stage. The DB `queries.status` CHECK constraint is the
+source of truth. Money is SAR for Hotels/Transfer/Visa and PKR for Tickets,
+combined via a daily ROE — see `docs/SPEC.md`.
 
 ## Commands
 

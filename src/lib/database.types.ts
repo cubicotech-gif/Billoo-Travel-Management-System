@@ -8,17 +8,15 @@
 // Money columns are NUMERIC in Postgres and arrive as `number` over the wire,
 // but all money *math* must go through $lib/money — never raw arithmetic.
 
-export type QueryStatus =
-	| 'New Query - Not Responded'
-	| 'Responded - Awaiting Reply'
-	| 'Working on Proposal'
-	| 'Proposal Sent'
-	| 'Revisions Requested'
-	| 'Finalized & Booking'
-	| 'Services Booked'
-	| 'In Delivery'
-	| 'Completed'
-	| 'Cancelled';
+export type QueryStatus = 'New Query' | 'Working' | 'Quoted' | 'Booking' | 'Cancelled';
+
+// Payment + check-in status, only meaningful while a query is in the Booking stage.
+export type BookingStatus =
+	| 'Pending Payment'
+	| 'Payment Done - Check-in Pending'
+	| 'Check-in Done - Payment Pending'
+	| 'Partial Payment'
+	| 'Completed';
 
 export type Currency = 'PKR' | 'SAR' | 'USD' | 'AED' | 'EUR' | 'GBP';
 
@@ -26,9 +24,14 @@ export type UserRole = 'admin' | 'manager' | 'agent' | 'finance' | 'viewer';
 
 export type ServiceType = 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other';
 
+// Daily rate cards: hotel/transfer/visa are SAR, airline is PKR.
+export type RateItemType = 'hotel' | 'transfer' | 'visa' | 'airline';
+
 export type ServiceStatus = 'pending' | 'confirmed' | 'cancelled';
 
-export type BookingStatus = 'pending' | 'payment_sent' | 'confirmed' | 'cancelled';
+// Per-service booking status (on query_services). Distinct from the
+// query-level BookingStatus (payment/check-in) defined above.
+export type ServiceBookingStatus = 'pending' | 'payment_sent' | 'confirmed' | 'cancelled';
 
 export interface Database {
 	public: {
@@ -65,6 +68,7 @@ export interface Database {
 					children: number;
 					infants: number;
 					status: QueryStatus;
+					booking_status: BookingStatus | null;
 					assigned_to: string | null;
 					notes: string | null;
 					cost_price: number;
@@ -94,10 +98,19 @@ export interface Database {
 					children?: number;
 					infants?: number;
 					status?: QueryStatus;
+					booking_status?: BookingStatus | null;
 					assigned_to?: string | null;
 					notes?: string | null;
 					cost_price?: number;
 					selling_price?: number;
+					// Stage-action fields (written as a query moves through the pipeline).
+					proposal_sent_date?: string | null;
+					current_proposal_version?: number | null;
+					finalized_date?: string | null;
+					advance_payment_amount?: number | null;
+					advance_payment_date?: string | null;
+					completed_date?: string | null;
+					customer_feedback?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['queries']['Insert']>;
 				Relationships: [];
@@ -135,6 +148,13 @@ export interface Database {
 					contact_person?: string | null;
 					email?: string | null;
 					phone?: string | null;
+					whatsapp_number?: string | null;
+					address?: string | null;
+					location?: string | null;
+					country?: string | null;
+					notes?: string | null;
+					is_active?: boolean;
+					is_deleted?: boolean;
 				};
 				Update: Partial<Database['public']['Tables']['vendors']['Insert']>;
 				Relationships: [];
@@ -185,7 +205,7 @@ export interface Database {
 					pnr: string | null;
 					booking_reference: string | null;
 					status: ServiceStatus;
-					booking_status: BookingStatus;
+					booking_status: ServiceBookingStatus;
 					service_date: string | null;
 					service_details: Record<string, unknown>;
 					notes: string | null;
@@ -203,11 +223,64 @@ export interface Database {
 					cost_price?: number;
 					selling_price?: number;
 					status?: ServiceStatus;
-					booking_status?: BookingStatus;
+					booking_status?: ServiceBookingStatus;
 					service_date?: string | null;
 					notes?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['query_services']['Insert']>;
+				Relationships: [];
+			};
+			rate_cards: {
+				Row: {
+					id: string;
+					rate_date: string;
+					item_type: RateItemType;
+					name: string;
+					city: string | null;
+					vendor_id: string | null;
+					currency: Currency;
+					cost_price: number;
+					selling_price: number;
+					unit: string | null;
+					occupancy: number | null;
+					active: boolean;
+					notes: string | null;
+					meta: Record<string, unknown>;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					rate_date?: string;
+					item_type: RateItemType;
+					name: string;
+					city?: string | null;
+					vendor_id?: string | null;
+					currency: Currency;
+					cost_price?: number;
+					selling_price?: number;
+					unit?: string | null;
+					occupancy?: number | null;
+					active?: boolean;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['rate_cards']['Insert']>;
+				Relationships: [];
+			};
+			exchange_rates: {
+				Row: {
+					id: string;
+					rate_date: string;
+					sar_to_pkr: number;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					rate_date?: string;
+					sar_to_pkr: number;
+				};
+				Update: Partial<Database['public']['Tables']['exchange_rates']['Insert']>;
 				Relationships: [];
 			};
 		};

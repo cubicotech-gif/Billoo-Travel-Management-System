@@ -1,18 +1,21 @@
 <script lang="ts">
 	import { Card, Badge } from '$lib/ui';
 	import { useQueries } from '$features/queries/queries';
-	import { WORKFLOW_STAGES } from '$features/queries/workflow';
+	import { MAIN_STAGES, isCancelled, isSettled } from '$features/queries/workflow';
 	import { formatAmount } from '$lib/money';
 
 	const queries = useQueries();
 
 	// Live pipeline counts + headline numbers, derived from the cached list.
+	// "Open" = still active: not cancelled and not a settled (Completed) booking.
 	const stats = $derived.by(() => {
 		const rows = $queries.data ?? [];
-		const open = rows.filter((q) => q.status !== 'Completed' && q.status !== 'Cancelled');
+		const open = rows.filter(
+			(q) => !isCancelled(q.status) && !isSettled(q.status, q.booking_status)
+		);
 		const pipelineValue = open.reduce((acc, q) => acc + Number(q.selling_price), 0);
 		const projectedProfit = open.reduce((acc, q) => acc + Number(q.profit), 0);
-		const byStage = WORKFLOW_STAGES.map((s) => ({
+		const byStage = MAIN_STAGES.map((s) => ({
 			stage: s,
 			count: rows.filter((q) => q.status === s.status).length
 		}));
