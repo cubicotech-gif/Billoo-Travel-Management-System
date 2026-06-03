@@ -40,6 +40,22 @@ export const STAGE_BY_STATUS: Record<QueryStatus, WorkflowStage> = Object.fromEn
 	WORKFLOW_STAGES.map((s) => [s.status, s])
 ) as Record<QueryStatus, WorkflowStage>;
 
+/**
+ * Safe stage lookup. Falls back to a neutral stage showing the raw value, so a
+ * stray/legacy status (e.g. from before a migration) renders instead of
+ * crashing the page.
+ */
+export function stageFor(status: string): WorkflowStage {
+	return (
+		STAGE_BY_STATUS[status as QueryStatus] ?? {
+			status: status as QueryStatus,
+			label: status || 'Unknown',
+			hint: '',
+			tone: 'neutral'
+		}
+	);
+}
+
 const ORDER: QueryStatus[] = MAIN_STAGES.map((s) => s.status);
 
 /** Next stage in the linear flow, or null at Booking / Cancelled. */

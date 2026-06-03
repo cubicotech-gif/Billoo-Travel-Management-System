@@ -3,7 +3,7 @@
 	import { ArrowLeft, Phone, Mail, MapPin } from 'lucide-svelte';
 	import { Badge, Card } from '$ui';
 	import { formatAmount } from '$lib/money';
-	import { STAGE_BY_STATUS } from '$features/queries/workflow';
+	import { stageFor } from '$features/queries/workflow';
 	import { usePassenger, usePassengerQueries } from './queries';
 	import { fullName } from './types';
 
@@ -81,7 +81,7 @@
 								<a href="/queries/{q.id}" class="text-brand-600 hover:underline">{q.query_number}</a>
 							</td>
 							<td class="px-4 py-3 text-slate-600">{q.destination}</td>
-							<td class="px-4 py-3"><Badge tone={STAGE_BY_STATUS[q.status].tone}>{STAGE_BY_STATUS[q.status].label}</Badge></td>
+							<td class="px-4 py-3"><Badge tone={stageFor(q.status).tone}>{stageFor(q.status).label}</Badge></td>
 							<td class="px-4 py-3 text-right text-slate-700">{formatAmount(Number(q.selling_price))}</td>
 							<td class="px-4 py-3 text-xs text-slate-400">{fmtDate(q.created_at)}</td>
 						</tr>

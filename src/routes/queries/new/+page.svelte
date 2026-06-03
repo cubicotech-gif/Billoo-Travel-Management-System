@@ -92,6 +92,7 @@
 			passenger_id: passengerId,
 			client_name: clientName,
 			client_phone: clientPhone,
+			status: 'New Query',
 			destination: form.packageType, // package type doubles as destination label
 			created_by_staff: form.createdBy || null,
 			adults: Number(form.adults),
