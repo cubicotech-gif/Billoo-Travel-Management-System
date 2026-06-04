@@ -17,6 +17,7 @@
 	import Stepper from './Stepper.svelte';
 	import StageActions from './StageActions.svelte';
 	import ConfirmationPanel from './ConfirmationPanel.svelte';
+	import PaymentSchedule from '$features/payments/PaymentSchedule.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingPanel from '$features/bookings/BookingPanel.svelte';
 	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
@@ -173,6 +174,10 @@
 	{#if q.status === 'Booking'}
 		<div class="mb-8">
 			<BookingPanel queryId={id} />
+		</div>
+
+		<div class="mb-8">
+			<PaymentSchedule queryId={id} sellingPkr={Number(q.selling_price)} />
 		</div>
 
 		<div class="mb-8">

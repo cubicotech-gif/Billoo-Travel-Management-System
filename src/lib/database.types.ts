@@ -266,6 +266,36 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['staff']['Insert']>;
 				Relationships: [];
 			};
+			query_payments: {
+				Row: {
+					id: string;
+					query_id: string;
+					label: string;
+					amount: number;
+					due_date: string | null;
+					status: 'pending' | 'paid';
+					paid_date: string | null;
+					method: string | null;
+					reference: string | null;
+					notes: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					label?: string;
+					amount?: number;
+					due_date?: string | null;
+					status?: 'pending' | 'paid';
+					paid_date?: string | null;
+					method?: string | null;
+					reference?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['query_payments']['Insert']>;
+				Relationships: [];
+			};
 			query_services: {
 				Row: {
 					id: string;
