@@ -26,6 +26,7 @@ export interface RoomRow {
 	sell: number;
 }
 export interface HotelForm {
+	city: string;
 	sel: string;
 	name: string;
 	vendorId: string;
@@ -75,8 +76,7 @@ export interface BuilderForm {
 	validUntil: string;
 	inclusions: string;
 	exclusions: string;
-	makkah: HotelForm;
-	madinah: HotelForm;
+	hotels: HotelForm[];
 	transfers: TransferForm[];
 	visa: VisaForm;
 	airline: AirlineForm;
@@ -84,7 +84,7 @@ export interface BuilderForm {
 }
 
 export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 });
-export const blankHotel = (): HotelForm => ({ sel: '', name: '', vendorId: '', checkIn: '', checkOut: '', nights: 0, rooms: [newRoom()] });
+export const blankHotel = (city = ''): HotelForm => ({ city, sel: '', name: '', vendorId: '', checkIn: '', checkOut: '', nights: 0, rooms: [newRoom()] });
 export const newTransfer = (): TransferForm => ({ vehicle: '7-seater', customVehicle: '', route: 'Airport → Makkah', customRoute: '', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
 export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', vendorId: '', cost: 0, sell: 0, include: true });
 export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 });
@@ -100,8 +100,7 @@ export function blankForm(): BuilderForm {
 		validUntil: '',
 		inclusions: '',
 		exclusions: '',
-		makkah: blankHotel(),
-		madinah: blankHotel(),
+		hotels: [blankHotel('Makkah'), blankHotel('Madinah')],
 		transfers: [newTransfer()],
 		visa: blankVisa(),
 		airline: blankAirline(),
@@ -135,8 +134,8 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 	form.inclusions = (q.inclusions ?? []).join('\n');
 	form.exclusions = (q.exclusions ?? []).join('\n');
 
-	const makkahRooms: RoomRow[] = [];
-	const madinahRooms: RoomRow[] = [];
+	// Group hotel lines by city into one slot each (preserving order).
+	const citySlots = new Map<string, HotelForm>();
 	const transfers: TransferForm[] = [];
 	let visaSet = false;
 	let airlineSet = false;
@@ -146,21 +145,22 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 	for (const l of lines) {
 		const meta = l.meta ?? {};
 		if (l.line_type === 'hotel') {
-			const city = s(meta, 'city');
-			const target = city === 'Madinah' ? form.madinah : form.makkah;
-			const rooms = city === 'Madinah' ? madinahRooms : makkahRooms;
-			// Header fields are shared across a hotel's room lines — set once.
-			if (rooms.length === 0) {
-				target.sel = l.rate_card_id ?? OTHER;
-				target.name = s(meta, 'hotel') || l.label;
-				target.vendorId = l.vendor_id ?? '';
-				target.nights = n(meta, 'nights');
-				target.checkIn = s(meta, 'check_in');
-				target.checkOut = s(meta, 'check_out');
+			const city = s(meta, 'city') || 'Hotel';
+			let slot = citySlots.get(city);
+			if (!slot) {
+				slot = blankHotel(city);
+				slot.rooms = [];
+				slot.sel = l.rate_card_id ?? OTHER;
+				slot.name = s(meta, 'hotel') || l.label;
+				slot.vendorId = l.vendor_id ?? '';
+				slot.nights = n(meta, 'nights');
+				slot.checkIn = s(meta, 'check_in');
+				slot.checkOut = s(meta, 'check_out');
+				citySlots.set(city, slot);
 			}
 			const rt = s(meta, 'room_type') || 'Double';
 			const m = pick(rt, ROOM_TYPES);
-			rooms.push({
+			slot.rooms.push({
 				rt: m.choice,
 				customLabel: m.custom,
 				occupancy: n(meta, 'occupancy') || 2,
@@ -216,8 +216,7 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 		}
 	}
 
-	if (makkahRooms.length) form.makkah.rooms = makkahRooms;
-	if (madinahRooms.length) form.madinah.rooms = madinahRooms;
+	if (citySlots.size) form.hotels = [...citySlots.values()];
 	form.transfers = transfers.length ? transfers : [newTransfer()];
 	if (!visaSet) form.visa.include = false;
 

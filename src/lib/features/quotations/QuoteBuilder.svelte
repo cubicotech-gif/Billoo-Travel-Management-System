@@ -30,7 +30,8 @@
 		blankVisa,
 		blankAirline,
 		blankForm,
-		quotationToForm
+		quotationToForm,
+		type HotelForm
 	} from './edit-map';
 	import RangeCalendar from './RangeCalendar.svelte';
 	import QuotationList from './QuotationList.svelte';
@@ -96,24 +97,37 @@
 			})();
 			return;
 		}
-		// Fresh quote: seed pax/nights from the query and ROE from today's rate.
+		// Fresh quote: seed pax + hotel slots (one per itinerary city) + ROE.
 		const q = $queryDetail.data;
 		const r = $roe.data;
 		if (!q) return;
 		form.adults = q.adults;
 		form.children = q.children;
 		form.infants = q.infants;
-		form.makkah.nights = q.nights_makkah ?? 0;
-		form.madinah.nights = q.nights_madinah ?? 0;
+		const cities = q.itinerary_cities ?? [];
+		if (cities.length) {
+			form.hotels = cities.map((c) => {
+				const h = blankHotel(c.city);
+				h.nights = c.nights ?? 0;
+				return h;
+			});
+		}
 		form.validUntil = addDays(new Date().toISOString().slice(0, 10), 7);
 		if (r) form.roeValue = Number(r.sar_to_pkr);
 		seeded = true;
 	});
 
+	function addHotel() {
+		form.hotels.push(blankHotel(''));
+	}
+	function removeHotel(i: number) {
+		form.hotels.splice(i, 1);
+	}
+
 	const splitLines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
 
 	// Hotel selection: fill name/vendor; seed a room price from the rate.
-	function onHotelSel(h: typeof form.makkah) {
+	function onHotelSel(h: HotelForm) {
 		if (h.sel === OTHER || !h.sel) return;
 		const r = rate(h.sel);
 		if (!r) return;
@@ -128,17 +142,17 @@
 	function onRoomType(room: ReturnType<typeof newRoom>) {
 		if (room.rt !== 'Custom') room.occupancy = OCCUPANCY[room.rt] ?? room.occupancy;
 	}
-	function addRoom(h: typeof form.makkah) {
+	function addRoom(h: HotelForm) {
 		h.rooms.push(newRoom());
 	}
-	function removeRoom(h: typeof form.makkah, i: number) {
+	function removeRoom(h: HotelForm, i: number) {
 		h.rooms.splice(i, 1);
 	}
 
-	function nightsFromDates(h: typeof form.makkah) {
+	function nightsFromDates(h: HotelForm) {
 		h.nights = nightsBetween(h.checkIn, h.checkOut);
 	}
-	function datesFromNights(h: typeof form.makkah) {
+	function datesFromNights(h: HotelForm) {
 		const n = num(h.nights);
 		if (n > 0) {
 			if (!h.checkIn) h.checkIn = defaultCheckIn();
@@ -156,8 +170,9 @@
 		return t.route === 'Custom' ? t.customRoute || 'Transfer' : t.route;
 	}
 
-	function hotelInput(h: typeof form.makkah, city: string) {
+	function hotelInput(h: HotelForm) {
 		if (!h.sel || num(h.nights) <= 0) return null;
+		const city = h.city || 'Hotel';
 		return {
 			city,
 			name: h.name || city,
@@ -177,9 +192,9 @@
 	}
 
 	const input = $derived.by((): QuotationInput => {
-		const hotels = [hotelInput(form.makkah, 'Makkah'), hotelInput(form.madinah, 'Madinah')].filter(
-			(h): h is NonNullable<typeof h> => h !== null
-		);
+		const hotels = form.hotels
+			.map((h) => hotelInput(h))
+			.filter((h): h is NonNullable<typeof h> => h !== null);
 		const transfers = form.transfers.map((t) => ({
 			vehicleType: vehicleLabel(t),
 			route: routeLabel(t),
@@ -208,9 +223,10 @@
 	const divisor = $derived(perPersonDivisor({ adults: form.adults, children: form.children, infants: form.infants }, form.ppIncludeInfants));
 	const pp = $derived(perPerson(result.totalSellPkr, divisor));
 
-	function hotelWa(h: typeof form.makkah): WhatsAppHotel | null {
+	function hotelWa(h: HotelForm): WhatsAppHotel | null {
 		if (!h.sel || num(h.nights) <= 0) return null;
 		return {
+			city: h.city || 'Hotel',
 			hotel: h.name || '',
 			nights: num(h.nights),
 			roomLines: h.rooms.map((r) => `${roomTypeLabel(r)} (sleeps ${num(r.occupancy)}) ×${num(r.qty)}`)
@@ -220,12 +236,11 @@
 	const waData = $derived.by((): WhatsAppData => {
 		const q = $queryDetail.data;
 		return {
-			totalNights: num(form.makkah.nights) + num(form.madinah.nights),
+			totalNights: form.hotels.reduce((a, h) => a + num(h.nights), 0),
 			packageType: q?.package_type ?? 'Umrah',
 			perPersonPkr: pp,
 			label: form.label || null,
-			makkah: hotelWa(form.makkah),
-			madinah: hotelWa(form.madinah),
+			hotels: form.hotels.map(hotelWa).filter((h): h is WhatsAppHotel => h !== null),
 			visaType: form.visa.include ? (form.visa.type === 'Other' ? form.visa.otherLabel || 'Other' : 'Umrah') : null,
 			transferRoutes: form.transfers.map(routeLabel),
 			ticketsIncluded: form.airlineInclude
@@ -257,8 +272,7 @@
 		form.label = '';
 		form.inclusions = '';
 		form.exclusions = '';
-		form.makkah = blankHotel();
-		form.madinah = blankHotel();
+		form.hotels = [blankHotel('Makkah'), blankHotel('Madinah')];
 		form.transfers = [newTransfer()];
 		form.visa = blankVisa();
 		form.airline = blankAirline();
@@ -323,38 +337,41 @@
 			</p>
 		</Card>
 
-		{#each [{ slot: form.makkah, city: 'Makkah' }, { slot: form.madinah, city: 'Madinah' }] as h (h.city)}
-			<Card title={`${h.city} hotel (SAR · per room/night)`}>
+		{#each form.hotels as slot, hi (hi)}
+			<Card title={`${slot.city || 'Hotel'} (SAR · per room/night)`}>
 				<div class="space-y-3">
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 						<div class="space-y-3">
-							<Select label="Hotel" bind:value={h.slot.sel} options={hotelOpts(h.city)} onchange={() => onHotelSel(h.slot)} />
-							{#if h.slot.sel === OTHER}
-								<Input label="Hotel name" bind:value={h.slot.name} placeholder="Type hotel name" />
+							<div class="grid grid-cols-2 gap-2">
+								<Input label="City" bind:value={slot.city} placeholder="e.g. Makkah" />
+								<Select label="Hotel" bind:value={slot.sel} options={hotelOpts(slot.city)} onchange={() => onHotelSel(slot)} />
+							</div>
+							{#if slot.sel === OTHER}
+								<Input label="Hotel name" bind:value={slot.name} placeholder="Type hotel name" />
 							{/if}
-							{#if h.slot.sel}
+							{#if slot.sel}
 								<div class="grid grid-cols-2 gap-2">
-									<Select label="Vendor" bind:value={h.slot.vendorId} options={vendorOptsFor('Hotel')} />
-									<Input label="Nights" type="number" min="0" bind:value={h.slot.nights} onchange={() => datesFromNights(h.slot)} />
+									<Select label="Vendor" bind:value={slot.vendorId} options={vendorOptsFor('Hotel')} />
+									<Input label="Nights" type="number" min="0" bind:value={slot.nights} onchange={() => datesFromNights(slot)} />
 								</div>
 							{/if}
 						</div>
-						{#if h.slot.sel}
+						{#if slot.sel}
 							<div>
 								<span class="mb-1 block text-sm font-medium text-slate-700">Dates (check-in → check-out)</span>
-								<RangeCalendar bind:start={h.slot.checkIn} bind:end={h.slot.checkOut} onChange={() => nightsFromDates(h.slot)} />
+								<RangeCalendar bind:start={slot.checkIn} bind:end={slot.checkOut} onChange={() => nightsFromDates(slot)} />
 							</div>
 						{/if}
 					</div>
 
-					{#if h.slot.sel}
+					{#if slot.sel}
 						<div class="rounded-lg border border-slate-100 p-3">
 							<div class="mb-2 flex items-center justify-between">
 								<span class="text-xs font-semibold uppercase text-slate-400">Room types (mixed allowed)</span>
-								<Button size="sm" variant="ghost" onclick={() => addRoom(h.slot)}><Plus class="h-4 w-4" /> Room</Button>
+								<Button size="sm" variant="ghost" onclick={() => addRoom(slot)}><Plus class="h-4 w-4" /> Room</Button>
 							</div>
 							<div class="space-y-2">
-								{#each h.slot.rooms as room, i (i)}
+								{#each slot.rooms as room, i (i)}
 									<div class="flex flex-wrap items-end gap-2">
 										<div class="w-28"><Select label="Type" bind:value={room.rt} options={ROOM_TYPES} onchange={() => onRoomType(room)} /></div>
 										{#if room.rt === 'Custom'}
@@ -364,7 +381,7 @@
 										<div class="w-16"><Input label="Qty" type="number" min="0" bind:value={room.qty} /></div>
 										<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={room.cost} /></div>
 										<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={room.sell} /></div>
-										<button type="button" onclick={() => removeRoom(h.slot, i)} class="mb-1 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove room">
+										<button type="button" onclick={() => removeRoom(slot, i)} class="mb-1 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove room">
 											<Trash2 class="h-4 w-4" />
 										</button>
 									</div>
@@ -372,9 +389,15 @@
 							</div>
 						</div>
 					{/if}
+
+					<div class="flex justify-end">
+						<button type="button" onclick={() => removeHotel(hi)} class="text-xs text-slate-400 hover:text-red-600">Remove city</button>
+					</div>
 				</div>
 			</Card>
 		{/each}
+
+		<Button type="button" variant="secondary" size="sm" onclick={addHotel}><Plus class="h-4 w-4" /> Add city / hotel</Button>
 
 		<Card title="Transfers (SAR · per vehicle)">
 			<div class="space-y-2">
