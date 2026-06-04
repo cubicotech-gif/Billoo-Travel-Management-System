@@ -76,6 +76,27 @@ export function isCancelled(status: QueryStatus): boolean {
 	return status === 'Cancelled';
 }
 
+// --- Stage aging / stuck-deal alerts -------------------------------------
+
+/** Soft SLA per stage (days). Past this, a query is flagged as stuck. */
+export const STAGE_SLA_DAYS: Record<QueryStatus, number> = {
+	'New Query': 2,
+	Working: 3,
+	Quoted: 3,
+	Booking: 7,
+	Cancelled: Number.POSITIVE_INFINITY
+};
+
+/** Whole days since an ISO timestamp (0 if missing). */
+export function daysSince(iso: string | null): number {
+	if (!iso) return 0;
+	return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+}
+
+export function isStuck(status: QueryStatus, days: number): boolean {
+	return days > (STAGE_SLA_DAYS[status] ?? Number.POSITIVE_INFINITY);
+}
+
 // --- Booking payment / check-in status -----------------------------------
 
 export interface BookingStatusMeta {

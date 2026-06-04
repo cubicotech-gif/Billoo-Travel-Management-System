@@ -38,7 +38,8 @@ export async function updateQuery(id: string, patch: QueryUpdate): Promise<Query
 }
 
 export async function setQueryStatus(id: string, status: QueryStatus): Promise<Query> {
-	return updateQuery(id, { status });
+	// Stamp the stage change so days-in-stage / stuck alerts are accurate.
+	return updateQuery(id, { status, stage_changed_at: new Date().toISOString() });
 }
 
 // --- Services ------------------------------------------------------------

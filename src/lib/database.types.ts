@@ -116,6 +116,7 @@ export interface Database {
 					responded: boolean | null;
 					response_text: string | null;
 					initial_quotation: string | null;
+					stage_changed_at: string | null;
 					created_at: string;
 					updated_at: string;
 				};
@@ -158,6 +159,7 @@ export interface Database {
 					responded?: boolean | null;
 					response_text?: string | null;
 					initial_quotation?: string | null;
+					stage_changed_at?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['queries']['Insert']>;
 				Relationships: [];
