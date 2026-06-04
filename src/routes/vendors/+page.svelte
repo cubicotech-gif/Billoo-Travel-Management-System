@@ -47,7 +47,7 @@
 			<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
 				<tr>
 					<th class="px-4 py-3 font-medium">Name</th>
-					<th class="px-4 py-3 font-medium">Type</th>
+					<th class="px-4 py-3 font-medium">Services</th>
 					<th class="px-4 py-3 font-medium">Contact</th>
 					<th class="px-4 py-3 font-medium">Phone</th>
 					<th class="px-4 py-3 font-medium">Location</th>
@@ -58,7 +58,13 @@
 				{#each $vendors.data ?? [] as v (v.id)}
 					<tr class="hover:bg-slate-50">
 						<td class="px-4 py-3 font-medium text-slate-700">{v.name}</td>
-						<td class="px-4 py-3"><Badge tone="info">{v.type}</Badge></td>
+						<td class="px-4 py-3">
+							<div class="flex flex-wrap gap-1">
+								{#each v.service_types?.length ? v.service_types : [v.type] as s (s)}
+									<Badge tone="info">{s}</Badge>
+								{/each}
+							</div>
+						</td>
 						<td class="px-4 py-3 text-slate-600">{v.contact_person ?? '—'}</td>
 						<td class="px-4 py-3 text-slate-600">{v.phone ?? v.whatsapp_number ?? '—'}</td>
 						<td class="px-4 py-3 text-slate-500">{v.location ?? '—'}</td>

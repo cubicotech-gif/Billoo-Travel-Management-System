@@ -55,7 +55,9 @@ export interface VisaForm {
 export interface AirlineForm {
 	sel: string;
 	name: string;
-	vendorId: string;
+	route: string;
+	fareClass: string;
+	pnr: string;
 	adultCost: number;
 	adultSell: number;
 	childCost: number;
@@ -82,7 +84,7 @@ export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupanc
 export const blankHotel = (): HotelForm => ({ sel: '', name: '', vendorId: '', checkIn: '', checkOut: '', nights: 0, rooms: [newRoom()] });
 export const newTransfer = (): TransferForm => ({ vehicle: '7-seater', customVehicle: '', route: 'Airport → Makkah', customRoute: '', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
 export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', vendorId: '', cost: 0, sell: 0, include: true });
-export const blankAirline = (): AirlineForm => ({ sel: '', name: '', vendorId: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 });
+export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 });
 
 export function blankForm(): BuilderForm {
 	return {
@@ -186,7 +188,9 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 			if (!airlineSet) {
 				form.airline.name = l.label.split(' (')[0] ?? '';
 				form.airline.sel = l.rate_card_id ?? OTHER;
-				form.airline.vendorId = l.vendor_id ?? '';
+				form.airline.route = s(meta, 'route');
+				form.airline.fareClass = s(meta, 'fare_class');
+				form.airline.pnr = s(meta, 'pnr');
 				airlineSet = true;
 			}
 			const t = s(meta, 'pax_type');

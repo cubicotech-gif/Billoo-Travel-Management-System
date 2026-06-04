@@ -60,7 +60,10 @@ export interface VisaInput {
 export interface TicketsInput {
 	airlineName: string;
 	rateCardId?: string | null;
-	vendorId?: string | null;
+	// Flights are in-house (no vendor) — capture flight detail instead.
+	route?: string | null;
+	fareClass?: string | null;
+	pnr?: string | null;
 	adultCost: number;
 	adultSell: number;
 	childCost: number;
@@ -224,14 +227,19 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 				line_type: 'ticket',
 				label: `${t.airlineName} (${ty.key} ×${ty.count})`,
 				rateCardId: t.rateCardId ?? null,
-				vendorId: t.vendorId ?? null,
+				vendorId: null, // in-house ticketing
 				currency: 'PKR',
 				unitCost: ty.cost,
 				unitSell: ty.sell,
 				quantity: ty.count,
 				lineCost: toNumber(lineCost),
 				lineSell: toNumber(lineSell),
-				meta: { pax_type: ty.key }
+				meta: {
+					pax_type: ty.key,
+					route: t.route ?? null,
+					fare_class: t.fareClass ?? null,
+					pnr: t.pnr ?? null
+				}
 			});
 		}
 	}
