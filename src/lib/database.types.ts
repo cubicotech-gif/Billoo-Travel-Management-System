@@ -24,6 +24,19 @@ export type UserRole = 'admin' | 'manager' | 'agent' | 'finance' | 'viewer';
 
 export type PackageType = 'Umrah' | 'Tour' | 'Leisure';
 
+export type DocumentType =
+	| 'passport'
+	| 'cnic'
+	| 'visa'
+	| 'photo'
+	| 'vaccination'
+	| 'mahram'
+	| 'ticket'
+	| 'voucher'
+	| 'invoice'
+	| 'receipt'
+	| 'other';
+
 export type ServiceType = 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | 'Insurance' | 'Other';
 
 // Daily rate cards: hotel/transfer/visa are SAR, airline is PKR.
@@ -499,7 +512,7 @@ export interface Database {
 					id: string;
 					entity_type: 'query' | 'passenger' | 'vendor' | 'invoice';
 					entity_id: string;
-					document_type: 'passport' | 'visa' | 'ticket' | 'voucher' | 'invoice' | 'receipt' | 'other';
+					document_type: DocumentType;
 					file_name: string;
 					file_url: string;
 					file_size: number | null;
@@ -513,11 +526,12 @@ export interface Database {
 					id?: string;
 					entity_type: 'query' | 'passenger' | 'vendor' | 'invoice';
 					entity_id: string;
-					document_type: 'passport' | 'visa' | 'ticket' | 'voucher' | 'invoice' | 'receipt' | 'other';
+					document_type: DocumentType;
 					file_name: string;
 					file_url: string;
 					file_size?: number | null;
 					mime_type?: string | null;
+					expiry_date?: string | null;
 					notes?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['documents']['Insert']>;

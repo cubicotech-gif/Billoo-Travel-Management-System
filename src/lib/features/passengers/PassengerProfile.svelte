@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { ArrowLeft, Phone, Mail, MapPin } from 'lucide-svelte';
-	import { Badge, Card } from '$ui';
+	import { Badge, Card, WhatsAppLink } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { stageFor } from '$features/queries/workflow';
+	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
+	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
+	import { PASSENGER_DOCUMENT_TYPES } from '$features/documents/api';
 	import { usePassenger, usePassengerQueries } from './queries';
 	import { fullName } from './types';
 
@@ -29,12 +32,15 @@
 	{@const p = $passenger.data}
 	<div class="mb-6">
 		<h1 class="text-2xl font-bold text-slate-800">{fullName(p)}</h1>
-		<div class="mt-2 flex flex-wrap gap-4 text-sm text-slate-500">
+		<div class="mt-2 flex flex-wrap items-center gap-4 text-sm text-slate-500">
 			<span class="inline-flex items-center gap-1"><Phone class="h-4 w-4" /> {p.phone}</span>
+			<WhatsAppLink number={p.whatsapp ?? p.phone} label="WhatsApp" />
 			{#if p.email}<span class="inline-flex items-center gap-1"><Mail class="h-4 w-4" /> {p.email}</span>{/if}
 			{#if p.city}<span class="inline-flex items-center gap-1"><MapPin class="h-4 w-4" /> {p.city}</span>{/if}
 		</div>
 	</div>
+
+	<PassengerDocAlert passengerId={id} />
 
 	<div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
 		<Card>
@@ -90,4 +96,13 @@
 			</table>
 		</div>
 	{/if}
+
+	<div class="mt-8">
+		<DocumentsPanel
+			entityType="passenger"
+			entityId={id}
+			title="Document vault"
+			types={PASSENGER_DOCUMENT_TYPES}
+		/>
+	</div>
 {/if}
