@@ -124,6 +124,15 @@
 			</div>
 		</div>
 
+		{#if (q.itinerary_cities ?? []).length}
+			<div class="mt-3 border-t border-slate-100 pt-3 text-sm">
+				<span class="text-xs uppercase tracking-wide text-slate-400">Itinerary</span>
+				<div class="text-slate-700">
+					{(q.itinerary_cities ?? []).map((c) => `${c.city} ${c.nights}N`).join(' · ')}
+				</div>
+			</div>
+		{/if}
+
 		<!-- Completion chips -->
 		<div class="mt-4 flex flex-wrap gap-2">
 			<Badge tone={q.responded ? 'success' : 'neutral'}>{q.responded ? 'Responded' : 'Not responded'}</Badge>

@@ -1433,3 +1433,21 @@ CREATE INDEX IF NOT EXISTS idx_query_payments_query ON public.query_payments (qu
 DROP TRIGGER IF EXISTS update_query_payments_updated_at ON public.query_payments;
 CREATE TRIGGER update_query_payments_updated_at BEFORE UPDATE ON public.query_payments
 	FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+
+-- =====================================================
+-- Dynamic trip-type capture: Umrah Plus + city blocks
+-- =====================================================
+-- Run once (or re-run complete-schema.sql), then dev-open-access.sql.
+-- =====================================================
+
+ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_package_type_check;
+ALTER TABLE public.queries ADD CONSTRAINT queries_package_type_check CHECK (
+	package_type IS NULL OR package_type IN ('Umrah', 'Umrah Plus', 'Tour', 'Leisure')
+);
+
+-- Repeatable city blocks (Umrah cities, Umrah-Plus extra city, multi-city tours).
+-- Each: { city, arrival_date, nights, hotel_preference, activities }.
+ALTER TABLE public.queries
+	ADD COLUMN IF NOT EXISTS itinerary_cities JSONB DEFAULT '[]'::jsonb,
+	ADD COLUMN IF NOT EXISTS trip_country TEXT;
