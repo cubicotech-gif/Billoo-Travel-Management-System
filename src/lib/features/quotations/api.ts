@@ -29,6 +29,10 @@ export async function getQuotationLines(quotationId: string): Promise<QuotationL
 	);
 }
 
+export async function getQuotation(id: string): Promise<Quotation> {
+	return unwrap(await supabase.from('quotations').select('*').eq('id', id).single());
+}
+
 async function nextVersion(queryId: string): Promise<number> {
 	const { data, error } = await supabase
 		.from('quotations')
