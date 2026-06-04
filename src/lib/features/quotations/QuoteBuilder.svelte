@@ -57,6 +57,22 @@
 		{ value: '', label: 'Own / TBD' },
 		...($vendors.data ?? []).map((v) => ({ value: v.id, label: v.name }))
 	]);
+	const airlineOpts = $derived([
+		{ value: '', label: '— none —' },
+		...pool.filter((r) => r.item_type === 'airline').map((r) => ({ value: r.id, label: r.name })),
+		{ value: OTHER, label: 'Other — type manually' }
+	]);
+
+	function onAirlineSel() {
+		const a = form.airline;
+		if (a.sel === OTHER || !a.sel) return;
+		const r = rate(a.sel);
+		if (!r) return;
+		a.name = r.name;
+		a.adultCost = Number(r.cost_price);
+		a.adultSell = Number(r.selling_price);
+		if (r.vendor_id) a.vendorId = r.vendor_id;
+	}
 
 	const num = (v: number | string) => Number(v) || 0;
 
@@ -388,7 +404,10 @@
 			{#if form.airlineInclude}
 				<div class="space-y-3">
 					<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-						<Input label="Airline" bind:value={form.airline.name} placeholder="e.g. Saudia" />
+						<Select label="Airline (adult fare from rates)" bind:value={form.airline.sel} options={airlineOpts} onchange={onAirlineSel} />
+						{#if form.airline.sel === OTHER}
+							<Input label="Airline name" bind:value={form.airline.name} placeholder="e.g. Saudia" />
+						{/if}
 						<Select label="Vendor" bind:value={form.airline.vendorId} options={vendorOpts} />
 					</div>
 					<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
