@@ -48,12 +48,13 @@ describe('quotationToForm (edit reopen)', () => {
 		expect(form.adults).toBe(4);
 		expect(form.label).toBe('Gold');
 
-		// Makkah hotel with two room types preserved.
-		expect(form.makkah.name).toBe('Hilton');
-		expect(form.makkah.nights).toBe(5);
-		expect(form.makkah.checkIn).toBe('2026-03-03');
-		expect(form.makkah.rooms).toHaveLength(2);
-		expect(form.makkah.rooms[0]).toMatchObject({ rt: 'Quad', qty: 1, cost: 200, sell: 250 });
+		// Makkah hotel slot with two room types preserved.
+		const makkah = form.hotels.find((h) => h.city === 'Makkah')!;
+		expect(makkah.name).toBe('Hilton');
+		expect(makkah.nights).toBe(5);
+		expect(makkah.checkIn).toBe('2026-03-03');
+		expect(makkah.rooms).toHaveLength(2);
+		expect(makkah.rooms[0]).toMatchObject({ rt: 'Quad', qty: 1, cost: 200, sell: 250 });
 
 		expect(form.transfers[0]).toMatchObject({ vehicle: '7-seater', route: 'Airport → Makkah', vehicles: 2, sell: 380 });
 		expect(form.visa).toMatchObject({ include: true, type: 'Umrah', sell: 220 });
@@ -69,7 +70,8 @@ describe('quotationToForm (edit reopen)', () => {
 			line({ line_type: 'visa', meta: { visa_type: 'Work' } })
 		];
 		const form = quotationToForm(quotation, lines);
-		expect(form.madinah.rooms[0]).toMatchObject({ rt: 'Custom', customLabel: 'Penthouse', occupancy: 6 });
+		const madinah = form.hotels.find((h) => h.city === 'Madinah')!;
+		expect(madinah.rooms[0]).toMatchObject({ rt: 'Custom', customLabel: 'Penthouse', occupancy: 6 });
 		expect(form.transfers[0]).toMatchObject({ vehicle: 'Custom', customVehicle: 'Bus', route: 'Custom', customRoute: 'Makkah → Taif' });
 		expect(form.visa).toMatchObject({ type: 'Other', otherLabel: 'Work' });
 	});
