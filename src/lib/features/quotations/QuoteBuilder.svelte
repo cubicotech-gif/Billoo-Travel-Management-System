@@ -17,6 +17,7 @@
 	import { renderStructured, type WhatsAppData, type WhatsAppHotel } from './whatsapp';
 	import { addDays, defaultCheckIn, nightsBetween } from './dates';
 	import { useCreateQuotation } from './queries';
+	import { useSetQueryStatus } from '$features/queries/queries';
 	import { getQuotation, getQuotationLines } from './api';
 	import {
 		OTHER,
@@ -43,6 +44,7 @@
 	const vendors = useVendors();
 	const roe = useLatestRoe();
 	const createQuotation = untrack(() => useCreateQuotation(queryId));
+	const setStatus = useSetQueryStatus();
 
 	const pool = $derived(latestRates($rates.data ?? []));
 	const byId = $derived(new Map(pool.map((r) => [r.id, r])));
@@ -298,6 +300,11 @@
 			inclusions: splitLines(form.inclusions),
 			exclusions: splitLines(form.exclusions)
 		});
+		// Auto-advance: a saved quote means the query has been quoted.
+		const st = $queryDetail.data?.status;
+		if (st === 'New Query' || st === 'Working') {
+			$setStatus.mutate({ id: queryId, status: 'Quoted' });
+		}
 		if (addAnother) resetLines();
 	}
 </script>
