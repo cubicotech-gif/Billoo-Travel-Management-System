@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Pencil, Plus, Trash2 } from 'lucide-svelte';
-	import { Button } from '$ui';
+	import { Button, WhatsAppLink } from '$ui';
 	import { usePassengers, useDeletePassenger } from '$features/passengers/queries';
 	import PassengerModal from '$features/passengers/PassengerModal.svelte';
 	import { fullName, type Passenger } from '$features/passengers/types';
@@ -58,7 +58,7 @@
 						<td class="px-4 py-3 font-medium text-slate-700">
 							<a href="/passengers/{p.id}" class="hover:text-brand-600">{fullName(p)}</a>
 						</td>
-						<td class="px-4 py-3 text-slate-600">{p.phone}</td>
+						<td class="px-4 py-3"><WhatsAppLink number={p.whatsapp ?? p.phone} label={p.phone} /></td>
 						<td class="px-4 py-3 text-slate-500">{p.city ?? '—'}</td>
 						<td class="px-4 py-3 text-slate-500">{p.passport_number ?? '—'}</td>
 						<td class="px-4 py-3">

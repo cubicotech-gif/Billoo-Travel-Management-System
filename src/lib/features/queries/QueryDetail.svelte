@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { ArrowLeft, ArrowRight, Ban, FileText, Map } from 'lucide-svelte';
-	import { Badge, Button, Card } from '$ui';
+	import { Badge, Button, Card, WhatsAppLink } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { useQueryDetail, useSetQueryStatus } from './queries';
 	import {
@@ -17,6 +17,8 @@
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingPanel from '$features/bookings/BookingPanel.svelte';
 	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
+	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
+	import { QUERY_DOCUMENT_TYPES } from '$features/documents/api';
 
 	// `id` is stable for this component instance: the route keys on it, so a
 	// different query remounts us.
@@ -56,10 +58,13 @@
 				{/if}
 			</div>
 			<p class="mt-1 font-mono text-xs text-slate-400">{q.query_number}</p>
-			<p class="mt-1 text-sm text-slate-500">
-				{q.destination} · {q.adults} adult{q.adults === 1 ? '' : 's'}{q.children
-					? `, ${q.children} child`
-					: ''}{q.infants ? `, ${q.infants} infant` : ''} · {q.client_phone}
+			<p class="mt-1 flex flex-wrap items-center gap-x-1 text-sm text-slate-500">
+				<span>
+					{q.destination} · {q.adults} adult{q.adults === 1 ? '' : 's'}{q.children
+						? `, ${q.children} child`
+						: ''}{q.infants ? `, ${q.infants} infant` : ''} ·
+				</span>
+				<WhatsAppLink number={q.client_phone} />
 			</p>
 		</div>
 		<!-- Guided controls: back / advance / cancel (or restore) -->
@@ -85,6 +90,10 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if q.passenger_id}
+		<PassengerDocAlert passengerId={q.passenger_id} />
+	{/if}
 
 	<Stepper status={q.status} />
 
@@ -134,7 +143,7 @@
 		</div>
 
 		<div class="mb-8">
-			<DocumentsPanel entityType="query" entityId={id} />
+			<DocumentsPanel entityType="query" entityId={id} types={QUERY_DOCUMENT_TYPES} />
 		</div>
 	{/if}
 {/if}

@@ -1,19 +1,47 @@
 import { supabase } from '$lib/supabase';
-import type { Database } from '$lib/database.types';
+import type { Database, DocumentType } from '$lib/database.types';
 
 export type Document = Database['public']['Tables']['documents']['Row'];
-export type DocumentType = Document['document_type'];
+export type { DocumentType };
 export type DocumentEntity = Document['entity_type'];
 
-export const DOCUMENT_TYPES: DocumentType[] = [
+/** Passenger identity/eligibility docs (the reusable vault). */
+export const PASSENGER_DOCUMENT_TYPES: DocumentType[] = [
 	'passport',
+	'cnic',
 	'visa',
+	'photo',
+	'vaccination',
+	'mahram',
+	'other'
+];
+
+/** Booking/trip docs attached to a query. */
+export const QUERY_DOCUMENT_TYPES: DocumentType[] = [
 	'ticket',
 	'voucher',
 	'invoice',
 	'receipt',
+	'passport',
+	'visa',
 	'other'
 ];
+
+export const DOCUMENT_TYPES: DocumentType[] = PASSENGER_DOCUMENT_TYPES;
+
+/** Document types that carry a meaningful expiry (eligibility-critical). */
+export const EXPIRABLE_TYPES: DocumentType[] = ['passport', 'visa', 'vaccination'];
+
+export type ExpiryStatus = 'expired' | 'soon' | 'ok';
+
+/** 'soon' = within 6 months — the Hajj/Umrah passport-validity rule. */
+export function expiryStatus(date: string | null): ExpiryStatus | null {
+	if (!date) return null;
+	const days = (new Date(date).getTime() - Date.now()) / 86_400_000;
+	if (days < 0) return 'expired';
+	if (days < 183) return 'soon';
+	return 'ok';
+}
 
 const BUCKET = 'documents';
 
@@ -42,6 +70,7 @@ export interface UploadArgs {
 	entityType: DocumentEntity;
 	entityId: string;
 	documentType: DocumentType;
+	expiryDate?: string | null;
 }
 
 /** Upload to Storage (private bucket) then record the metadata row. */
@@ -62,7 +91,8 @@ export async function uploadDocument(args: UploadArgs): Promise<Document> {
 				file_name: args.file.name,
 				file_url: path,
 				file_size: args.file.size,
-				mime_type: args.file.type || null
+				mime_type: args.file.type || null,
+				expiry_date: args.expiryDate || null
 			})
 			.select()
 			.single()
