@@ -5,3 +5,4 @@ export { default as Input } from './Input.svelte';
 export { default as Select } from './Select.svelte';
 export { default as Modal } from './Modal.svelte';
 export { default as WhatsAppLink } from './WhatsAppLink.svelte';
+export { default as BulkImportModal } from './BulkImportModal.svelte';

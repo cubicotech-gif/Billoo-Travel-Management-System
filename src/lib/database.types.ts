@@ -187,6 +187,7 @@ export interface Database {
 					email: string | null;
 					phone: string | null;
 					whatsapp_number: string | null;
+					whatsapp_group: string | null;
 					address: string | null;
 					balance: number;
 					rating: number | null;
@@ -212,6 +213,7 @@ export interface Database {
 					email?: string | null;
 					phone?: string | null;
 					whatsapp_number?: string | null;
+					whatsapp_group?: string | null;
 					address?: string | null;
 					location?: string | null;
 					country?: string | null;

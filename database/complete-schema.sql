@@ -1465,3 +1465,10 @@ ALTER TABLE public.quotations
 	ADD COLUMN IF NOT EXISTS valid_until DATE,
 	ADD COLUMN IF NOT EXISTS inclusions TEXT[] DEFAULT '{}',
 	ADD COLUMN IF NOT EXISTS exclusions TEXT[] DEFAULT '{}';
+
+
+-- Vendor WhatsApp group link (Billoo works with vendors via shared WA groups).
+-- Run once (or re-run complete-schema.sql), then dev-open-access.sql.
+
+ALTER TABLE public.vendors
+	ADD COLUMN IF NOT EXISTS whatsapp_group TEXT;
