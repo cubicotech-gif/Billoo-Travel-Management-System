@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { Pencil, Plus, Trash2, RefreshCw } from 'lucide-svelte';
-	import { Badge, Button, Card, Input } from '$ui';
+	import { Pencil, Plus, Trash2, RefreshCw, Upload } from 'lucide-svelte';
+	import { useQueryClient } from '@tanstack/svelte-query';
+	import { Badge, Button, Card, Input, BulkImportModal } from '$ui';
 	import { formatAmount } from '$lib/money';
-	import type { RateItemType } from '$lib/database.types';
+	import type { Currency, RateItemType } from '$lib/database.types';
 	import { useVendors } from '$features/vendors/queries';
 	import {
 		useRates,
@@ -10,6 +11,7 @@
 		useLatestRoe,
 		useSetRoe
 	} from '$features/rates/queries';
+	import { bulkCreateRates } from '$features/rates/api';
 	import { RATE_TYPES, RATE_TYPE_BY_KEY, type RateCard } from '$features/rates/types';
 	import RateModal from '$features/rates/RateModal.svelte';
 
@@ -18,6 +20,32 @@
 	const deleteRate = useDeleteRate();
 	const latestRoe = useLatestRoe();
 	const setRoe = useSetRoe();
+	const client = useQueryClient();
+
+	let bulkOpen = $state(false);
+	const RATE_KEYS: RateItemType[] = ['hotel', 'transfer', 'visa', 'airline'];
+
+	async function importRates(rows: string[][]): Promise<number> {
+		const toInsert = rows
+			.map((r) => {
+				const type = (r[0] ?? '').trim().toLowerCase() as RateItemType;
+				if (!RATE_KEYS.includes(type) || !r[1]?.trim()) return null;
+				const cfg = RATE_TYPE_BY_KEY[type];
+				return {
+					item_type: type,
+					name: r[1].trim(),
+					city: r[2]?.trim() || null,
+					currency: cfg.currency as Currency,
+					unit: cfg.unit,
+					cost_price: Number(r[3]) || 0,
+					selling_price: Number(r[4]) || 0
+				};
+			})
+			.filter((x): x is NonNullable<typeof x> => x !== null);
+		const n = await bulkCreateRates(toInsert);
+		await client.invalidateQueries({ queryKey: ['rates'] });
+		return n;
+	}
 
 	let activeType = $state<RateItemType>('hotel');
 	let modalOpen = $state(false);
@@ -99,7 +127,10 @@
 			</button>
 		{/each}
 	</div>
-	<Button size="sm" onclick={openAdd}><Plus class="h-4 w-4" /> Add {config.label} rate</Button>
+	<div class="flex gap-2">
+		<Button size="sm" variant="secondary" onclick={() => (bulkOpen = true)}><Upload class="h-4 w-4" /> Bulk import</Button>
+		<Button size="sm" onclick={openAdd}><Plus class="h-4 w-4" /> Add {config.label} rate</Button>
+	</div>
 </div>
 
 {#if $rates.isLoading}
@@ -156,3 +187,12 @@
 {/if}
 
 <RateModal itemType={activeType} rate={editing} open={modalOpen} onClose={() => (modalOpen = false)} />
+
+<BulkImportModal
+	open={bulkOpen}
+	onClose={() => (bulkOpen = false)}
+	title="Bulk import rates"
+	columns={['Type (hotel/transfer/visa/airline)', 'Name', 'City', 'Cost', 'Sell']}
+	example={'hotel\tHilton Makkah\tMakkah\t200\t250\ntransfer\tSedan\t\t300\t380\nairline\tSaudia\t\t150000\t180000'}
+	onImport={importRates}
+/>

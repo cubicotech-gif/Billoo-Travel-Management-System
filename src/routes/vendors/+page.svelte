@@ -1,15 +1,38 @@
 <script lang="ts">
-	import { Pencil, Plus, Trash2 } from 'lucide-svelte';
-	import { Badge, Button } from '$ui';
+	import { Pencil, Plus, Trash2, MessageCircle, Upload } from 'lucide-svelte';
+	import { useQueryClient } from '@tanstack/svelte-query';
+	import { Badge, Button, BulkImportModal } from '$ui';
 	import { useVendors, useDeleteVendor } from '$features/vendors/queries';
+	import { bulkCreateVendors } from '$features/vendors/api';
+	import { primaryType, type Vendor } from '$features/vendors/types';
 	import VendorModal from '$features/vendors/VendorModal.svelte';
-	import type { Vendor } from '$features/vendors/types';
 
 	const vendors = useVendors();
 	const deleteVendor = useDeleteVendor();
+	const client = useQueryClient();
 
 	let modalOpen = $state(false);
+	let bulkOpen = $state(false);
 	let editing = $state<Vendor | null>(null);
+
+	async function importVendors(rows: string[][]): Promise<number> {
+		const toInsert = rows
+			.filter((r) => r[0]?.trim())
+			.map((r) => {
+				const services = (r[1] ?? '').split(/[|;]/).map((s) => s.trim()).filter(Boolean);
+				return {
+					name: (r[0] ?? '').trim(),
+					type: primaryType(services),
+					service_types: services,
+					phone: r[2]?.trim() || null,
+					whatsapp_group: r[3]?.trim() || null,
+					location: r[4]?.trim() || null
+				};
+			});
+		const n = await bulkCreateVendors(toInsert);
+		await client.invalidateQueries({ queryKey: ['vendors'] });
+		return n;
+	}
 
 	function openAdd() {
 		editing = null;
@@ -30,7 +53,10 @@
 		<h1 class="text-2xl font-bold text-slate-800">Vendors</h1>
 		<p class="text-sm text-slate-500">Suppliers you book hotels, transfers, visas and tickets from.</p>
 	</div>
-	<Button onclick={openAdd}><Plus class="h-4 w-4" /> Add vendor</Button>
+	<div class="flex gap-2">
+		<Button variant="secondary" onclick={() => (bulkOpen = true)}><Upload class="h-4 w-4" /> Bulk import</Button>
+		<Button onclick={openAdd}><Plus class="h-4 w-4" /> Add vendor</Button>
+	</div>
 </div>
 
 {#if $vendors.isLoading}
@@ -48,7 +74,7 @@
 				<tr>
 					<th class="px-4 py-3 font-medium">Name</th>
 					<th class="px-4 py-3 font-medium">Services</th>
-					<th class="px-4 py-3 font-medium">Contact</th>
+					<th class="px-4 py-3 font-medium">WhatsApp group</th>
 					<th class="px-4 py-3 font-medium">Phone</th>
 					<th class="px-4 py-3 font-medium">Location</th>
 					<th class="px-4 py-3"></th>
@@ -65,7 +91,13 @@
 								{/each}
 							</div>
 						</td>
-						<td class="px-4 py-3 text-slate-600">{v.contact_person ?? '—'}</td>
+						<td class="px-4 py-3">
+							{#if v.whatsapp_group}
+								<a href={v.whatsapp_group} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-green-600 hover:underline">
+									<MessageCircle class="h-4 w-4" /> Open group
+								</a>
+							{:else}<span class="text-slate-400">—</span>{/if}
+						</td>
 						<td class="px-4 py-3 text-slate-600">{v.phone ?? v.whatsapp_number ?? '—'}</td>
 						<td class="px-4 py-3 text-slate-500">{v.location ?? '—'}</td>
 						<td class="px-4 py-3">
@@ -86,3 +118,12 @@
 {/if}
 
 <VendorModal vendor={editing} open={modalOpen} onClose={() => (modalOpen = false)} />
+
+<BulkImportModal
+	open={bulkOpen}
+	onClose={() => (bulkOpen = false)}
+	title="Bulk import vendors"
+	columns={['Name', 'Services (| separated)', 'Phone', 'WhatsApp group link', 'City']}
+	example={'Al Safwah Transport\tTransfer|Ground Handling\t+96650…\thttps://chat.whatsapp.com/abc\tMakkah'}
+	onImport={importVendors}
+/>

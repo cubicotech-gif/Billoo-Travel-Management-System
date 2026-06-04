@@ -24,6 +24,14 @@ export async function createRate(input: NewRateCard): Promise<RateCard> {
 	return unwrap<RateCard>(await supabase.from('rate_cards').insert(input).select().single());
 }
 
+/** Insert many rates at once (bulk import). Returns the count inserted. */
+export async function bulkCreateRates(rows: NewRateCard[]): Promise<number> {
+	if (rows.length === 0) return 0;
+	const { error, data } = await supabase.from('rate_cards').insert(rows).select('id');
+	if (error) throw new Error(error.message);
+	return data?.length ?? 0;
+}
+
 export async function updateRate(id: string, patch: RateCardUpdate): Promise<RateCard> {
 	return unwrap<RateCard>(
 		await supabase.from('rate_cards').update(patch).eq('id', id).select().single()

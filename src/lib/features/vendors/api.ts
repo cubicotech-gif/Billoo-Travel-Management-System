@@ -23,6 +23,14 @@ export async function createVendor(input: NewVendor): Promise<Vendor> {
 	return unwrap<Vendor>(await supabase.from('vendors').insert(input).select().single());
 }
 
+/** Insert many vendors at once (bulk import). Returns the count inserted. */
+export async function bulkCreateVendors(rows: NewVendor[]): Promise<number> {
+	if (rows.length === 0) return 0;
+	const { error, data } = await supabase.from('vendors').insert(rows).select('id');
+	if (error) throw new Error(error.message);
+	return data?.length ?? 0;
+}
+
 export async function updateVendor(id: string, patch: VendorUpdate): Promise<Vendor> {
 	return unwrap<Vendor>(await supabase.from('vendors').update(patch).eq('id', id).select().single());
 }

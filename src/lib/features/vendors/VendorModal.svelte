@@ -20,7 +20,7 @@
 		services: [] as string[],
 		contact_person: '',
 		phone: '',
-		whatsapp_number: '',
+		whatsapp_group: '',
 		email: '',
 		location: '',
 		notes: ''
@@ -34,7 +34,7 @@
 				services: v?.service_types?.length ? [...v.service_types] : [],
 				contact_person: v?.contact_person ?? '',
 				phone: v?.phone ?? '',
-				whatsapp_number: v?.whatsapp_number ?? '',
+				whatsapp_group: v?.whatsapp_group ?? '',
 				email: v?.email ?? '',
 				location: v?.location ?? '',
 				notes: v?.notes ?? ''
@@ -58,7 +58,7 @@
 			service_types: form.services,
 			contact_person: form.contact_person || null,
 			phone: form.phone || null,
-			whatsapp_number: form.whatsapp_number || null,
+			whatsapp_group: form.whatsapp_group || null,
 			email: form.email || null,
 			location: form.location || null,
 			notes: form.notes || null
@@ -95,7 +95,7 @@
 		</div>
 		<div class="grid grid-cols-2 gap-3">
 			<Input label="Phone" bind:value={form.phone} />
-			<Input label="WhatsApp" bind:value={form.whatsapp_number} />
+			<Input label="WhatsApp group link" bind:value={form.whatsapp_group} placeholder="https://chat.whatsapp.com/…" />
 		</div>
 		<Input label="Email" type="email" bind:value={form.email} />
 		<Input label="Notes" bind:value={form.notes} />
