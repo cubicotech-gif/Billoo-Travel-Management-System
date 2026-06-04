@@ -83,7 +83,9 @@
 			<tbody class="divide-y divide-slate-50">
 				{#each $vendors.data ?? [] as v (v.id)}
 					<tr class="hover:bg-slate-50">
-						<td class="px-4 py-3 font-medium text-slate-700">{v.name}</td>
+						<td class="px-4 py-3 font-medium text-slate-700">
+							<a href="/vendors/{v.id}" class="hover:text-brand-600">{v.name}</a>
+						</td>
 						<td class="px-4 py-3">
 							<div class="flex flex-wrap gap-1">
 								{#each v.service_types?.length ? v.service_types : [v.type] as s (s)}

@@ -281,6 +281,33 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['staff']['Insert']>;
 				Relationships: [];
 			};
+			vendor_payments: {
+				Row: {
+					id: string;
+					vendor_id: string;
+					booking_id: string | null;
+					query_id: string | null;
+					amount: number;
+					payment_date: string | null;
+					method: string | null;
+					reference: string | null;
+					notes: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					vendor_id: string;
+					booking_id?: string | null;
+					query_id?: string | null;
+					amount?: number;
+					payment_date?: string | null;
+					method?: string | null;
+					reference?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['vendor_payments']['Insert']>;
+				Relationships: [];
+			};
 			query_payments: {
 				Row: {
 					id: string;
