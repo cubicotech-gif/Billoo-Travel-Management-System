@@ -2,7 +2,7 @@
 	import { Button } from '$ui';
 	import { Plus } from 'lucide-svelte';
 	import { useQueries, useSetQueryStatus } from '$features/queries/queries';
-	import { WORKFLOW_STAGES } from '$features/queries/workflow';
+	import { WORKFLOW_STAGES, daysSince, isStuck } from '$features/queries/workflow';
 	import type { QueryStatus } from '$lib/database.types';
 	import type { Query } from '$features/queries/types';
 	import { formatAmount } from '$lib/money';
@@ -94,11 +94,16 @@
 							<div class="mt-0.5 text-xs text-slate-500">{q.destination}</div>
 							<div class="mt-2 flex items-center justify-between">
 								<span class="font-mono text-[10px] text-slate-400">{q.query_number}</span>
-								{#if Number(q.selling_price) > 0}
-									<span class="text-xs font-semibold text-green-600">
-										{formatAmount(Number(q.profit))}
-									</span>
-								{/if}
+								<div class="flex items-center gap-2">
+									{#if isStuck(q.status, daysSince(q.stage_changed_at))}
+										<span class="rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-600">
+											{daysSince(q.stage_changed_at)}d
+										</span>
+									{/if}
+									{#if Number(q.selling_price) > 0}
+										<span class="text-xs font-semibold text-green-600">{formatAmount(Number(q.profit))}</span>
+									{/if}
+								</div>
 							</div>
 						</a>
 					{/each}

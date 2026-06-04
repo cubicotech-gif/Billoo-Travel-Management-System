@@ -116,6 +116,8 @@ export interface Database {
 					responded: boolean | null;
 					response_text: string | null;
 					initial_quotation: string | null;
+					stage_changed_at: string | null;
+					voucher_sent_at: string | null;
 					created_at: string;
 					updated_at: string;
 				};
@@ -158,6 +160,8 @@ export interface Database {
 					responded?: boolean | null;
 					response_text?: string | null;
 					initial_quotation?: string | null;
+					stage_changed_at?: string | null;
+					voucher_sent_at?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['queries']['Insert']>;
 				Relationships: [];
@@ -260,6 +264,36 @@ export interface Database {
 				};
 				Insert: { id?: string; name: string; active?: boolean };
 				Update: Partial<Database['public']['Tables']['staff']['Insert']>;
+				Relationships: [];
+			};
+			query_payments: {
+				Row: {
+					id: string;
+					query_id: string;
+					label: string;
+					amount: number;
+					due_date: string | null;
+					status: 'pending' | 'paid';
+					paid_date: string | null;
+					method: string | null;
+					reference: string | null;
+					notes: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					label?: string;
+					amount?: number;
+					due_date?: string | null;
+					status?: 'pending' | 'paid';
+					paid_date?: string | null;
+					method?: string | null;
+					reference?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['query_payments']['Insert']>;
 				Relationships: [];
 			};
 			query_services: {

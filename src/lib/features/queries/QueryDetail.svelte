@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ArrowLeft, ArrowRight, Ban, FileText, Map } from 'lucide-svelte';
+	import { ArrowLeft, ArrowRight, Ban, Map } from 'lucide-svelte';
 	import { Badge, Button, Card, WhatsAppLink } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { useQueryDetail, useSetQueryStatus } from './queries';
@@ -10,10 +10,14 @@
 		stageFor,
 		nextStatus,
 		prevStatus,
-		isCancelled
+		isCancelled,
+		daysSince,
+		isStuck
 	} from './workflow';
 	import Stepper from './Stepper.svelte';
 	import StageActions from './StageActions.svelte';
+	import ConfirmationPanel from './ConfirmationPanel.svelte';
+	import PaymentSchedule from '$features/payments/PaymentSchedule.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingPanel from '$features/bookings/BookingPanel.svelte';
 	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
@@ -48,46 +52,85 @@
 	{@const q = $query.data}
 	{@const next = nextStatus(q.status)}
 	{@const prev = prevStatus(q.status)}
-	<div class="mb-6 flex flex-wrap items-start justify-between gap-4">
-		<div>
-			<div class="flex items-center gap-3">
-				<h1 class="text-2xl font-bold text-slate-800">{q.client_name}</h1>
-				<Badge tone={stageFor(q.status).tone}>{stageFor(q.status).label}</Badge>
-				{#if q.status === 'Booking' && q.booking_status}
-					<Badge tone={BOOKING_STATUS_TONE[q.booking_status]}>{q.booking_status}</Badge>
+	{@const days = daysSince(q.stage_changed_at)}
+	{@const stuck = isStuck(q.status, days)}
+	{@const reference = `BLO-${new Date(q.created_at).getFullYear()}-${q.query_number.slice(-4)}`}
+	<!-- Rich summary header: state at a glance, not a blank form. -->
+	<div class="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+		<div class="flex flex-wrap items-start justify-between gap-4">
+			<div>
+				<div class="flex flex-wrap items-center gap-3">
+					<h1 class="text-2xl font-bold text-slate-800">{q.client_name}</h1>
+					<Badge tone={stageFor(q.status).tone}>{stageFor(q.status).label}</Badge>
+					{#if q.status === 'Booking' && q.booking_status}
+						<Badge tone={BOOKING_STATUS_TONE[q.booking_status]}>{q.booking_status}</Badge>
+					{/if}
+					{#if stuck}<Badge tone="danger">Stuck · {days}d</Badge>{/if}
+				</div>
+				<div class="mt-1 flex flex-wrap items-center gap-x-3 text-sm text-slate-500">
+					<span class="font-mono text-xs font-semibold text-slate-600">{reference}</span>
+					<WhatsAppLink number={q.client_phone} />
+				</div>
+			</div>
+			<!-- Guided controls: back / advance / cancel (or restore) -->
+			<div class="flex items-center gap-2">
+				{#if isCancelled(q.status)}
+					<Button variant="secondary" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: 'New Query' })}>
+						Restore to New Query
+					</Button>
+				{:else}
+					{#if prev}
+						<Button variant="ghost" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: prev })}>
+							<ArrowLeft class="h-4 w-4" /> Back
+						</Button>
+					{/if}
+					{#if next}
+						<Button disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: next })}>
+							Advance to {STAGE_BY_STATUS[next].label} <ArrowRight class="h-4 w-4" />
+						</Button>
+					{/if}
+					<Button variant="ghost" disabled={$setStatus.isPending} onclick={cancelQuery}>
+						<Ban class="h-4 w-4" /> Cancel
+					</Button>
 				{/if}
 			</div>
-			<p class="mt-1 font-mono text-xs text-slate-400">{q.query_number}</p>
-			<p class="mt-1 flex flex-wrap items-center gap-x-1 text-sm text-slate-500">
-				<span>
-					{q.destination} · {q.adults} adult{q.adults === 1 ? '' : 's'}{q.children
-						? `, ${q.children} child`
-						: ''}{q.infants ? `, ${q.infants} infant` : ''} ·
-				</span>
-				<WhatsAppLink number={q.client_phone} />
-			</p>
 		</div>
-		<!-- Guided controls: back / advance / cancel (or restore) -->
-		<div class="flex items-center gap-2">
-			{#if isCancelled(q.status)}
-				<Button variant="secondary" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: 'New Query' })}>
-					Restore to New Query
-				</Button>
-			{:else}
-				{#if prev}
-					<Button variant="ghost" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: prev })}>
-						<ArrowLeft class="h-4 w-4" /> Back
-					</Button>
-				{/if}
-				{#if next}
-					<Button disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: next })}>
-						Advance to {STAGE_BY_STATUS[next].label} <ArrowRight class="h-4 w-4" />
-					</Button>
-				{/if}
-				<Button variant="ghost" disabled={$setStatus.isPending} onclick={cancelQuery}>
-					<Ban class="h-4 w-4" /> Cancel
-				</Button>
-			{/if}
+
+		<!-- Facts -->
+		<div class="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 text-sm sm:grid-cols-3 lg:grid-cols-5">
+			<div>
+				<div class="text-xs uppercase tracking-wide text-slate-400">Package</div>
+				<div class="font-medium text-slate-700">{q.package_type ?? q.destination}</div>
+			</div>
+			<div>
+				<div class="text-xs uppercase tracking-wide text-slate-400">Pax</div>
+				<div class="font-medium text-slate-700">
+					{q.adults}A{q.children ? ` · ${q.children}C` : ''}{q.infants ? ` · ${q.infants}I` : ''}
+				</div>
+			</div>
+			<div>
+				<div class="text-xs uppercase tracking-wide text-slate-400">Est. value</div>
+				<div class="font-medium text-slate-700">
+					{Number(q.selling_price) > 0 ? formatAmount(Number(q.selling_price), 'PKR') : '—'}
+				</div>
+			</div>
+			<div>
+				<div class="text-xs uppercase tracking-wide text-slate-400">Owner</div>
+				<div class="font-medium text-slate-700">{q.created_by_staff ?? '—'}</div>
+			</div>
+			<div>
+				<div class="text-xs uppercase tracking-wide text-slate-400">In stage</div>
+				<div class="font-medium {stuck ? 'text-red-600' : 'text-slate-700'}">{days}d</div>
+			</div>
+		</div>
+
+		<!-- Completion chips -->
+		<div class="mt-4 flex flex-wrap gap-2">
+			<Badge tone={q.responded ? 'success' : 'neutral'}>{q.responded ? 'Responded' : 'Not responded'}</Badge>
+			<Badge tone={Number(q.selling_price) > 0 ? 'success' : 'neutral'}>{Number(q.selling_price) > 0 ? 'Priced' : 'Not priced'}</Badge>
+			<Badge tone={q.advance_payment_amount ? 'success' : 'warning'}>
+				{q.advance_payment_amount ? `Advance ${formatAmount(Number(q.advance_payment_amount), 'PKR')}` : 'No advance'}
+			</Badge>
 		</div>
 	</div>
 
@@ -133,10 +176,15 @@
 			<BookingPanel queryId={id} />
 		</div>
 
-		<div class="mb-4 flex gap-2">
-			<Button variant="secondary" size="sm" href="/queries/{id}/voucher">
-				<FileText class="h-4 w-4" /> Voucher
-			</Button>
+		<div class="mb-8">
+			<PaymentSchedule queryId={id} sellingPkr={Number(q.selling_price)} />
+		</div>
+
+		<div class="mb-8">
+			<ConfirmationPanel query={q} queryId={id} />
+		</div>
+
+		<div class="mb-4">
 			<Button variant="secondary" size="sm" href="/queries/{id}/itinerary">
 				<Map class="h-4 w-4" /> Itinerary
 			</Button>
