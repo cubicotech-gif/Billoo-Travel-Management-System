@@ -6,6 +6,7 @@
 	import { formatAmount } from '$lib/money';
 	import { BOOKING_STATUSES, BOOKING_STATUS_TONE } from './workflow';
 	import { useUpdateQuery } from './queries';
+	import IntakeSummary from './IntakeSummary.svelte';
 	import type { Query } from './types';
 
 	let { query }: { query: Query } = $props();
@@ -53,34 +54,27 @@
 
 {#if query.status === 'New Query'}
 	<Card title="New Query — intake">
-		<div class="flex items-start gap-3 text-sm text-slate-500">
+		<div class="mb-4 flex items-start gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-500">
 			<Clock class="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-			<p>
-				Logged, not yet priced. Capture the client's request (full intake form coming in the CRM
-				phase), then advance to <span class="font-medium text-slate-700">Working</span> to build the
-				quotation.
-			</p>
+			<p>Logged, not yet priced. Review the intake below, then advance to <span class="font-medium text-slate-700">Working</span> to build the quotation.</p>
 		</div>
+		<IntakeSummary {query} />
 	</Card>
 {:else if query.status === 'Working'}
 	<Card title="Working — build the quotation">
-		<div class="flex items-start gap-3 text-sm text-slate-500">
+		<div class="mb-4 flex items-start gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-500">
 			<Calculator class="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-			<p>
-				Price the package below (the SAR/PKR rate calculator arrives in a later phase). When the
-				quote is ready, advance to <span class="font-medium text-slate-700">Quoted</span> to send it
-				to the client.
-			</p>
+			<p>Build the package in the quotation builder below — it auto-fills from this intake. Saving a quote moves the query to <span class="font-medium text-slate-700">Quoted</span>.</p>
 		</div>
+		<IntakeSummary {query} />
 	</Card>
 {:else if query.status === 'Quoted'}
 	<Card title="Quoted — awaiting client">
 		<div class="flex items-start gap-3 text-sm text-slate-500">
 			<FileCheck class="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
 			<p>
-				Quotation shared; awaiting the client's decision. If they want changes, move
-				<span class="font-medium text-slate-700">Back</span> to Working; if they approve, advance to
-				<span class="font-medium text-slate-700">Booking</span>.
+				Quotation(s) shared — awaiting the client's decision. <span class="font-medium text-slate-700">Open proposal</span> to re-send, move
+				<span class="font-medium text-slate-700">Back</span> to Working for changes, or <span class="font-medium text-slate-700">Accept</span> a tier to convert to a booking.
 			</p>
 		</div>
 	</Card>

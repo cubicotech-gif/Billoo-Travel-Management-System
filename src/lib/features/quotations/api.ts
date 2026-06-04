@@ -138,9 +138,13 @@ export async function updateQuotation(
  */
 export async function acceptQuotation(quotation: Quotation): Promise<void> {
 	await setQuotationStatus(quotation.id, 'accepted');
+	// Accepting a tier moves the query into the Booking stage and copies its
+	// totals onto the query (so the booking auto-populates).
 	await updateQuery(quotation.query_id, {
 		cost_price: quotation.total_cost_pkr,
-		selling_price: quotation.total_sell_pkr
+		selling_price: quotation.total_sell_pkr,
+		status: 'Booking',
+		stage_changed_at: new Date().toISOString()
 	});
 }
 
