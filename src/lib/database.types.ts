@@ -117,6 +117,7 @@ export interface Database {
 					response_text: string | null;
 					initial_quotation: string | null;
 					stage_changed_at: string | null;
+					voucher_sent_at: string | null;
 					created_at: string;
 					updated_at: string;
 				};
@@ -160,6 +161,7 @@ export interface Database {
 					response_text?: string | null;
 					initial_quotation?: string | null;
 					stage_changed_at?: string | null;
+					voucher_sent_at?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['queries']['Insert']>;
 				Relationships: [];

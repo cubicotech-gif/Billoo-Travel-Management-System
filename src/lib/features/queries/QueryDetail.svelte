@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ArrowLeft, ArrowRight, Ban, FileText, Map } from 'lucide-svelte';
+	import { ArrowLeft, ArrowRight, Ban, Map } from 'lucide-svelte';
 	import { Badge, Button, Card, WhatsAppLink } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { useQueryDetail, useSetQueryStatus } from './queries';
@@ -16,6 +16,7 @@
 	} from './workflow';
 	import Stepper from './Stepper.svelte';
 	import StageActions from './StageActions.svelte';
+	import ConfirmationPanel from './ConfirmationPanel.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingPanel from '$features/bookings/BookingPanel.svelte';
 	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
@@ -174,10 +175,11 @@
 			<BookingPanel queryId={id} />
 		</div>
 
-		<div class="mb-4 flex gap-2">
-			<Button variant="secondary" size="sm" href="/queries/{id}/voucher">
-				<FileText class="h-4 w-4" /> Voucher
-			</Button>
+		<div class="mb-8">
+			<ConfirmationPanel query={q} queryId={id} />
+		</div>
+
+		<div class="mb-4">
 			<Button variant="secondary" size="sm" href="/queries/{id}/itinerary">
 				<Map class="h-4 w-4" /> Itinerary
 			</Button>

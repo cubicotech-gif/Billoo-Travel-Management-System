@@ -1398,3 +1398,10 @@ ALTER TABLE public.documents ADD CONSTRAINT documents_document_type_check CHECK 
 
 ALTER TABLE public.queries
 	ADD COLUMN IF NOT EXISTS stage_changed_at TIMESTAMPTZ DEFAULT NOW();
+
+
+-- Track when the booking voucher was shared with the client (green-tick state).
+-- Run once (or re-run complete-schema.sql), then dev-open-access.sql.
+
+ALTER TABLE public.queries
+	ADD COLUMN IF NOT EXISTS voucher_sent_at TIMESTAMPTZ;
