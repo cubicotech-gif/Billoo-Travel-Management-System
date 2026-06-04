@@ -3,7 +3,7 @@
 
 	interface Props extends HTMLInputAttributes {
 		label?: string;
-		value: string | number;
+		value: string | number | null;
 	}
 
 	let { label, value = $bindable(), class: klass = '', ...rest }: Props = $props();

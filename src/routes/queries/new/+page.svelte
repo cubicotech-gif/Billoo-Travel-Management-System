@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, Settings2 } from 'lucide-svelte';
+	import { ArrowLeft, Settings2, Plus } from 'lucide-svelte';
 	import { Button, Card, Input, Select } from '$ui';
-	import type { PackageType } from '$lib/database.types';
+	import type { CityBlock, PackageType } from '$lib/database.types';
 	import { useStaff } from '$features/staff/queries';
 	import StaffManagerModal from '$features/staff/StaffManagerModal.svelte';
+	import CityBlockRow from '$features/queries/CityBlock.svelte';
+	import { TRIP_TYPES, newCity, seedCities, isUmrahType, isFixedCity } from '$features/queries/trip';
 	import { usePassengers, useCreatePassenger } from '$features/passengers/queries';
 	import { fullName, splitName } from '$features/passengers/types';
 	import { useCreateQuery } from '$features/queries/queries';
@@ -28,10 +30,9 @@
 		children: 0,
 		infants: 0,
 		packageType: 'Umrah' as PackageType,
-		durationDays: '' as number | '',
-		nightsMakkah: '' as number | '',
-		nightsMadinah: '' as number | '',
-		hotelPreference: '',
+		travelDate: '',
+		country: '',
+		cities: seedCities('Umrah') as CityBlock[],
 		clientPreference: '',
 		// capture modes
 		customerPlan: '',
@@ -41,6 +42,18 @@
 		responseText: '',
 		initialQuotation: ''
 	});
+
+	const isUmrah = $derived(isUmrahType(form.packageType));
+
+	function onTripType() {
+		form.cities = seedCities(form.packageType);
+	}
+	function addCity() {
+		form.cities.push(newCity());
+	}
+	function removeCity(i: number) {
+		form.cities.splice(i, 1);
+	}
 
 	const staffOptions = $derived([
 		{ value: '', label: '— select staff —' },
@@ -88,21 +101,41 @@
 			clientPhone = created.phone;
 		}
 
+		// Normalise the city blocks and derive the legacy fields the builder reads.
+		const cities: CityBlock[] = form.cities
+			.filter((c) => c.city.trim() || Number(c.nights) > 0)
+			.map((c) => ({
+				city: c.city.trim(),
+				arrival_date: c.arrival_date || null,
+				nights: Number(c.nights) || 0,
+				hotel_preference: c.hotel_preference.trim(),
+				activities: Number(c.activities) || 0
+			}));
+		const cityNights = (name: string) => cities.find((c) => c.city === name)?.nights ?? null;
+		const totalNights = cities.reduce((a, c) => a + c.nights, 0);
+		const hotelPref = cities
+			.filter((c) => c.hotel_preference)
+			.map((c) => `${c.city}: ${c.hotel_preference}`)
+			.join('; ');
+
 		const query = await $createQuery.mutateAsync({
 			passenger_id: passengerId,
 			client_name: clientName,
 			client_phone: clientPhone,
 			status: 'New Query',
-			destination: form.packageType, // package type doubles as destination label
+			destination: form.country || form.packageType,
+			travel_date: form.travelDate || null,
 			created_by_staff: form.createdBy || null,
 			adults: Number(form.adults),
 			children: Number(form.children),
 			infants: Number(form.infants),
 			package_type: form.packageType,
-			duration_days: form.durationDays === '' ? null : Number(form.durationDays),
-			nights_makkah: form.nightsMakkah === '' ? null : Number(form.nightsMakkah),
-			nights_madinah: form.nightsMadinah === '' ? null : Number(form.nightsMadinah),
-			hotel_preference: form.hotelPreference || null,
+			trip_country: form.country || null,
+			itinerary_cities: cities,
+			duration_days: totalNights || null,
+			nights_makkah: isUmrah ? cityNights('Makkah') : null,
+			nights_madinah: isUmrah ? cityNights('Madinah') : null,
+			hotel_preference: hotelPref || null,
 			client_preference: form.clientPreference || null,
 			customer_plan: form.customerPlan || null,
 			quick_note: form.quickNote || null,
@@ -163,17 +196,40 @@
 	<Card title="Trip">
 		<div class="space-y-4">
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-				<Select label="Package" bind:value={form.packageType} options={['Umrah', 'Tour', 'Leisure']} />
+				<Select label="Trip type" bind:value={form.packageType} options={[...TRIP_TYPES]} onchange={onTripType} />
 				<Input label="Adults" type="number" min="0" bind:value={form.adults} />
 				<Input label="Children" type="number" min="0" bind:value={form.children} />
 				<Input label="Infants" type="number" min="0" bind:value={form.infants} />
 			</div>
-			<div class="grid grid-cols-3 gap-3">
-				<Input label="Total duration (days)" type="number" min="0" bind:value={form.durationDays} />
-				<Input label="Nights — Makkah" type="number" min="0" bind:value={form.nightsMakkah} />
-				<Input label="Nights — Madinah" type="number" min="0" bind:value={form.nightsMadinah} />
+			<div class="grid grid-cols-2 gap-3">
+				<Input label="Intended travel date" type="date" bind:value={form.travelDate} />
+				{#if !isUmrah}
+					<Input label="Country" bind:value={form.country} placeholder="e.g. Turkey" />
+				{/if}
 			</div>
-			<Input label="Hotel / distance preference" bind:value={form.hotelPreference} placeholder="e.g. within 300m of Haram" />
+
+			<!-- City blocks: holy cities for Umrah, + extra city for Umrah Plus,
+			     free multi-city for Tour/Leisure. -->
+			<div class="space-y-2">
+				<div class="flex items-center justify-between">
+					<span class="text-xs font-semibold uppercase text-slate-400">
+						{isUmrah ? 'Cities & nights' : 'Itinerary (cities)'}
+					</span>
+					{#if form.packageType !== 'Umrah'}
+						<Button type="button" size="sm" variant="ghost" onclick={addCity}><Plus class="h-4 w-4" /> City</Button>
+					{/if}
+				</div>
+				{#each form.cities as block, i (i)}
+					<CityBlockRow
+						{block}
+						cityEditable={!isFixedCity(form.packageType, i)}
+						showArrival={!isUmrah}
+						showActivities={!isUmrah}
+						onRemove={isFixedCity(form.packageType, i) ? undefined : () => removeCity(i)}
+					/>
+				{/each}
+			</div>
+
 			<Input label="Client preference / special requirements" bind:value={form.clientPreference} />
 		</div>
 	</Card>

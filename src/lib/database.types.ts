@@ -22,7 +22,15 @@ export type Currency = 'PKR' | 'SAR' | 'USD' | 'AED' | 'EUR' | 'GBP';
 
 export type UserRole = 'admin' | 'manager' | 'agent' | 'finance' | 'viewer';
 
-export type PackageType = 'Umrah' | 'Tour' | 'Leisure';
+export type PackageType = 'Umrah' | 'Umrah Plus' | 'Tour' | 'Leisure';
+
+export interface CityBlock {
+	city: string;
+	arrival_date: string | null;
+	nights: number;
+	hotel_preference: string;
+	activities: number;
+}
 
 export type DocumentType =
 	| 'passport'
@@ -118,6 +126,8 @@ export interface Database {
 					initial_quotation: string | null;
 					stage_changed_at: string | null;
 					voucher_sent_at: string | null;
+					itinerary_cities: CityBlock[];
+					trip_country: string | null;
 					created_at: string;
 					updated_at: string;
 				};
@@ -162,6 +172,8 @@ export interface Database {
 					initial_quotation?: string | null;
 					stage_changed_at?: string | null;
 					voucher_sent_at?: string | null;
+					itinerary_cities?: CityBlock[];
+					trip_country?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['queries']['Insert']>;
 				Relationships: [];
