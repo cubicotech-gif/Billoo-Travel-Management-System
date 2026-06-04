@@ -54,6 +54,9 @@ export interface SaveQuotationArgs {
 	label?: string | null;
 	perPersonPkr?: number;
 	ppIncludeInfants?: boolean;
+	validUntil?: string | null;
+	inclusions?: string[];
+	exclusions?: string[];
 }
 
 /** Persist a calculated quotation as a new version, with its line breakdown. */
@@ -79,6 +82,9 @@ export async function createQuotation(args: SaveQuotationArgs): Promise<Quotatio
 				per_person_pkr: args.perPersonPkr ?? 0,
 				pp_include_infants: args.ppIncludeInfants ?? false,
 				label: args.label ?? null,
+				valid_until: args.validUntil ?? null,
+				inclusions: args.inclusions ?? [],
+				exclusions: args.exclusions ?? [],
 				whatsapp_text: args.whatsappText
 			})
 			.select()

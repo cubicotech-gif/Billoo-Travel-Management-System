@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Calculator, Copy, Check, Send, ThumbsUp, Trash2, Eye } from 'lucide-svelte';
+	import { Calculator, Copy, Check, Send, ThumbsUp, Trash2, Eye, FileText } from 'lucide-svelte';
 	import { Badge, Button } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import {
@@ -36,7 +36,12 @@
 
 <div class="mb-3 flex items-center justify-between">
 	<h2 class="text-lg font-semibold text-slate-800">Quotations</h2>
-	<Button size="sm" href="/queries/{queryId}/quote"><Calculator class="h-4 w-4" /> Build quotation</Button>
+	<div class="flex gap-2">
+		{#if ($quotations.data ?? []).some((q) => q.status !== 'archived')}
+			<Button size="sm" variant="secondary" href="/queries/{queryId}/proposal"><FileText class="h-4 w-4" /> Open proposal</Button>
+		{/if}
+		<Button size="sm" href="/queries/{queryId}/quote"><Calculator class="h-4 w-4" /> Build quotation</Button>
+	</div>
 </div>
 
 {#if $quotations.isLoading}
