@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Button, Input, Modal, Select } from '$ui';
+	import { Button, Input, Modal } from '$ui';
 	import { useCreateVendor, useUpdateVendor } from './queries';
-	import { VENDOR_TYPES, type Vendor } from './types';
+	import { VENDOR_SERVICES, primaryType, type Vendor, type VendorService } from './types';
 
 	interface Props {
 		vendor?: Vendor | null;
@@ -17,7 +17,7 @@
 
 	let form = $state({
 		name: '',
-		type: 'Hotel',
+		services: [] as string[],
 		contact_person: '',
 		phone: '',
 		whatsapp_number: '',
@@ -31,7 +31,7 @@
 			const v = untrack(() => vendor);
 			form = {
 				name: v?.name ?? '',
-				type: v?.type ?? 'Hotel',
+				services: v?.service_types?.length ? [...v.service_types] : [],
 				contact_person: v?.contact_person ?? '',
 				phone: v?.phone ?? '',
 				whatsapp_number: v?.whatsapp_number ?? '',
@@ -42,13 +42,20 @@
 		}
 	});
 
+	function toggle(s: VendorService) {
+		form.services = form.services.includes(s)
+			? form.services.filter((x) => x !== s)
+			: [...form.services, s];
+	}
+
 	const saving = $derived($createVendor.isPending || $updateVendor.isPending);
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
 		const payload = {
 			name: form.name,
-			type: form.type,
+			type: primaryType(form.services),
+			service_types: form.services,
 			contact_person: form.contact_person || null,
 			phone: form.phone || null,
 			whatsapp_number: form.whatsapp_number || null,
@@ -64,9 +71,23 @@
 
 <Modal {open} {onClose} title={vendor ? 'Edit vendor' : 'Add vendor'}>
 	<form onsubmit={submit} class="space-y-4">
-		<div class="grid grid-cols-2 gap-3">
-			<Input label="Name" bind:value={form.name} required placeholder="e.g. Hilton Makkah" />
-			<Select label="Type" bind:value={form.type} options={[...VENDOR_TYPES]} />
+		<Input label="Name" bind:value={form.name} required placeholder="e.g. Al Safwah Transport" />
+		<div>
+			<span class="mb-1 block text-sm font-medium text-slate-700">Services offered</span>
+			<div class="flex flex-wrap gap-2">
+				{#each VENDOR_SERVICES as s (s)}
+					<button
+						type="button"
+						onclick={() => toggle(s)}
+						class="rounded-full border px-3 py-1 text-sm transition-colors {form.services.includes(s)
+							? 'border-brand-500 bg-brand-50 text-brand-700'
+							: 'border-slate-300 text-slate-500 hover:bg-slate-50'}"
+					>
+						{s}
+					</button>
+				{/each}
+			</div>
+			<p class="mt-1 text-xs text-slate-400">Flights are issued in-house (no vendor).</p>
 		</div>
 		<div class="grid grid-cols-2 gap-3">
 			<Input label="Contact person" bind:value={form.contact_person} />

@@ -6,6 +6,7 @@
 	import { useQueryDetail } from '$features/queries/queries';
 	import { useRates, useLatestRoe } from '$features/rates/queries';
 	import { useVendors } from '$features/vendors/queries';
+	import { vendorHasService, type VendorService } from '$features/vendors/types';
 	import { latestRates } from '$features/rates/types';
 	import {
 		calculateQuotation,
@@ -54,10 +55,15 @@
 			{ value: OTHER, label: 'Other — type manually' }
 		];
 	}
-	const vendorOpts = $derived([
-		{ value: '', label: 'Own / TBD' },
-		...($vendors.data ?? []).map((v) => ({ value: v.id, label: v.name }))
-	]);
+	// Vendors filtered by the line's service type (flights are in-house).
+	function vendorOptsFor(service: VendorService) {
+		return [
+			{ value: '', label: 'Own / TBD' },
+			...($vendors.data ?? [])
+				.filter((v) => vendorHasService(v, service))
+				.map((v) => ({ value: v.id, label: v.name }))
+		];
+	}
 	const airlineOpts = $derived([
 		{ value: '', label: '— none —' },
 		...pool.filter((r) => r.item_type === 'airline').map((r) => ({ value: r.id, label: r.name })),
@@ -72,7 +78,6 @@
 		a.name = r.name;
 		a.adultCost = Number(r.cost_price);
 		a.adultSell = Number(r.selling_price);
-		if (r.vendor_id) a.vendorId = r.vendor_id;
 	}
 
 	const num = (v: number | string) => Number(v) || 0;
@@ -191,7 +196,7 @@
 				? { visaType: v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah', vendorId: v.vendorId || null, costSar: num(v.cost), sellSar: num(v.sell) }
 				: null,
 			tickets: form.airlineInclude
-				? { airlineName: ai.name || 'Tickets', vendorId: ai.vendorId || null, rateCardId: ai.sel === OTHER || !ai.sel ? null : ai.sel, adultCost: num(ai.adultCost), adultSell: num(ai.adultSell), childCost: num(ai.childCost), childSell: num(ai.childSell), infantCost: num(ai.infantCost), infantSell: num(ai.infantSell) }
+				? { airlineName: ai.name || 'Tickets', rateCardId: ai.sel === OTHER || !ai.sel ? null : ai.sel, route: ai.route || null, fareClass: ai.fareClass || null, pnr: ai.pnr || null, adultCost: num(ai.adultCost), adultSell: num(ai.adultSell), childCost: num(ai.childCost), childSell: num(ai.childSell), infantCost: num(ai.infantCost), infantSell: num(ai.infantSell) }
 				: null
 		};
 	});
@@ -307,7 +312,7 @@
 							{/if}
 							{#if h.slot.sel}
 								<div class="grid grid-cols-2 gap-2">
-									<Select label="Vendor" bind:value={h.slot.vendorId} options={vendorOpts} />
+									<Select label="Vendor" bind:value={h.slot.vendorId} options={vendorOptsFor('Hotel')} />
 									<Input label="Nights" type="number" min="0" bind:value={h.slot.nights} onchange={() => datesFromNights(h.slot)} />
 								</div>
 							{/if}
@@ -357,7 +362,7 @@
 						{#if t.vehicle === 'Custom'}<div class="w-28"><Input label="Custom" bind:value={t.customVehicle} /></div>{/if}
 						<div class="w-44"><Select label="Route" bind:value={t.route} options={ROUTES} /></div>
 						{#if t.route === 'Custom'}<div class="w-40"><Input label="Custom route" bind:value={t.customRoute} /></div>{/if}
-						<div class="w-32"><Select label="Vendor" bind:value={t.vendorId} options={vendorOpts} /></div>
+						<div class="w-32"><Select label="Vendor" bind:value={t.vendorId} options={vendorOptsFor('Transfer')} /></div>
 						<div class="w-16"><Input label="Qty" type="number" min="0" bind:value={t.vehicles} /></div>
 						<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={t.cost} /></div>
 						<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={t.sell} /></div>
@@ -378,7 +383,7 @@
 				{#if form.visa.include}
 					<div class="w-32"><Select label="Visa type" bind:value={form.visa.type} options={['Umrah', 'Other']} /></div>
 					{#if form.visa.type === 'Other'}<div class="w-32"><Input label="Label" bind:value={form.visa.otherLabel} /></div>{/if}
-					<div class="w-36"><Select label="Vendor" bind:value={form.visa.vendorId} options={vendorOpts} /></div>
+					<div class="w-36"><Select label="Vendor" bind:value={form.visa.vendorId} options={vendorOptsFor('Visa')} /></div>
 					<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={form.visa.cost} /></div>
 					<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={form.visa.sell} /></div>
 				{/if}
@@ -391,14 +396,17 @@
 			</label>
 			{#if form.airlineInclude}
 				<div class="space-y-3">
+					<p class="text-xs text-slate-400">Issued in-house on Billoo's IATA — no vendor.</p>
 					<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
 						<Select label="Airline (adult fare from rates)" bind:value={form.airline.sel} options={airlineOpts} onchange={onAirlineSel} />
 						{#if form.airline.sel === OTHER}
 							<Input label="Airline name" bind:value={form.airline.name} placeholder="e.g. Saudia" />
 						{/if}
-						<Select label="Vendor" bind:value={form.airline.vendorId} options={vendorOpts} />
+						<Input label="Route" bind:value={form.airline.route} placeholder="e.g. KHI → JED → KHI" />
 					</div>
-					<div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+					<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+						<Input label="Fare class" bind:value={form.airline.fareClass} placeholder="e.g. Economy" />
+						<Input label="PNR" bind:value={form.airline.pnr} />
 						<Input label="Adult cost" type="number" min="0" bind:value={form.airline.adultCost} />
 						<Input label="Adult sell" type="number" min="0" bind:value={form.airline.adultSell} />
 					</div>

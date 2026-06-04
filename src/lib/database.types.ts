@@ -204,6 +204,7 @@ export interface Database {
 					location?: string | null;
 					country?: string | null;
 					notes?: string | null;
+					service_types?: string[];
 					is_active?: boolean;
 					is_deleted?: boolean;
 				};
