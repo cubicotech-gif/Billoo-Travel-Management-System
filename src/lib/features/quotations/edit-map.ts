@@ -72,6 +72,9 @@ export interface BuilderForm {
 	infants: number;
 	ppIncludeInfants: boolean;
 	label: string;
+	validUntil: string;
+	inclusions: string;
+	exclusions: string;
 	makkah: HotelForm;
 	madinah: HotelForm;
 	transfers: TransferForm[];
@@ -94,6 +97,9 @@ export function blankForm(): BuilderForm {
 		infants: 0,
 		ppIncludeInfants: false,
 		label: '',
+		validUntil: '',
+		inclusions: '',
+		exclusions: '',
 		makkah: blankHotel(),
 		madinah: blankHotel(),
 		transfers: [newTransfer()],
@@ -125,6 +131,9 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 	form.infants = q.infants;
 	form.ppIncludeInfants = q.pp_include_infants;
 	form.label = q.label ?? '';
+	form.validUntil = q.valid_until ?? '';
+	form.inclusions = (q.inclusions ?? []).join('\n');
+	form.exclusions = (q.exclusions ?? []).join('\n');
 
 	const makkahRooms: RoomRow[] = [];
 	const madinahRooms: RoomRow[] = [];

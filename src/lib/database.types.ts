@@ -421,6 +421,9 @@ export interface Database {
 					per_person_pkr: number;
 					pp_include_infants: boolean;
 					label: string | null;
+					valid_until: string | null;
+					inclusions: string[];
+					exclusions: string[];
 					whatsapp_text: string | null;
 					notes: string | null;
 					created_at: string;
@@ -445,6 +448,9 @@ export interface Database {
 					per_person_pkr?: number;
 					pp_include_infants?: boolean;
 					label?: string | null;
+					valid_until?: string | null;
+					inclusions?: string[];
+					exclusions?: string[];
 					whatsapp_text?: string | null;
 					notes?: string | null;
 				};

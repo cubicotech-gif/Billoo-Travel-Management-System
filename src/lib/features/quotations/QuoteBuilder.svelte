@@ -105,9 +105,12 @@
 		form.infants = q.infants;
 		form.makkah.nights = q.nights_makkah ?? 0;
 		form.madinah.nights = q.nights_madinah ?? 0;
+		form.validUntil = addDays(new Date().toISOString().slice(0, 10), 7);
 		if (r) form.roeValue = Number(r.sar_to_pkr);
 		seeded = true;
 	});
+
+	const splitLines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
 
 	// Hotel selection: fill name/vendor; seed a room price from the rate.
 	function onHotelSel(h: typeof form.makkah) {
@@ -252,6 +255,8 @@
 
 	function resetLines() {
 		form.label = '';
+		form.inclusions = '';
+		form.exclusions = '';
 		form.makkah = blankHotel();
 		form.madinah = blankHotel();
 		form.transfers = [newTransfer()];
@@ -274,7 +279,10 @@
 			whatsappText,
 			label: form.label || null,
 			perPersonPkr: pp,
-			ppIncludeInfants: form.ppIncludeInfants
+			ppIncludeInfants: form.ppIncludeInfants,
+			validUntil: form.validUntil || null,
+			inclusions: splitLines(form.inclusions),
+			exclusions: splitLines(form.exclusions)
 		});
 		if (addAnother) resetLines();
 	}
@@ -297,8 +305,22 @@
 				<Input label="Adults" type="number" min="0" bind:value={form.adults} />
 				<Input label="Children" type="number" min="0" bind:value={form.children} />
 				<Input label="Infants" type="number" min="0" bind:value={form.infants} />
-				<Input label="Label (tier)" bind:value={form.label} placeholder="e.g. Gold" />
+				<Input label="Tier (e.g. 3★ / Premium)" bind:value={form.label} placeholder="e.g. 5-star" />
 			</div>
+			<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+				<Input label="Valid until" type="date" bind:value={form.validUntil} />
+				<div>
+					<span class="mb-1 block text-sm font-medium text-slate-700">Inclusions (one per line)</span>
+					<textarea bind:value={form.inclusions} rows="3" placeholder="Visa&#10;Hotels&#10;Transfers" class="w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
+				</div>
+				<div>
+					<span class="mb-1 block text-sm font-medium text-slate-700">Exclusions (one per line)</span>
+					<textarea bind:value={form.exclusions} rows="3" placeholder="Air tickets&#10;Meals" class="w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
+				</div>
+			</div>
+			<p class="mt-2 text-xs text-slate-400">
+				Tip: build 2–3 tiers (Standard / Premium) on this query with “Save &amp; add another”, then open the Proposal to send them together.
+			</p>
 		</Card>
 
 		{#each [{ slot: form.makkah, city: 'Makkah' }, { slot: form.madinah, city: 'Madinah' }] as h (h.city)}

@@ -40,6 +40,20 @@
 			{/if}
 		</div>
 
+		{#if quotation.valid_until}
+			<p class="mb-2 text-xs text-amber-600">Valid until {quotation.valid_until}</p>
+		{/if}
+		{#if quotation.inclusions?.length || quotation.exclusions?.length}
+			<div class="mb-3 grid grid-cols-2 gap-3 text-xs">
+				<div>
+					{#each quotation.inclusions ?? [] as inc (inc)}<div class="text-slate-600">✓ {inc}</div>{/each}
+				</div>
+				<div>
+					{#each quotation.exclusions ?? [] as exc (exc)}<div class="text-slate-400">✗ {exc}</div>{/each}
+				</div>
+			</div>
+		{/if}
+
 		<pre class="max-h-96 overflow-y-auto whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs text-slate-700">{quotation.whatsapp_text ?? '(no message saved)'}</pre>
 
 		<div class="mt-4 flex flex-wrap gap-2">
