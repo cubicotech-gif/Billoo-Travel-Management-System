@@ -16,24 +16,25 @@
 	import { renderStructured, type WhatsAppData, type WhatsAppHotel } from './whatsapp';
 	import { addDays, defaultCheckIn, nightsBetween } from './dates';
 	import { useCreateQuotation } from './queries';
+	import { getQuotation, getQuotationLines } from './api';
+	import {
+		OTHER,
+		ROOM_TYPES,
+		OCCUPANCY,
+		VEHICLES,
+		ROUTES,
+		newRoom,
+		newTransfer,
+		blankHotel,
+		blankVisa,
+		blankAirline,
+		blankForm,
+		quotationToForm
+	} from './edit-map';
 	import RangeCalendar from './RangeCalendar.svelte';
 	import QuotationList from './QuotationList.svelte';
 
-	let { queryId }: { queryId: string } = $props();
-
-	const OTHER = '__other__';
-	const ROOM_TYPES = ['Double', 'Triple', 'Quad', 'Quint', 'Custom'];
-	const OCCUPANCY: Record<string, number> = { Double: 2, Triple: 3, Quad: 4, Quint: 5 };
-	const VEHICLES = ['4-seater', '7-seater', '14-seater', '50-seater', 'Custom'];
-	const ROUTES = [
-		'Airport → Makkah',
-		'Makkah → Madinah',
-		'Madinah → Makkah',
-		'Madinah → Airport',
-		'Makkah → Airport',
-		'Airport → Madinah',
-		'Custom'
-	];
+	let { queryId, editId }: { queryId: string; editId?: string } = $props();
 
 	const queryDetail = untrack(() => useQueryDetail(queryId));
 	const rates = useRates();
@@ -76,34 +77,21 @@
 
 	const num = (v: number | string) => Number(v) || 0;
 
-	function newRoom() {
-		return { rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 };
-	}
-	function blankHotel() {
-		return { sel: '', name: '', vendorId: '', checkIn: '', checkOut: '', nights: 0, rooms: [newRoom()] };
-	}
-	function newTransfer() {
-		return { vehicle: '7-seater', customVehicle: '', route: 'Airport → Makkah', customRoute: '', vendorId: '', cost: 0, sell: 0, vehicles: 1 };
-	}
-
-	let form = $state({
-		roeValue: 0,
-		adults: 1,
-		children: 0,
-		infants: 0,
-		ppIncludeInfants: false,
-		label: '',
-		makkah: blankHotel(),
-		madinah: blankHotel(),
-		transfers: [newTransfer()],
-		visa: { type: 'Umrah', otherLabel: '', vendorId: '', cost: 0, sell: 0, include: true },
-		airline: { sel: '', name: '', vendorId: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 },
-		airlineInclude: false
-	});
+	let form = $state(blankForm());
 
 	let seeded = $state(false);
 	$effect(() => {
 		if (seeded) return;
+		if (editId) {
+			// Reopen a saved quotation: load it and reverse-map into the form.
+			seeded = true;
+			(async () => {
+				const [q, lines] = await Promise.all([getQuotation(editId), getQuotationLines(editId)]);
+				form = quotationToForm(q, lines);
+			})();
+			return;
+		}
+		// Fresh quote: seed pax/nights from the query and ROE from today's rate.
 		const q = $queryDetail.data;
 		const r = $roe.data;
 		if (!q) return;
@@ -262,8 +250,8 @@
 		form.makkah = blankHotel();
 		form.madinah = blankHotel();
 		form.transfers = [newTransfer()];
-		form.visa = { type: 'Umrah', otherLabel: '', vendorId: '', cost: 0, sell: 0, include: true };
-		form.airline = { sel: '', name: '', vendorId: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 };
+		form.visa = blankVisa();
+		form.airline = blankAirline();
 		form.airlineInclude = false;
 		dirty = false;
 	}
