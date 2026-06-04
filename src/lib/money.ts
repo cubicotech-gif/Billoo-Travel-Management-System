@@ -11,14 +11,19 @@ import type { Currency } from './database.types';
 // All currencies the system supports use 2 decimal places.
 const PRECISION = 2;
 
-const LOCALE_BY_CURRENCY: Record<Currency, string> = {
-	PKR: 'en-PK',
-	SAR: 'ar-SA',
-	AED: 'ar-AE',
-	USD: 'en-US',
-	EUR: 'en-IE',
-	GBP: 'en-GB'
-};
+/** Localized currency string, e.g. "PKR 1,500.50" or "SAR 240.00".
+ * Uses the ISO code (not the native symbol) so SAR doesn't render as RTL
+ * Arabic glyphs — staff want a clean "SAR 240.00". */
+export function formatMoney(m: Money): string {
+	const currency = m.getCurrency() as Currency;
+	return new Intl.NumberFormat('en-US', {
+		style: 'currency',
+		currency,
+		currencyDisplay: 'code',
+		minimumFractionDigits: PRECISION,
+		maximumFractionDigits: PRECISION
+	}).format(m.toUnit());
+}
 
 export type Money = Dinero.Dinero;
 
@@ -75,17 +80,6 @@ export function profitMarginPct(selling: Money, cost: Money): number {
  */
 export function convertToPkr(amount: Money, rateToPkr: number): Money {
 	return money(amount.toUnit() * rateToPkr, 'PKR');
-}
-
-/** Localized currency string, e.g. "Rs 1,500.50" or "$1,500.50". */
-export function formatMoney(m: Money): string {
-	const currency = m.getCurrency() as Currency;
-	return m.toUnit().toLocaleString(LOCALE_BY_CURRENCY[currency], {
-		style: 'currency',
-		currency,
-		minimumFractionDigits: PRECISION,
-		maximumFractionDigits: PRECISION
-	});
 }
 
 /** Format a raw major-unit number as currency without building a Money first. */

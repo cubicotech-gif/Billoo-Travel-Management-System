@@ -56,6 +56,10 @@ async function syncBookingTotals(bookingId: string, roe: number): Promise<void> 
  * quotation lines (actuals start equal to quoted; staff then adjust).
  */
 export async function createBookingFromQuotation(quotation: Quotation): Promise<Booking> {
+	// Guard: one active booking per query — return the existing one if present.
+	const existing = await getBookingForQuery(quotation.query_id);
+	if (existing) return existing;
+
 	const lines = await getQuotationLines(quotation.id);
 	const booking = unwrap<Booking>(
 		await supabase
@@ -70,12 +74,15 @@ export async function createBookingFromQuotation(quotation: Quotation): Promise<
 			booking_id: booking.id,
 			line_type: l.line_type,
 			label: l.label,
-			vendor_id: null, // actual vendor chosen by staff
+			// Carry the vendor quoted on the line, plus the line detail (hotel
+			// dates, room type, route, …) so vouchers/itineraries can use them.
+			vendor_id: l.vendor_id,
 			currency: l.currency,
 			quoted_cost: Number(l.line_cost),
 			quoted_sell: Number(l.line_sell),
 			actual_cost: Number(l.line_cost),
-			actual_sell: Number(l.line_sell)
+			actual_sell: Number(l.line_sell),
+			meta: l.meta ?? {}
 		}));
 		const { error } = await supabase.from('booking_items').insert(rows);
 		if (error) throw new Error(error.message);
