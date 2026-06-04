@@ -472,6 +472,7 @@ export interface Database {
 					actual_sell: number;
 					booking_reference: string | null;
 					notes: string | null;
+					meta: Record<string, unknown>;
 					created_at: string;
 					updated_at: string;
 				};
@@ -488,6 +489,7 @@ export interface Database {
 					actual_sell?: number;
 					booking_reference?: string | null;
 					notes?: string | null;
+					meta?: Record<string, unknown>;
 				};
 				Update: Partial<Database['public']['Tables']['booking_items']['Insert']>;
 				Relationships: [];

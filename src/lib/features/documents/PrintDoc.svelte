@@ -2,7 +2,7 @@
 	import { ArrowLeft, Printer } from 'lucide-svelte';
 	import { Button } from '$ui';
 	import { formatAmount } from '$lib/money';
-	import type { Currency } from '$lib/database.types';
+	import type { Currency, QuotationLineType } from '$lib/database.types';
 	import { getQuery } from '$features/queries/api';
 	import { getBookingForQuery, listBookingItems } from '$features/bookings/api';
 	import { listQuotations, getQuotationLines } from '$features/quotations/api';
@@ -11,9 +11,11 @@
 	let { queryId, kind }: { queryId: string; kind: 'voucher' | 'itinerary' } = $props();
 
 	interface Row {
+		lineType: QuotationLineType;
 		label: string;
 		currency: Currency;
 		amount: number;
+		meta: Record<string, unknown>;
 	}
 
 	let query = $state<Query | null>(null);
@@ -28,18 +30,29 @@
 		(async () => {
 			try {
 				query = await getQuery(queryId);
-				// Prefer actual booking; otherwise fall back to the accepted quotation.
 				const booking = await getBookingForQuery(queryId);
 				if (booking) {
 					const items = await listBookingItems(booking.id);
-					rows = items.map((i) => ({ label: i.label, currency: i.currency, amount: Number(i.actual_sell) }));
+					rows = items.map((i) => ({
+						lineType: i.line_type,
+						label: i.label,
+						currency: i.currency,
+						amount: Number(i.actual_sell),
+						meta: i.meta ?? {}
+					}));
 					totalPkr = Number(booking.actual_sell_pkr);
 				} else {
 					const quotes = await listQuotations(queryId);
 					const accepted = quotes.find((q) => q.status === 'accepted') ?? quotes[0];
 					if (accepted) {
 						const lines = await getQuotationLines(accepted.id);
-						rows = lines.map((l) => ({ label: l.label, currency: l.currency, amount: Number(l.line_sell) }));
+						rows = lines.map((l) => ({
+							lineType: l.line_type,
+							label: l.label,
+							currency: l.currency,
+							amount: Number(l.line_sell),
+							meta: l.meta ?? {}
+						}));
 						totalPkr = Number(accepted.total_sell_pkr);
 					}
 				}
@@ -50,6 +63,23 @@
 	});
 
 	const title = $derived(kind === 'voucher' ? 'Booking Voucher' : 'Travel Itinerary');
+
+	const hotels = $derived(rows.filter((r) => r.lineType === 'hotel'));
+	const transfers = $derived(rows.filter((r) => r.lineType === 'transfer'));
+	const visas = $derived(rows.filter((r) => r.lineType === 'visa'));
+	const tickets = $derived(rows.filter((r) => r.lineType === 'ticket'));
+
+	function str(meta: Record<string, unknown>, key: string): string {
+		const v = meta[key];
+		return v == null ? '' : String(v);
+	}
+	function hotelDates(meta: Record<string, unknown>): string {
+		const ci = str(meta, 'check_in');
+		const co = str(meta, 'check_out');
+		const nights = str(meta, 'nights');
+		if (ci && co) return `${ci} → ${co}${nights ? ` (${nights} nights)` : ''}`;
+		return nights ? `${nights} nights` : '';
+	}
 </script>
 
 <div class="no-print mb-4 flex items-center justify-between">
@@ -88,34 +118,55 @@
 				<div class="text-slate-500">
 					{query.adults} adult{query.adults === 1 ? '' : 's'}{query.children ? `, ${query.children} child` : ''}{query.infants ? `, ${query.infants} infant` : ''}
 				</div>
-				{#if query.nights_makkah || query.nights_madinah}
-					<div class="text-slate-500">
-						{query.nights_makkah ? `Makkah ${query.nights_makkah}N` : ''}
-						{query.nights_madinah ? `· Madinah ${query.nights_madinah}N` : ''}
-					</div>
-				{/if}
 			</div>
 		</div>
 
-		<table class="mb-6 w-full text-sm">
-			<thead class="border-b border-slate-200 text-left text-xs uppercase text-slate-400">
-				<tr>
-					<th class="py-2 font-medium">Component</th>
-					{#if kind === 'voucher'}<th class="py-2 text-right font-medium">Amount</th>{/if}
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-slate-100">
-				{#each rows as r, i (i)}
-					<tr>
-						<td class="py-2 text-slate-700">{r.label}</td>
-						{#if kind === 'voucher'}<td class="py-2 text-right text-slate-600">{formatAmount(r.amount, r.currency)}</td>{/if}
-					</tr>
+		<!-- Itinerary: structured by component, with dates & room types. -->
+		{#if hotels.length}
+			<div class="mb-5">
+				<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Accommodation</h3>
+				{#each hotels as h, i (i)}
+					<div class="mb-2 flex items-start justify-between gap-4 text-sm">
+						<div>
+							<div class="font-medium text-slate-800">{str(h.meta, 'city')} · {str(h.meta, 'hotel')}</div>
+							<div class="text-slate-500">
+								{str(h.meta, 'room_type')}{str(h.meta, 'qty') ? ` ×${str(h.meta, 'qty')}` : ''}
+								{#if hotelDates(h.meta)}· {hotelDates(h.meta)}{/if}
+							</div>
+						</div>
+						{#if kind === 'voucher'}<div class="text-slate-600">{formatAmount(h.amount, h.currency)}</div>{/if}
+					</div>
 				{/each}
-				{#if rows.length === 0}
-					<tr><td class="py-3 text-slate-400">No items — create a booking or accept a quotation first.</td></tr>
-				{/if}
-			</tbody>
-		</table>
+			</div>
+		{/if}
+
+		{#if transfers.length}
+			<div class="mb-5">
+				<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Transfers</h3>
+				{#each transfers as t, i (i)}
+					<div class="mb-1 flex items-center justify-between text-sm">
+						<span class="text-slate-700">{t.label}</span>
+						{#if kind === 'voucher'}<span class="text-slate-600">{formatAmount(t.amount, t.currency)}</span>{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+
+		{#if visas.length || tickets.length}
+			<div class="mb-5">
+				<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Visa & Tickets</h3>
+				{#each [...visas, ...tickets] as r, i (i)}
+					<div class="mb-1 flex items-center justify-between text-sm">
+						<span class="text-slate-700">{r.label}</span>
+						{#if kind === 'voucher'}<span class="text-slate-600">{formatAmount(r.amount, r.currency)}</span>{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+
+		{#if rows.length === 0}
+			<p class="py-3 text-sm text-slate-400">No items — create a booking or accept a quotation first.</p>
+		{/if}
 
 		{#if kind === 'voucher'}
 			<div class="flex justify-end border-t border-slate-200 pt-3">

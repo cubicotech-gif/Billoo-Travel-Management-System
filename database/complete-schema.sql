@@ -1365,3 +1365,13 @@ ALTER TABLE public.quotations
 	ADD COLUMN IF NOT EXISTS label TEXT,
 	ADD COLUMN IF NOT EXISTS per_person_pkr NUMERIC(12, 2) NOT NULL DEFAULT 0,
 	ADD COLUMN IF NOT EXISTS pp_include_infants BOOLEAN NOT NULL DEFAULT FALSE;
+
+
+-- =====================================================
+-- Carry quotation line detail (hotel dates, room type, route, …) into bookings
+-- =====================================================
+-- Run once (or re-run complete-schema.sql), then dev-open-access.sql.
+-- =====================================================
+
+ALTER TABLE public.booking_items
+	ADD COLUMN IF NOT EXISTS meta JSONB DEFAULT '{}'::jsonb;
