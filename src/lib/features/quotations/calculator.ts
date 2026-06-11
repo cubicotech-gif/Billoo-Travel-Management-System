@@ -47,6 +47,8 @@ export interface BreakfastInput {
 export interface HotelInput {
 	city: string;
 	name: string;
+	hotelId?: string | null;
+	mealPlan?: string | null;
 	rateCardId?: string | null;
 	vendorId?: string | null;
 	nights: number;
@@ -258,6 +260,8 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 					stay: hi,
 					city: h.city,
 					hotel: h.name,
+					hotel_id: h.hotelId ?? null,
+					meal_plan: h.mealPlan ?? null,
 					room_type: rt.label,
 					occupancy: rt.occupancy,
 					qty: rt.qty,
@@ -299,6 +303,8 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 						included: !!b.included,
 						city: h.city,
 						hotel: h.name,
+						hotel_id: h.hotelId ?? null,
+						meal_plan: h.mealPlan ?? null,
 						persons: b.persons,
 						persons_auto: b.personsAuto ?? true,
 						nights: h.nights

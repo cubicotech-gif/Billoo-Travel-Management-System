@@ -1,11 +1,29 @@
+import type { ObsRoomType } from '$lib/database.types';
 import type { Quotation, QuotationLine } from './types';
 
 // Form model for the quote builder, shared with the edit-mapping below so a
 // saved quotation can be reopened. Kept in sync with QuoteBuilder.svelte.
 
 export const OTHER = '__other__';
-export const ROOM_TYPES = ['Double', 'Triple', 'Quad', 'Quint', 'Custom'];
-export const OCCUPANCY: Record<string, number> = { Double: 2, Triple: 3, Quad: 4, Quint: 5 };
+// Room types mirror the rate_observations enum (double/triple/quad/sharing/custom).
+export const ROOM_TYPES = ['Double', 'Triple', 'Quad', 'Sharing', 'Custom'];
+export const OCCUPANCY: Record<string, number> = { Double: 2, Triple: 3, Quad: 4, Sharing: 5 };
+
+/** Map a room-type display label to the rate_observations enum value. */
+export function roomTypeEnum(rt: string): ObsRoomType {
+	switch (rt) {
+		case 'Double':
+			return 'double';
+		case 'Triple':
+			return 'triple';
+		case 'Quad':
+			return 'quad';
+		case 'Sharing':
+			return 'sharing';
+		default:
+			return 'custom';
+	}
+}
 export const VEHICLES = ['4-seater', '7-seater', '14-seater', '50-seater', 'Custom'];
 export const ROUTES = [
 	'Airport → Makkah',
@@ -34,10 +52,12 @@ export interface RoomRow {
 export type BreakfastMode = 'none' | 'included' | 'separate';
 export interface HotelForm {
 	id: string;
+	hotelId: string; // canonical hotels.id (from the searchable select)
 	city: string;
 	sel: string; // '' | OTHER | a saved hotel name
 	name: string;
 	vendorId: string;
+	mealPlan: string; // RO / BB / HB / FB
 	checkIn: string;
 	checkOut: string;
 	nights: number;
@@ -98,7 +118,7 @@ export interface BuilderForm {
 }
 
 export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 });
-export const blankHotel = (city = ''): HotelForm => ({ id: uid(), city, sel: '', name: '', vendorId: '', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0 });
+export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0 });
 export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Airport → Makkah', customRoute: '', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
 export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', vendorId: '', cost: 0, sell: 0, include: true });
 export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 });
@@ -168,8 +188,10 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				slot = blankHotel(city);
 				slot.rooms = [];
 				slot.sel = OTHER;
+				slot.hotelId = s(meta, 'hotel_id');
 				slot.name = s(meta, 'hotel') || l.label;
 				slot.vendorId = l.vendor_id ?? '';
+				slot.mealPlan = s(meta, 'meal_plan') || 'RO';
 				slot.nights = n(meta, 'nights');
 				slot.checkIn = s(meta, 'check_in');
 				slot.checkOut = s(meta, 'check_out');

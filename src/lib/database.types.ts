@@ -50,6 +50,18 @@ export type ServiceType = 'Flight' | 'Hotel' | 'Visa' | 'Transport' | 'Tour' | '
 // Daily rate cards: hotel/transfer/visa are SAR, airline is PKR.
 export type RateItemType = 'hotel' | 'transfer' | 'visa' | 'airline';
 
+// Rate Intelligence: canonical hotels + the append-only observation log.
+export type HotelCity = 'makkah' | 'madinah' | 'other';
+export type ObsRoomType = 'double' | 'triple' | 'quad' | 'sharing' | 'custom';
+export type MealPlan = 'RO' | 'BB' | 'HB' | 'FB';
+export type RateObservationSource =
+	| 'workshop_capture'
+	| 'manual_entry'
+	| 'rate_sheet_import'
+	| 'suggestion_accepted'
+	| 'backfill_quotations'
+	| 'backfill_rate_cards';
+
 export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'archived';
 
 export type QuotationLineType = 'hotel' | 'transfer' | 'visa' | 'ticket';
@@ -385,6 +397,7 @@ export interface Database {
 					name: string;
 					city: string | null;
 					vendor_id: string | null;
+					hotel_id: string | null;
 					currency: Currency;
 					cost_price: number;
 					selling_price: number;
@@ -403,6 +416,7 @@ export interface Database {
 					name: string;
 					city?: string | null;
 					vendor_id?: string | null;
+					hotel_id?: string | null;
 					currency: Currency;
 					cost_price?: number;
 					selling_price?: number;
@@ -617,6 +631,73 @@ export interface Database {
 					notes?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['documents']['Insert']>;
+				Relationships: [];
+			};
+			hotels: {
+				Row: {
+					id: string;
+					name: string;
+					city: HotelCity;
+					star_rating: number | null;
+					distance_note: string | null;
+					aliases: string[];
+					active: boolean;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					name: string;
+					city: HotelCity;
+					star_rating?: number | null;
+					distance_note?: string | null;
+					aliases?: string[];
+					active?: boolean;
+				};
+				Update: Partial<Database['public']['Tables']['hotels']['Insert']>;
+				Relationships: [];
+			};
+			rate_observations: {
+				Row: {
+					id: string;
+					hotel_id: string;
+					room_type: ObsRoomType | null;
+					occupancy: number | null;
+					vendor_id: string | null;
+					check_in: string | null;
+					check_out: string | null;
+					rate: number;
+					currency: Currency;
+					meal_plan: MealPlan;
+					source: RateObservationSource;
+					query_id: string | null;
+					quotation_id: string | null;
+					captured_at: string;
+					captured_by: string | null;
+					invalidated: boolean;
+					invalidated_reason: string | null;
+					notes: string | null;
+				};
+				Insert: {
+					id?: string;
+					hotel_id: string;
+					room_type?: ObsRoomType | null;
+					occupancy?: number | null;
+					vendor_id?: string | null;
+					check_in?: string | null;
+					check_out?: string | null;
+					rate: number;
+					currency?: Currency;
+					meal_plan?: MealPlan;
+					source: RateObservationSource;
+					query_id?: string | null;
+					quotation_id?: string | null;
+					captured_at?: string;
+					captured_by?: string | null;
+					invalidated?: boolean;
+					invalidated_reason?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['rate_observations']['Insert']>;
 				Relationships: [];
 			};
 		};

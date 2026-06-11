@@ -1,5 +1,6 @@
 import { supabase } from '$lib/supabase';
 import type { ExchangeRate, NewRateCard, RateCard, RateCardUpdate } from './types';
+import type { RateObservationInsert } from './observations';
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
 	if (result.error) throw new Error(result.error.message);
@@ -28,6 +29,14 @@ export async function createRate(input: NewRateCard): Promise<RateCard> {
 export async function bulkCreateRates(rows: NewRateCard[]): Promise<number> {
 	if (rows.length === 0) return 0;
 	const { error, data } = await supabase.from('rate_cards').insert(rows).select('id');
+	if (error) throw new Error(error.message);
+	return data?.length ?? 0;
+}
+
+/** Append rate observations (silent workshop capture). Returns count inserted. */
+export async function insertRateObservations(rows: RateObservationInsert[]): Promise<number> {
+	if (rows.length === 0) return 0;
+	const { error, data } = await supabase.from('rate_observations').insert(rows).select('id');
 	if (error) throw new Error(error.message);
 	return data?.length ?? 0;
 }
