@@ -30,6 +30,12 @@ export interface RoomType {
 	sellSar: number;
 }
 
+/** Optional breakfast add-on, charged per person per night (room occupancy). */
+export interface BreakfastInput {
+	costSar: number;
+	sellSar: number;
+}
+
 export interface HotelInput {
 	city: string;
 	name: string;
@@ -39,6 +45,12 @@ export interface HotelInput {
 	checkIn?: string | null;
 	checkOut?: string | null;
 	rooms: RoomType[];
+	breakfast?: BreakfastInput | null;
+}
+
+/** Persons sleeping in a stay = Σ(occupancy × qty) across its room types. */
+export function personsInRooms(rooms: RoomType[]): number {
+	return rooms.reduce((a, r) => a + r.occupancy * r.qty, 0);
 }
 
 export interface TransferRow {
@@ -124,14 +136,98 @@ export function roomsFor(persons: number, occupancy: number): number {
 	return Math.ceil(persons / occupancy);
 }
 
+// --- Advanced per-person split ------------------------------------------
+// Shared package costs (hotels, transfers — room/vehicle based) divide across
+// the adults; children are charged only for the per-person items they actually
+// use (visa, tickets) at their own rates. Which buckets children share is
+// configurable so staff can fine-tune the breakdown.
+
+export interface ChildShare {
+	hotels: boolean;
+	transfers: boolean;
+	visa: boolean;
+	tickets: boolean;
+}
+
+export const DEFAULT_CHILD_SHARE: ChildShare = {
+	hotels: false,
+	transfers: false,
+	visa: true,
+	tickets: true
+};
+
+export interface AdvancedPerPerson {
+	perAdult: number;
+	perChild: number;
+	adultBreakdown: { label: string; amount: number }[];
+	childBreakdown: { label: string; amount: number }[];
+}
+
+function roundPkr(n: number): number {
+	return Math.round(n * 100) / 100;
+}
+
+/**
+ * Advanced per-person split, computed from the calculated line breakdown.
+ * SAR lines are converted to PKR via the ROE; tickets are already PKR.
+ */
+export function perPersonAdvanced(
+	result: QuotationResult,
+	roe: number,
+	pax: PaxCounts,
+	share: ChildShare = DEFAULT_CHILD_SHARE
+): AdvancedPerPerson {
+	const adults = pax.adults > 0 ? pax.adults : 1;
+	const children = pax.children;
+
+	const sar = (n: number) => n * roe;
+	const sumSell = (pred: (l: QuotationLineResult) => boolean) =>
+		result.lines.filter(pred).reduce((a, l) => a + l.lineSell, 0);
+
+	const hotelsPkr = sar(sumSell((l) => l.line_type === 'hotel'));
+	const transfersPkr = sar(sumSell((l) => l.line_type === 'transfer'));
+	// Visa is stored per-person (quantity = persons); recover the unit rate.
+	const visaLine = result.lines.find((l) => l.line_type === 'visa');
+	const visaPerPersonPkr = visaLine ? sar(visaLine.unitSell) : 0;
+	const ticketUnit = (paxType: string) =>
+		result.lines.find((l) => l.line_type === 'ticket' && l.meta?.pax_type === paxType)?.unitSell ?? 0;
+	const adultTicketPkr = ticketUnit('adult');
+	const childTicketPkr = ticketUnit('child');
+
+	const hotelsDiv = adults + (share.hotels ? children : 0);
+	const transfersDiv = adults + (share.transfers ? children : 0);
+
+	const adultBreakdown = [
+		{ label: 'Accommodation', amount: roundPkr(hotelsPkr / hotelsDiv) },
+		{ label: 'Transfers', amount: roundPkr(transfersPkr / transfersDiv) },
+		{ label: 'Visa', amount: roundPkr(visaPerPersonPkr) },
+		{ label: 'Air ticket', amount: roundPkr(adultTicketPkr) }
+	].filter((b) => b.amount > 0);
+
+	const childBreakdown = [
+		{ label: 'Accommodation', amount: share.hotels ? roundPkr(hotelsPkr / hotelsDiv) : 0 },
+		{ label: 'Transfers', amount: share.transfers ? roundPkr(transfersPkr / transfersDiv) : 0 },
+		{ label: 'Visa', amount: share.visa ? roundPkr(visaPerPersonPkr) : 0 },
+		{ label: 'Air ticket', amount: share.tickets ? roundPkr(childTicketPkr) : 0 }
+	].filter((b) => b.amount > 0);
+
+	return {
+		perAdult: roundPkr(adultBreakdown.reduce((a, b) => a + b.amount, 0)),
+		perChild: roundPkr(childBreakdown.reduce((a, b) => a + b.amount, 0)),
+		adultBreakdown,
+		childBreakdown
+	};
+}
+
 export function calculateQuotation(input: QuotationInput): QuotationResult {
 	const lines: QuotationLineResult[] = [];
 	const sarCosts: Money[] = [];
 	const sarSells: Money[] = [];
 
 	// Hotels: one line per room type — total = perNight × qty × nights.
-	for (const h of input.hotels) {
-		if (h.nights <= 0) continue;
+	for (let hi = 0; hi < input.hotels.length; hi++) {
+		const h = input.hotels[hi];
+		if (!h || h.nights <= 0) continue;
 		for (const rt of h.rooms) {
 			const units = rt.qty * h.nights;
 			if (units <= 0) continue;
@@ -151,6 +247,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 				lineCost: toNumber(lineCost),
 				lineSell: toNumber(lineSell),
 				meta: {
+					stay: hi,
 					city: h.city,
 					hotel: h.name,
 					room_type: rt.label,
@@ -161,6 +258,38 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 					check_out: h.checkOut ?? null
 				}
 			});
+		}
+
+		// Breakfast: per person per night, persons derived from room occupancy.
+		if (h.breakfast && (h.breakfast.costSar > 0 || h.breakfast.sellSar > 0)) {
+			const persons = personsInRooms(h.rooms);
+			const units = persons * h.nights;
+			if (units > 0) {
+				const lineCost = multiply(money(h.breakfast.costSar, 'SAR'), units);
+				const lineSell = multiply(money(h.breakfast.sellSar, 'SAR'), units);
+				sarCosts.push(lineCost);
+				sarSells.push(lineSell);
+				lines.push({
+					line_type: 'hotel',
+					label: `${h.city} — ${h.name} (breakfast ×${persons}/night)`,
+					rateCardId: null,
+					vendorId: h.vendorId ?? null,
+					currency: 'SAR',
+					unitCost: h.breakfast.costSar,
+					unitSell: h.breakfast.sellSar,
+					quantity: units,
+					lineCost: toNumber(lineCost),
+					lineSell: toNumber(lineSell),
+					meta: {
+						stay: hi,
+						kind: 'breakfast',
+						city: h.city,
+						hotel: h.name,
+						persons,
+						nights: h.nights
+					}
+				});
+			}
 		}
 	}
 

@@ -10,11 +10,13 @@
 	interface Props {
 		itemType: RateItemType;
 		rate?: RateCard | null;
+		/** Clone the given rate into a NEW row dated today (daily update workflow). */
+		cloneAsNew?: boolean;
 		open: boolean;
 		onClose: () => void;
 	}
 
-	let { itemType, rate = null, open, onClose }: Props = $props();
+	let { itemType, rate = null, cloneAsNew = false, open, onClose }: Props = $props();
 
 	const config = $derived(RATE_TYPE_BY_KEY[itemType]);
 	const vendors = useVendors();
@@ -44,7 +46,7 @@
 				cost_price: Number(r?.cost_price ?? 0),
 				selling_price: Number(r?.selling_price ?? 0),
 				occupancy: r?.occupancy ?? 2,
-				rate_date: r?.rate_date?.slice(0, 10) ?? today,
+				rate_date: cloneAsNew ? today : (r?.rate_date?.slice(0, 10) ?? today),
 				notes: r?.notes ?? ''
 			};
 		}
@@ -73,13 +75,13 @@
 			rate_date: form.rate_date,
 			notes: form.notes || null
 		};
-		if (rate) await $updateRate.mutateAsync({ id: rate.id, patch: payload });
+		if (rate && !cloneAsNew) await $updateRate.mutateAsync({ id: rate.id, patch: payload });
 		else await $createRate.mutateAsync(payload);
 		onClose();
 	}
 </script>
 
-<Modal {open} {onClose} title={`${rate ? 'Edit' : 'Add'} ${config.label} rate`}>
+<Modal {open} {onClose} title={`${cloneAsNew ? "Update today's" : rate ? 'Edit' : 'Add'} ${config.label} rate`}>
 	<form onsubmit={submit} class="space-y-4">
 		<Input label="Name" bind:value={form.name} required placeholder="e.g. Hilton Makkah / Sedan / Umrah visa / Saudia" />
 		<div class="grid grid-cols-2 gap-3">

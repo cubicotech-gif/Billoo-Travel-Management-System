@@ -69,15 +69,29 @@ active board.
 - **Initial response tracking:** Responded? · response text · initial quotation text.
 - **Actions:** Save → New Query. Edit/delete. Forward to Working.
 
-### Stage 2 — Working (Quotation Builder)
+### Stage 2 — Working (Quotation Builder / Package Builder)
 Reads from **Daily Rates**.
 - **Currency:** Hotels/Transfer/Visa in **SAR**; Tickets in **PKR**; one **ROE (SAR→PKR)**.
 - **Per-item pricing:** each rate item has a **cost** (vendor) and a **manual
   selling** price. Quotation uses selling; **margin (sell − cost) shown to staff**.
-- **Hotels — SAR, per room per night:** select Makkah + Madinah hotels.
-  Rooms from occupancy: `rooms = ceil(persons ÷ occupancy)`, editable. Nights
-  from check-in/out (or enter nights → dates, default check-in = today + 1
-  month). `hotel = room rate × nights × rooms`.
+- **Smart auto-save (low-friction):** hotels, transfers, ticket fares and visa
+  entered manually are saved to the rate database on quote save, **vendor-wise**
+  and **per hotel room-type (occupancy)**. Fuzzy name matching prevents
+  duplicates. Selecting a saved hotel auto-populates its most recent rates
+  (overwritable; the new rates are saved too). Vendors typed inline are
+  find-or-created. Each saved rate is **valid 3 days**; a one-click
+  “Update today” on the Daily Rates page refreshes an item's rate.
+- **Flexible itinerary (stays):** the itinerary is a free-ordered **sequence of
+  stays** — each stay = city + hotel + check-in/out + nights + rooms. No fixed
+  city order. **Dates chain**: a stay's check-in defaults to the previous stay's
+  check-out; reorder re-chains automatically. Supports **split-stays** (one city
+  across 2–3 hotels) and **return visits** (non-consecutive stays in the same
+  city/hotel — never merged). Nights auto-calc; **total vs requested** shown.
+- **Breakfast:** optional per stay, charged **per person per night** by room
+  occupancy (cost + sell), persons = Σ(occupancy × qty).
+- **Hotels — SAR, per room per night:** Rooms from occupancy: `rooms = ceil(persons
+  ÷ occupancy)`, editable. Nights from check-in/out (or enter nights → dates,
+  default check-in = today + 1 month). `hotel = room rate × nights × rooms`.
 - **Transfer — SAR, per vehicle:** `transfer = vehicle rate × vehicles`.
 - **Visa — SAR:** `persons = adults + children + infants` (infant = adult rate);
   `visa = rate × persons`.
@@ -89,6 +103,10 @@ Reads from **Daily Rates**.
   Package total (PKR) = SAR subtotal × ROE + tickets (PKR)
   Profit (PKR)        = total sell − total cost   (same formula on cost prices)
   ```
+- **Per-person:** *Simple* = total ÷ (adults + children [+ infants]). *Advanced*
+  = shared costs (hotels, transfers) ÷ adults, while children are charged only
+  for the items they actually use (visa, tickets) at their own rates — an
+  editable breakdown picks which buckets children share.
 - **Output:** auto total → WhatsApp template (copy-paste) → save to passenger
   history. "Add another quotation" → alternatives, each saved. Edit/delete per
   quotation (drafts: hard delete; sent: edit = new version, delete = archive).
