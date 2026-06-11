@@ -30,10 +30,18 @@ export interface RoomType {
 	sellSar: number;
 }
 
-/** Optional breakfast add-on, charged per person per night (room occupancy). */
+/**
+ * Optional breakfast. Either *included* in the room rate (display only, no
+ * charge — some hotels bundle it / make it compulsory) or charged *separately*
+ * per person per night. `persons` is supplied by the caller (room occupancy by
+ * default, or a manual override e.g. "breakfast for 2 only").
+ */
 export interface BreakfastInput {
 	costSar: number;
 	sellSar: number;
+	persons: number;
+	personsAuto?: boolean; // true when persons came from occupancy (not overridden)
+	included?: boolean; // bundled in the room rate — show it, don't price it
 }
 
 export interface HotelInput {
@@ -260,32 +268,39 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			});
 		}
 
-		// Breakfast: per person per night, persons derived from room occupancy.
-		if (h.breakfast && (h.breakfast.costSar > 0 || h.breakfast.sellSar > 0)) {
-			const persons = personsInRooms(h.rooms);
-			const units = persons * h.nights;
-			if (units > 0) {
-				const lineCost = multiply(money(h.breakfast.costSar, 'SAR'), units);
-				const lineSell = multiply(money(h.breakfast.sellSar, 'SAR'), units);
+		// Breakfast: included (display, no charge) or per person per night.
+		if (h.breakfast) {
+			const b = h.breakfast;
+			const priced = !b.included && (b.costSar > 0 || b.sellSar > 0);
+			if (b.included || priced) {
+				const units = b.persons * h.nights;
+				const unitCost = b.included ? 0 : b.costSar;
+				const unitSell = b.included ? 0 : b.sellSar;
+				const lineCost = multiply(money(unitCost, 'SAR'), units);
+				const lineSell = multiply(money(unitSell, 'SAR'), units);
 				sarCosts.push(lineCost);
 				sarSells.push(lineSell);
 				lines.push({
 					line_type: 'hotel',
-					label: `${h.city} — ${h.name} (breakfast ×${persons}/night)`,
+					label: b.included
+						? `${h.city} — ${h.name} (breakfast included)`
+						: `${h.city} — ${h.name} (breakfast ×${b.persons}/night)`,
 					rateCardId: null,
 					vendorId: h.vendorId ?? null,
 					currency: 'SAR',
-					unitCost: h.breakfast.costSar,
-					unitSell: h.breakfast.sellSar,
+					unitCost,
+					unitSell,
 					quantity: units,
 					lineCost: toNumber(lineCost),
 					lineSell: toNumber(lineSell),
 					meta: {
 						stay: hi,
 						kind: 'breakfast',
+						included: !!b.included,
 						city: h.city,
 						hotel: h.name,
-						persons,
+						persons: b.persons,
+						persons_auto: b.personsAuto ?? true,
 						nights: h.nights
 					}
 				});

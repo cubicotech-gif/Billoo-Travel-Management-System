@@ -118,7 +118,7 @@ describe('quotation calculator', () => {
 					name: 'Hilton',
 					nights: 5,
 					rooms: [{ label: 'Quad', occupancy: 4, qty: 1, costSar: 400, sellSar: 480 }],
-					breakfast: { costSar: 10, sellSar: 15 }
+					breakfast: { costSar: 10, sellSar: 15, persons: 4 }
 				}
 			],
 			transfers: [],
@@ -130,6 +130,50 @@ describe('quotation calculator', () => {
 		expect(personsInRooms([{ label: 'Quad', occupancy: 4, qty: 1, costSar: 0, sellSar: 0 }])).toBe(4);
 		const bk = r.lines.find((l) => l.meta?.kind === 'breakfast');
 		expect(bk?.lineSell).toBe(300);
+	});
+
+	it('supports a manual breakfast persons override (e.g. 2 of 4)', () => {
+		const r = calculateQuotation({
+			...base,
+			pax: { adults: 4, children: 0, infants: 0 },
+			hotels: [
+				{
+					city: 'Makkah',
+					name: 'Hilton',
+					nights: 5,
+					rooms: [{ label: 'Quad', occupancy: 4, qty: 1, costSar: 400, sellSar: 480 }],
+					breakfast: { costSar: 10, sellSar: 15, persons: 2, personsAuto: false }
+				}
+			],
+			transfers: [],
+			visa: null,
+			tickets: null
+		});
+		// breakfast: 15 * (2 persons * 5 nights) = 150.
+		expect(r.lines.find((l) => l.meta?.kind === 'breakfast')?.lineSell).toBe(150);
+	});
+
+	it('breakfast included in the room rate adds no charge but is flagged', () => {
+		const r = calculateQuotation({
+			...base,
+			hotels: [
+				{
+					city: 'Makkah',
+					name: 'Hilton',
+					nights: 5,
+					rooms: [{ label: 'Double', occupancy: 2, qty: 1, costSar: 200, sellSar: 250 }],
+					breakfast: { costSar: 0, sellSar: 0, persons: 2, included: true }
+				}
+			],
+			transfers: [],
+			visa: null,
+			tickets: null
+		});
+		// 250 * 5 = 1250 only; breakfast line present at 0 with included flag.
+		expect(r.sarSell).toBe(1250);
+		const bk = r.lines.find((l) => l.meta?.kind === 'breakfast');
+		expect(bk?.lineSell).toBe(0);
+		expect(bk?.meta?.included).toBe(true);
 	});
 
 	it('advanced per-person shares hotels across adults, children pay only their items', () => {

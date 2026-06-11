@@ -16,25 +16,30 @@
 	import { formatAmount } from '$lib/money';
 	import { useQueryDetail, useSetQueryStatus } from '$features/queries/queries';
 	import { useRates, useLatestRoe } from '$features/rates/queries';
-	import {
-		latestRates,
-		distinctHotels,
-		hotelRoomRates,
-		transferRateOptions
-	} from '$features/rates/types';
+	import { latestRates, hotelRoomRates, transferRateOptions } from '$features/rates/types';
 	import { rateAgeDays } from '$features/rates/validity';
 	import VendorPicker from '$features/vendors/VendorPicker.svelte';
+	import HotelPicker from './HotelPicker.svelte';
 	import {
 		calculateQuotation,
 		perPerson,
 		perPersonDivisor,
 		perPersonAdvanced,
+		personsInRooms,
 		DEFAULT_CHILD_SHARE,
 		type QuotationInput
 	} from './calculator';
 	import { renderStructured, type WhatsAppData, type WhatsAppHotel } from './whatsapp';
-	import { addDays } from './dates';
-	import { rechain, applyDateRange, applyNights, moveStay, totalNights } from './itinerary';
+	import { addDays, toISO } from './dates';
+	import {
+		rechain,
+		applyDateRange,
+		applyNights,
+		moveStay,
+		pinCheckIn,
+		relinkCheckIn,
+		totalNights
+	} from './itinerary';
 	import { persistRates, type RateSnapshot } from './autosave';
 	import { useCreateQuotation } from './queries';
 	import { getQuotation, getQuotationLines } from './api';
@@ -73,13 +78,6 @@
 	const num = (v: number | string) => Number(v) || 0;
 	const splitLines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
 
-	function hotelOpts(city: string) {
-		return [
-			{ value: '', label: '— none —' },
-			...distinctHotels(pool, city).map((h) => ({ value: h.name, label: h.name })),
-			{ value: OTHER, label: 'Other — type manually' }
-		];
-	}
 	const transferOpts = $derived([
 		{ value: '', label: 'Custom (type below)' },
 		...transferRateOptions(pool).map((r) => ({
@@ -137,7 +135,7 @@
 			});
 			rechain(form.hotels);
 		}
-		form.validUntil = addDays(new Date().toISOString().slice(0, 10), 7);
+		form.validUntil = addDays(toISO(new Date()), 7);
 		if (r) form.roeValue = Number(r.sar_to_pkr);
 		seeded = true;
 	});
@@ -160,17 +158,22 @@
 	function move(i: number, dir: -1 | 1) {
 		moveStay(form.hotels, i, i + dir);
 	}
+	function onStayCheckIn(i: number) {
+		pinCheckIn(form.hotels, i);
+	}
+	function relink(i: number) {
+		relinkCheckIn(form.hotels, i);
+	}
 
 	const requestedNights = $derived(
 		($queryDetail.data?.itinerary_cities ?? []).reduce((a, c) => a + (c.nights ?? 0), 0)
 	);
 	const itineraryNights = $derived(totalNights(form.hotels));
 
-	// Hotel selection: known hotel → auto-populate room rates by occupancy.
-	function onHotelSel(h: HotelForm) {
-		if (h.sel === OTHER || !h.sel) return;
-		h.name = h.sel;
-		const recents = hotelRoomRates($rates.data ?? [], h.sel, h.city);
+	// A saved hotel was picked → auto-populate its room rates by occupancy.
+	function onHotelPick(h: HotelForm, saved: boolean) {
+		if (!saved || !h.name) return;
+		const recents = hotelRoomRates($rates.data ?? [], h.name, h.city);
 		if (recents.length) {
 			h.rooms = recents.map((r) => {
 				const occ = r.occupancy ?? 2;
@@ -200,8 +203,8 @@
 
 	// Most recent rate age for a selected hotel — drives the "update rates" hint.
 	function hotelRateAge(h: HotelForm): number | null {
-		if (h.sel === OTHER || !h.sel) return null;
-		const recents = hotelRoomRates($rates.data ?? [], h.sel, h.city);
+		if (!h.name) return null;
+		const recents = hotelRoomRates($rates.data ?? [], h.name, h.city);
 		const newest = recents.reduce<string | null>(
 			(a, r) => (a && a > r.rate_date ? a : r.rate_date),
 			null
@@ -230,7 +233,9 @@
 		}
 	}
 
-	const stayPersons = (h: HotelForm) => h.rooms.reduce((a, r) => a + num(r.occupancy) * num(r.qty), 0);
+	const stayPersons = (h: HotelForm) => personsInRooms(h.rooms.map((r) => ({ label: '', occupancy: num(r.occupancy), qty: num(r.qty), costSar: 0, sellSar: 0 })));
+	// Breakfast persons: manual override when set (>0), else room occupancy total.
+	const breakfastPersons = (h: HotelForm) => (num(h.breakfastPersons) > 0 ? num(h.breakfastPersons) : stayPersons(h));
 
 	function roomTypeLabel(room: ReturnType<typeof newRoom>) {
 		return room.rt === 'Custom' ? room.customLabel || 'Room' : room.rt;
@@ -260,9 +265,16 @@
 				costSar: num(r.cost),
 				sellSar: num(r.sell)
 			})),
-			breakfast: h.breakfast
-				? { costSar: num(h.breakfastCost), sellSar: num(h.breakfastSell) }
-				: null
+			breakfast:
+				h.breakfastMode === 'none'
+					? null
+					: {
+							costSar: num(h.breakfastCost),
+							sellSar: num(h.breakfastSell),
+							persons: breakfastPersons(h),
+							personsAuto: num(h.breakfastPersons) <= 0,
+							included: h.breakfastMode === 'included'
+						}
 		};
 	}
 
@@ -312,7 +324,7 @@
 			city: h.city || 'Hotel',
 			hotel: h.name || '',
 			nights: num(h.nights),
-			breakfast: h.breakfast,
+			breakfast: h.breakfastMode !== 'none',
 			roomLines: h.rooms.map((r) => `${roomTypeLabel(r)} (sleeps ${num(r.occupancy)}) ×${num(r.qty)}`)
 		};
 	}
@@ -525,11 +537,8 @@
 						<div class="space-y-3">
 							<div class="grid grid-cols-2 gap-2">
 								<Input label="City" bind:value={slot.city} placeholder="e.g. Makkah" />
-								<Select label="Hotel" bind:value={slot.sel} options={hotelOpts(slot.city)} onchange={() => onHotelSel(slot)} />
+								<HotelPicker city={slot.city} bind:value={slot.name} onPick={(saved) => onHotelPick(slot, saved)} />
 							</div>
-							{#if slot.sel === OTHER}
-								<Input label="Hotel name" bind:value={slot.name} placeholder="Type hotel name — auto-saved" />
-							{/if}
 							<VendorPicker service="Hotel" bind:value={slot.vendorId} />
 							{#if age !== null && age >= 3}
 								<p class="rounded bg-amber-50 px-2 py-1 text-xs text-amber-700">Saved rate is {age} days old — please update.</p>
@@ -541,10 +550,16 @@
 								<RangeCalendar bind:start={slot.checkIn} bind:end={slot.checkOut} onChange={() => onStayDates(hi)} />
 							{:else}
 								<div class="grid grid-cols-2 gap-2">
-									<Input label="Check-in (auto)" type="date" value={slot.checkIn} disabled />
+									<Input label="Check-in" type="date" bind:value={slot.checkIn} onchange={() => onStayCheckIn(hi)} />
 									<Input label="Check-out" type="date" bind:value={slot.checkOut} onchange={() => onStayDates(hi)} />
 								</div>
-								<p class="mt-1 text-xs text-slate-400">Check-in chains from the previous stay's check-out.</p>
+								<p class="mt-1 text-xs text-slate-400">
+									{#if slot.lockCheckIn}
+										Check-in pinned. <button type="button" class="text-brand-600 hover:underline" onclick={() => relink(hi)}>↻ chain from previous</button>
+									{:else}
+										Defaults to the previous stay's check-out — edit to override.
+									{/if}
+								</p>
 							{/if}
 							<div class="mt-2 w-24">
 								<Input label="Nights" type="number" min="0" bind:value={slot.nights} onchange={() => onStayNights(hi)} />
@@ -575,15 +590,22 @@
 							{/each}
 						</div>
 
-						<!-- Breakfast: per person per night by room occupancy. -->
+						<!-- Breakfast: none / included in room rate / charged separately. -->
 						<div class="mt-3 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
-							<label class="mb-2 flex items-center gap-2 text-sm text-slate-600">
-								<input type="checkbox" bind:checked={slot.breakfast} class="rounded border-slate-300" /> With breakfast
-							</label>
-							{#if slot.breakfast}
+							<div class="w-52">
+								<Select label="Breakfast" bind:value={slot.breakfastMode} options={[
+									{ value: 'none', label: 'No breakfast' },
+									{ value: 'included', label: 'Included in room rate' },
+									{ value: 'separate', label: 'Charged separately' }
+								]} />
+							</div>
+							{#if slot.breakfastMode === 'separate'}
 								<div class="w-24"><Input label="Cost (SAR)" type="number" min="0" step="0.01" bind:value={slot.breakfastCost} /></div>
 								<div class="w-24"><Input label="Sell (SAR)" type="number" min="0" step="0.01" bind:value={slot.breakfastSell} /></div>
-								<span class="mb-2 text-xs text-slate-400">× {stayPersons(slot)} persons × {num(slot.nights)} nights</span>
+								<div class="w-28"><Input label="Persons (0 = auto)" type="number" min="0" bind:value={slot.breakfastPersons} /></div>
+								<span class="mb-2 text-xs text-slate-400">× {breakfastPersons(slot)} persons × {num(slot.nights)} nights</span>
+							{:else if slot.breakfastMode === 'included'}
+								<span class="mb-2 text-xs text-slate-400">Bundled in the room rate — shown as “Breakfast Included”, no extra charge.</span>
 							{/if}
 						</div>
 					</div>

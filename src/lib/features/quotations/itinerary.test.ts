@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { applyDateRange, applyNights, moveStay, rechain, totalNights, type ChainStay } from './itinerary';
+import {
+	applyDateRange,
+	applyNights,
+	moveStay,
+	pinCheckIn,
+	rechain,
+	relinkCheckIn,
+	totalNights,
+	type ChainStay
+} from './itinerary';
+import { addDays } from './dates';
 
 const stay = (checkIn = '', checkOut = '', nights = 0): ChainStay => ({ checkIn, checkOut, nights });
 
@@ -53,5 +63,39 @@ describe('itinerary chaining', () => {
 		applyNights(stays, 0);
 		expect(stays[0]?.checkIn).not.toBe('');
 		expect(stays[0]?.checkOut).not.toBe('');
+	});
+
+	it('crosses month boundaries without a timezone off-by-one', () => {
+		// 27 Jun + 4 nights = 1 Jul (was 30 Jun before the toISO local-parts fix).
+		expect(addDays('2026-06-27', 4)).toBe('2026-07-01');
+		const stays = [stay('2026-06-27', '2026-07-01', 0), stay('', '', 3)];
+		applyDateRange(stays, 0);
+		expect(stays[0]?.checkOut).toBe('2026-07-01');
+		expect(stays[1]?.checkIn).toBe('2026-07-01');
+	});
+
+	it('pins a manually-edited check-in and re-chains downstream from it', () => {
+		const stays = [stay('2026-04-04', '', 4), stay('', '', 3), stay('', '', 2)];
+		rechain(stays); // stay1 checkIn → 2026-04-08
+		// User overrides stay1 check-in to a later date (gap in the trip).
+		const s1 = stays[1];
+		if (s1) s1.checkIn = '2026-04-10';
+		pinCheckIn(stays, 1);
+		expect(stays[1]?.checkIn).toBe('2026-04-10');
+		expect(stays[1]?.checkOut).toBe('2026-04-13');
+		expect(stays[2]?.checkIn).toBe('2026-04-13'); // downstream still chains
+		// Changing stay0 no longer overwrites the pinned stay1 check-in.
+		const s0 = stays[0];
+		if (s0) s0.nights = 6;
+		rechain(stays);
+		expect(stays[1]?.checkIn).toBe('2026-04-10');
+	});
+
+	it('relinks a pinned stay back into the auto-chain', () => {
+		const stays = [stay('2026-04-04', '', 4), stay('2026-04-10', '', 3)];
+		const s1 = stays[1];
+		if (s1) s1.lockCheckIn = true;
+		relinkCheckIn(stays, 1);
+		expect(stays[1]?.checkIn).toBe('2026-04-08');
 	});
 });
