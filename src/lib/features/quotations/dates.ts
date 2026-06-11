@@ -2,7 +2,12 @@
 // strings; nights = whole days between check-in and check-out.
 
 export function toISO(d: Date): string {
-	return d.toISOString().slice(0, 10);
+	// Format from LOCAL date parts — never via toISOString(), which converts to
+	// UTC and can shift the date back a day in positive-offset timezones (PKT).
+	const y = d.getFullYear();
+	const m = String(d.getMonth() + 1).padStart(2, '0');
+	const day = String(d.getDate()).padStart(2, '0');
+	return `${y}-${m}-${day}`;
 }
 
 export function fromISO(s: string): Date {

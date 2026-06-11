@@ -31,6 +31,7 @@ export interface RoomRow {
 }
 // A "stay" = city + hotel + dates + nights + rooms. The itinerary is a sequence
 // of stays (split-stay and return visits are just more stays), dates auto-chain.
+export type BreakfastMode = 'none' | 'included' | 'separate';
 export interface HotelForm {
 	id: string;
 	city: string;
@@ -40,8 +41,10 @@ export interface HotelForm {
 	checkIn: string;
 	checkOut: string;
 	nights: number;
+	lockCheckIn: boolean; // user pinned this stay's check-in (don't auto-chain)
 	rooms: RoomRow[];
-	breakfast: boolean;
+	breakfastMode: BreakfastMode;
+	breakfastPersons: number; // 0 = auto (room occupancy)
 	breakfastCost: number;
 	breakfastSell: number;
 }
@@ -95,7 +98,7 @@ export interface BuilderForm {
 }
 
 export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 });
-export const blankHotel = (city = ''): HotelForm => ({ id: uid(), city, sel: '', name: '', vendorId: '', checkIn: '', checkOut: '', nights: 0, rooms: [newRoom()], breakfast: false, breakfastCost: 0, breakfastSell: 0 });
+export const blankHotel = (city = ''): HotelForm => ({ id: uid(), city, sel: '', name: '', vendorId: '', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0 });
 export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Airport → Makkah', customRoute: '', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
 export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', vendorId: '', cost: 0, sell: 0, include: true });
 export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 });
@@ -174,9 +177,11 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				stayOrder.push(key);
 			}
 			if (meta.kind === 'breakfast') {
-				slot.breakfast = true;
+				slot.breakfastMode = meta.included ? 'included' : 'separate';
 				slot.breakfastCost = Number(l.unit_cost);
 				slot.breakfastSell = Number(l.unit_sell);
+				// Restore a manual persons override; leave 0 (auto) otherwise.
+				slot.breakfastPersons = meta.persons_auto === false ? n(meta, 'persons') : 0;
 				continue;
 			}
 			const rt = s(meta, 'room_type') || 'Double';

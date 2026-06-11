@@ -9,20 +9,22 @@ export interface ChainStay {
 	checkIn: string;
 	checkOut: string;
 	nights: number;
+	/** When true the user pinned this stay's check-in — don't auto-chain it. */
+	lockCheckIn?: boolean;
 }
 
 /**
  * Re-chain an ordered list of stays in place. The FIRST stay keeps its own
- * check-in; every following stay's check-in is forced to the previous stay's
- * check-out. Each stay's nights are treated as the source of truth (so reorders
- * preserve durations and re-flow the dates); if nights are unset but both dates
- * exist, nights are derived from the dates instead.
+ * check-in; every following stay's check-in defaults to the previous stay's
+ * check-out UNLESS the user has pinned it (lockCheckIn). Each stay's nights are
+ * treated as the source of truth (so reorders preserve durations and re-flow
+ * the dates); if nights are unset but both dates exist, nights are derived.
  */
 export function rechain(stays: ChainStay[]): void {
 	for (let i = 0; i < stays.length; i++) {
 		const s = stays[i];
 		if (!s) continue;
-		if (i > 0) {
+		if (i > 0 && !s.lockCheckIn) {
 			const prev = stays[i - 1];
 			if (prev && prev.checkOut) s.checkIn = prev.checkOut;
 		}
@@ -45,6 +47,26 @@ export function applyDateRange(stays: ChainStay[], index: number): void {
 export function applyNights(stays: ChainStay[], index: number): void {
 	const s = stays[index];
 	if (s && s.nights > 0 && !s.checkIn) s.checkIn = defaultCheckIn();
+	rechain(stays);
+}
+
+/**
+ * The user manually edited a stay's check-in — pin it so chaining won't
+ * overwrite it, keep its duration (nights) and re-flow the dates: the stay's
+ * check-out shifts and everything downstream re-chains from it.
+ */
+export function pinCheckIn(stays: ChainStay[], index: number): void {
+	const s = stays[index];
+	if (!s) return;
+	if (index > 0) s.lockCheckIn = true;
+	rechain(stays);
+}
+
+/** Re-link a pinned stay back into the auto-chain (check-in follows previous). */
+export function relinkCheckIn(stays: ChainStay[], index: number): void {
+	const s = stays[index];
+	if (!s) return;
+	s.lockCheckIn = false;
 	rechain(stays);
 }
 

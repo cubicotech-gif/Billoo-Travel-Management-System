@@ -84,11 +84,15 @@ Reads from **Daily Rates**.
 - **Flexible itinerary (stays):** the itinerary is a free-ordered **sequence of
   stays** — each stay = city + hotel + check-in/out + nights + rooms. No fixed
   city order. **Dates chain**: a stay's check-in defaults to the previous stay's
-  check-out; reorder re-chains automatically. Supports **split-stays** (one city
+  check-out but is **editable** (pin/override, with re-link); reorder re-chains
+  automatically. Supports **split-stays** (one city
   across 2–3 hotels) and **return visits** (non-consecutive stays in the same
   city/hotel — never merged). Nights auto-calc; **total vs requested** shown.
-- **Breakfast:** optional per stay, charged **per person per night** by room
-  occupancy (cost + sell), persons = Σ(occupancy × qty).
+- **Breakfast:** per stay — **none**, **included** (bundled/compulsory in the
+  room rate: shown as “Breakfast Included”, no extra charge), or **separate**
+  (charged **per person per night**, cost + sell). Persons default to room
+  occupancy Σ(occupancy × qty) but can be **manually overridden** (e.g. breakfast
+  for 2 of 4).
 - **Hotels — SAR, per room per night:** Rooms from occupancy: `rooms = ceil(persons
   ÷ occupancy)`, editable. Nights from check-in/out (or enter nights → dates,
   default check-in = today + 1 month). `hotel = room rate × nights × rooms`.
