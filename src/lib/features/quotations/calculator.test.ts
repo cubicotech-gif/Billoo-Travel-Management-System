@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
 	calculateQuotation,
 	perPerson,
+	perPersonAdvanced,
 	perPersonDivisor,
+	personsInRooms,
 	roomsFor,
 	totalPersons,
 	type QuotationInput
@@ -104,6 +106,51 @@ describe('quotation calculator', () => {
 	it('nights/date helpers stay in sync', () => {
 		expect(nightsBetween('2026-03-03', '2026-03-08')).toBe(5);
 		expect(addDays('2026-03-03', 5)).toBe('2026-03-08');
+	});
+
+	it('charges breakfast per person per night by room occupancy', () => {
+		const r = calculateQuotation({
+			...base,
+			pax: { adults: 4, children: 0, infants: 0 },
+			hotels: [
+				{
+					city: 'Makkah',
+					name: 'Hilton',
+					nights: 5,
+					rooms: [{ label: 'Quad', occupancy: 4, qty: 1, costSar: 400, sellSar: 480 }],
+					breakfast: { costSar: 10, sellSar: 15 }
+				}
+			],
+			transfers: [],
+			visa: null,
+			tickets: null
+		});
+		// rooms: 480 * 5 = 2400; breakfast: 15 * (4 persons * 5 nights) = 300 → 2700 sell.
+		expect(r.sarSell).toBe(2700);
+		expect(personsInRooms([{ label: 'Quad', occupancy: 4, qty: 1, costSar: 0, sellSar: 0 }])).toBe(4);
+		const bk = r.lines.find((l) => l.meta?.kind === 'breakfast');
+		expect(bk?.lineSell).toBe(300);
+	});
+
+	it('advanced per-person shares hotels across adults, children pay only their items', () => {
+		const r = calculateQuotation({
+			...base,
+			pax: { adults: 2, children: 1, infants: 0 },
+			tickets: {
+				airlineName: 'Saudia',
+				adultCost: 150000,
+				adultSell: 180000,
+				childCost: 100000,
+				childSell: 120000,
+				infantCost: 0,
+				infantSell: 0
+			}
+		});
+		const adv = perPersonAdvanced(r, base.roe, { adults: 2, children: 1, infants: 0 });
+		// Adult shares accommodation+transfer over 2 adults, pays own visa + adult ticket.
+		// Child (default share) pays only visa + child ticket.
+		expect(adv.perChild).toBe(220 * 75 + 120000); // visa 220 SAR*75 + child ticket
+		expect(adv.perAdult).toBeGreaterThan(adv.perChild);
 	});
 
 	it('handles an empty quotation as zero', () => {

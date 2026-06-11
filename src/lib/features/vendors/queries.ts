@@ -1,5 +1,6 @@
 import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
-import { createVendor, deleteVendor, listVendors, updateVendor } from './api';
+import { createVendor, deleteVendor, ensureVendor, listVendors, updateVendor } from './api';
+import type { VendorService } from './types';
 import {
 	createVendorPayment,
 	deleteVendorPayment,
@@ -31,6 +32,16 @@ export function useUpdateVendor() {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: ({ id, patch }: { id: string; patch: VendorUpdate }) => updateVendor(id, patch),
+		onSuccess: () => client.invalidateQueries({ queryKey: VENDORS_KEY })
+	});
+}
+
+/** Find-or-create a vendor by name for the Package Builder's smart auto-save. */
+export function useEnsureVendor() {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ name, service }: { name: string; service: VendorService }) =>
+			ensureVendor(name, service),
 		onSuccess: () => client.invalidateQueries({ queryKey: VENDORS_KEY })
 	});
 }

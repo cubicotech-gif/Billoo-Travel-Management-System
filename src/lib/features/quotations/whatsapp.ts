@@ -7,12 +7,14 @@ export interface WhatsAppHotel {
 	hotel: string;
 	roomLines: string[]; // one line per room type, e.g. "Quad (4) ×1"
 	nights: number;
+	breakfast?: boolean;
 }
 
 export interface WhatsAppData {
 	totalNights: number;
 	packageType: string;
 	perPersonPkr: number;
+	perChildPkr?: number | null;
 	label?: string | null;
 	hotels: WhatsAppHotel[];
 	visaType: string | null;
@@ -30,6 +32,7 @@ function hotelBlock(h: WhatsAppHotel): string[] {
 	const emoji = CITY_EMOJI[h.city] ?? '🏙️';
 	const out = [`${emoji} ${h.city} Accommodation`, `🏨 ${h.hotel}`];
 	for (const line of h.roomLines) out.push(`🛏️ ${line}`);
+	if (h.breakfast) out.push('🍳 Breakfast Included');
 	out.push(`📅 ${h.nights} Nights Stay`);
 	return out;
 }
@@ -39,6 +42,7 @@ export function renderStructured(d: WhatsAppData): string {
 	const lines: string[] = [
 		`🌙 ${d.totalNights} Nights ${d.packageType} Package${tier} 🌙`,
 		`Package Cost: PKR ${pkr(d.perPersonPkr)}/- Per Person`,
+		...(d.perChildPkr ? [`Child: PKR ${pkr(d.perChildPkr)}/- Per Child`] : []),
 		''
 	];
 

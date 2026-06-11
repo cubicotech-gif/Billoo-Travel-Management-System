@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Pencil, Plus, Trash2, RefreshCw, Upload } from 'lucide-svelte';
+	import { Pencil, Plus, Trash2, RefreshCw, Upload, CalendarClock } from 'lucide-svelte';
 	import { useQueryClient } from '@tanstack/svelte-query';
 	import { Badge, Button, Card, Input, BulkImportModal } from '$ui';
 	import { formatAmount } from '$lib/money';
@@ -12,7 +12,8 @@
 		useSetRoe
 	} from '$features/rates/queries';
 	import { bulkCreateRates } from '$features/rates/api';
-	import { RATE_TYPES, RATE_TYPE_BY_KEY, type RateCard } from '$features/rates/types';
+	import { RATE_TYPES, RATE_TYPE_BY_KEY, latestRates, type RateCard } from '$features/rates/types';
+	import { isRateValid, RATE_VALIDITY_DAYS } from '$features/rates/validity';
 	import RateModal from '$features/rates/RateModal.svelte';
 
 	const rates = useRates();
@@ -50,9 +51,15 @@
 	let activeType = $state<RateItemType>('hotel');
 	let modalOpen = $state(false);
 	let editing = $state<RateCard | null>(null);
+	let cloneMode = $state(false);
 
 	const config = $derived(RATE_TYPE_BY_KEY[activeType]);
-	const rows = $derived(($rates.data ?? []).filter((r) => r.item_type === activeType));
+	// Show the latest rate per logical item — a clean daily-update worklist.
+	const rows = $derived(
+		latestRates($rates.data ?? [])
+			.filter((r) => r.item_type === activeType)
+			.sort((a, b) => a.name.localeCompare(b.name))
+	);
 
 	const vendorName = $derived.by(() => {
 		const map = new Map(($vendors.data ?? []).map((v) => [v.id, v.name]));
@@ -72,10 +79,17 @@
 
 	function openAdd() {
 		editing = null;
+		cloneMode = false;
 		modalOpen = true;
 	}
 	function openEdit(r: RateCard) {
 		editing = r;
+		cloneMode = false;
+		modalOpen = true;
+	}
+	function openUpdateToday(r: RateCard) {
+		editing = r;
+		cloneMode = true;
 		modalOpen = true;
 	}
 	function remove(r: RateCard) {
@@ -87,7 +101,8 @@
 	<h1 class="text-2xl font-bold text-slate-800">Daily Rates</h1>
 	<p class="text-sm text-slate-500">
 		Set today's exchange rate and maintain per-item cost & selling prices. Quotations use the
-		latest rate per item.
+		latest rate per item; rates are valid for {RATE_VALIDITY_DAYS} days. Use “Update today” to
+		refresh an item's rate in one click.
 	</p>
 </div>
 
@@ -160,7 +175,9 @@
 				{#each rows as r (r.id)}
 					{@const margin = Number(r.selling_price) - Number(r.cost_price)}
 					<tr class="hover:bg-slate-50">
-						<td class="px-4 py-3 font-medium text-slate-700">{r.name}</td>
+						<td class="px-4 py-3 font-medium text-slate-700">
+							{r.name}{#if r.item_type === 'hotel' && r.occupancy}<span class="ml-1 text-xs font-normal text-slate-400">· sleeps {r.occupancy}</span>{/if}
+						</td>
 						{#if config.hasCity}<td class="px-4 py-3"><Badge tone="neutral">{r.city ?? '—'}</Badge></td>{/if}
 						<td class="px-4 py-3 text-slate-500">{vendorName(r.vendor_id)}</td>
 						<td class="px-4 py-3 text-right text-slate-600">{formatAmount(Number(r.cost_price), r.currency)}</td>
@@ -168,9 +185,21 @@
 						<td class="px-4 py-3 text-right font-medium {margin >= 0 ? 'text-green-600' : 'text-red-600'}">
 							{formatAmount(margin, r.currency)}
 						</td>
-						<td class="px-4 py-3 text-xs text-slate-400">{new Date(r.rate_date).toLocaleDateString()}</td>
+						<td class="px-4 py-3 text-xs">
+							<div class="flex items-center gap-1.5">
+								<span class="text-slate-400">{new Date(r.rate_date).toLocaleDateString()}</span>
+								{#if isRateValid(r.rate_date)}
+									<Badge tone="success">valid</Badge>
+								{:else}
+									<Badge tone="warning">stale</Badge>
+								{/if}
+							</div>
+						</td>
 						<td class="px-4 py-3">
 							<div class="flex justify-end gap-1">
+								<button onclick={() => openUpdateToday(r)} class="rounded p-1.5 text-slate-400 hover:bg-brand-50 hover:text-brand-600" aria-label="Update today's rate" title="Update today's rate">
+									<CalendarClock class="h-4 w-4" />
+								</button>
 								<button onclick={() => openEdit(r)} class="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Edit">
 									<Pencil class="h-4 w-4" />
 								</button>
@@ -186,7 +215,7 @@
 	</div>
 {/if}
 
-<RateModal itemType={activeType} rate={editing} open={modalOpen} onClose={() => (modalOpen = false)} />
+<RateModal itemType={activeType} rate={editing} cloneAsNew={cloneMode} open={modalOpen} onClose={() => (modalOpen = false)} />
 
 <BulkImportModal
 	open={bulkOpen}
