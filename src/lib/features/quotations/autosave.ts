@@ -13,6 +13,7 @@ export interface RateSnapshot {
 	city: string | null;
 	occupancy: number | null;
 	vendor_id: string | null;
+	hotel_id?: string | null;
 	currency: 'SAR' | 'PKR';
 	unit: string | null;
 	cost_price: number;
@@ -73,6 +74,7 @@ export async function persistRates(
 			city: s.city,
 			occupancy: s.occupancy,
 			vendor_id: s.vendor_id,
+			hotel_id: s.hotel_id ?? null,
 			currency: s.currency,
 			unit: s.unit,
 			cost_price: s.cost_price,

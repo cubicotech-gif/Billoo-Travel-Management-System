@@ -15,11 +15,14 @@
 	import { Button, Card, Input, Select } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { useQueryDetail, useSetQueryStatus } from '$features/queries/queries';
+	import { auth } from '$lib/stores/auth.svelte';
 	import { useRates, useLatestRoe } from '$features/rates/queries';
 	import { latestRates, hotelRoomRates, transferRateOptions } from '$features/rates/types';
 	import { rateAgeDays } from '$features/rates/validity';
+	import { insertRateObservations } from '$features/rates/api';
+	import { buildObservations, type ObsStay } from '$features/rates/observations';
 	import VendorPicker from '$features/vendors/VendorPicker.svelte';
-	import HotelPicker from './HotelPicker.svelte';
+	import HotelSearchSelect from '$features/hotels/HotelSearchSelect.svelte';
 	import {
 		calculateQuotation,
 		perPerson,
@@ -56,6 +59,7 @@
 		blankAirline,
 		blankForm,
 		quotationToForm,
+		roomTypeEnum,
 		type HotelForm,
 		type TransferForm
 	} from './edit-map';
@@ -77,6 +81,13 @@
 
 	const num = (v: number | string) => Number(v) || 0;
 	const splitLines = (s: string) => s.split('\n').map((l) => l.trim()).filter(Boolean);
+
+	const MEAL_PLANS = [
+		{ value: 'RO', label: 'RO · room only' },
+		{ value: 'BB', label: 'BB · breakfast' },
+		{ value: 'HB', label: 'HB · half board' },
+		{ value: 'FB', label: 'FB · full board' }
+	];
 
 	const transferOpts = $derived([
 		{ value: '', label: 'Custom (type below)' },
@@ -170,9 +181,9 @@
 	);
 	const itineraryNights = $derived(totalNights(form.hotels));
 
-	// A saved hotel was picked → auto-populate its room rates by occupancy.
-	function onHotelPick(h: HotelForm, saved: boolean) {
-		if (!saved || !h.name) return;
+	// A canonical hotel was picked → auto-populate its room rates by occupancy.
+	function onHotelPick(h: HotelForm) {
+		if (!h.name) return;
 		const recents = hotelRoomRates($rates.data ?? [], h.name, h.city);
 		if (recents.length) {
 			h.rooms = recents.map((r) => {
@@ -253,6 +264,8 @@
 		return {
 			city,
 			name: h.name || city,
+			hotelId: h.hotelId || null,
+			mealPlan: h.mealPlan || 'RO',
 			vendorId: h.vendorId || null,
 			rateCardId: null,
 			nights: num(h.nights),
@@ -388,6 +401,7 @@
 					city: h.city || null,
 					occupancy: num(r.occupancy) || null,
 					vendor_id: h.vendorId || null,
+					hotel_id: h.hotelId || null,
 					currency: 'SAR',
 					unit: 'per room / night',
 					cost_price: num(r.cost),
@@ -440,12 +454,32 @@
 		return snaps;
 	}
 
+	// Silent rate capture: one append-only observation per complete hotel room
+	// line (canonical hotel + room type + dates + cost). Never blocks save.
+	function buildCaptureStays(): ObsStay[] {
+		return form.hotels
+			.filter((h) => h.hotelId && h.checkIn && h.checkOut && num(h.nights) > 0)
+			.map((h) => ({
+				hotelId: h.hotelId,
+				vendorId: h.vendorId,
+				checkIn: h.checkIn,
+				checkOut: h.checkOut,
+				nights: num(h.nights),
+				mealPlan: h.mealPlan,
+				rooms: h.rooms.map((r) => ({
+					roomType: roomTypeEnum(r.rt),
+					occupancy: num(r.occupancy),
+					cost: num(r.cost)
+				}))
+			}));
+	}
+
 	async function save(addAnother: boolean) {
 		if (num(form.roeValue) <= 0) {
 			alert('Set an exchange rate (ROE) first — see Daily Rates.');
 			return;
 		}
-		await $createQuotation.mutateAsync({
+		const quotation = await $createQuotation.mutateAsync({
 			queryId,
 			roe: num(form.roeValue),
 			pax: { adults: form.adults, children: form.children, infants: form.infants },
@@ -465,6 +499,17 @@
 			await client.invalidateQueries({ queryKey: ['rates'] });
 		} catch (e) {
 			console.warn('[quote] rate auto-save failed', e);
+		}
+		// Silent rate capture — must NEVER block the quotation save.
+		try {
+			const rows = buildObservations(buildCaptureStays(), {
+				quotationId: quotation.id,
+				queryId,
+				capturedBy: auth.user?.id ?? null
+			});
+			await insertRateObservations(rows);
+		} catch (e) {
+			console.warn('[quote] rate observation capture failed', e);
 		}
 		const st = $queryDetail.data?.status;
 		if (st === 'New Query' || st === 'Working') {
@@ -535,9 +580,10 @@
 
 					<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
 						<div class="space-y-3">
+							<HotelSearchSelect bind:hotelId={slot.hotelId} bind:name={slot.name} bind:city={slot.city} onPicked={() => onHotelPick(slot)} />
 							<div class="grid grid-cols-2 gap-2">
 								<Input label="City" bind:value={slot.city} placeholder="e.g. Makkah" />
-								<HotelPicker city={slot.city} bind:value={slot.name} onPick={(saved) => onHotelPick(slot, saved)} />
+								<Select label="Meal plan" bind:value={slot.mealPlan} options={MEAL_PLANS} />
 							</div>
 							<VendorPicker service="Hotel" bind:value={slot.vendorId} />
 							{#if age !== null && age >= 3}
@@ -578,6 +624,8 @@
 									<div class="w-28"><Select label="Type" bind:value={room.rt} options={ROOM_TYPES} onchange={() => onRoomType(room)} /></div>
 									{#if room.rt === 'Custom'}
 										<div class="w-24"><Input label="Label" bind:value={room.customLabel} /></div>
+									{/if}
+									{#if room.rt === 'Custom' || room.rt === 'Sharing'}
 										<div class="w-20"><Input label="Sleeps" type="number" min="1" bind:value={room.occupancy} /></div>
 									{/if}
 									<div class="w-16"><Input label="Qty" type="number" min="0" bind:value={room.qty} /></div>
