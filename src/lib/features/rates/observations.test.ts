@@ -3,6 +3,7 @@ import {
 	buildObservations,
 	groupHotelObservations,
 	latestHotelRoomRates,
+	reconcileObservations,
 	type ObsStay,
 	type RateObservation
 } from './observations';
@@ -89,6 +90,84 @@ describe('workshop rate capture', () => {
 		const rows = buildObservations([stay({ vendorId: '', mealPlan: 'XX' })], ctx);
 		expect(rows[0]?.vendor_id).toBeNull();
 		expect(rows[0]?.meal_plan).toBe('RO');
+	});
+});
+
+describe('reconcileObservations (smart capture)', () => {
+	const bb = (p: Partial<RateObservation>) => obs({ meal_plan: 'BB', ...p });
+	const quad = (over: Partial<ObsStay>) =>
+		stay({ rooms: [{ roomType: 'quad', occupancy: 4, cost: 500 }], ...over });
+
+	it('inserts a new band when dates do not overlap an existing season', () => {
+		const plan = reconcileObservations(
+			[bb({ id: 'e1', check_in: '2026-06-20', check_out: '2026-06-30', rate: 700 })],
+			[quad({ checkIn: '2026-08-01', checkOut: '2026-08-05', rooms: [{ roomType: 'quad', occupancy: 4, cost: 710 }] })],
+			ctx
+		);
+		expect(plan.updates).toHaveLength(0);
+		expect(plan.inserts).toHaveLength(1);
+		expect(plan.inserts[0]).toMatchObject({ check_in: '2026-08-01', rate: 710, source: 'workshop_capture' });
+	});
+
+	it('stretches the window back and refreshes the price on overlap', () => {
+		const plan = reconcileObservations(
+			[bb({ id: 'e1', check_in: '2026-06-20', check_out: '2026-06-30', rate: 700 })],
+			[quad({ checkIn: '2026-06-17', checkOut: '2026-06-25', rooms: [{ roomType: 'quad', occupancy: 4, cost: 675 }] })],
+			ctx
+		);
+		expect(plan.inserts).toHaveLength(0);
+		expect(plan.updates).toHaveLength(1);
+		expect(plan.updates[0]).toMatchObject({
+			id: 'e1',
+			patch: { check_in: '2026-06-17', check_out: '2026-06-30', rate: 675 }
+		});
+	});
+
+	it('folds multiple overlapping bands into the newest, invalidating the rest', () => {
+		const plan = reconcileObservations(
+			[
+				bb({ id: 'e1', check_in: '2026-06-20', check_out: '2026-06-25', rate: 700, captured_at: '2026-06-10T00:00:00Z' }),
+				bb({ id: 'e2', check_in: '2026-06-26', check_out: '2026-06-30', rate: 710, captured_at: '2026-06-12T00:00:00Z' })
+			],
+			[quad({ checkIn: '2026-06-22', checkOut: '2026-06-28', rooms: [{ roomType: 'quad', occupancy: 4, cost: 720 }] })],
+			ctx
+		);
+		expect(plan.updates).toHaveLength(1);
+		expect(plan.updates[0]?.id).toBe('e2'); // newest captured_at survives
+		expect(plan.updates[0]?.patch).toMatchObject({ check_in: '2026-06-20', check_out: '2026-06-30', rate: 720 });
+		expect(plan.invalidations).toEqual([{ id: 'e1', reason: 'merged' }]);
+	});
+
+	it('does not merge across a different vendor / meal (separate key)', () => {
+		const plan = reconcileObservations(
+			[bb({ id: 'e1', vendor_id: 'v1', check_in: '2026-06-20', check_out: '2026-06-30' })],
+			[quad({ vendorId: 'v2', checkIn: '2026-06-21', checkOut: '2026-06-28' })],
+			ctx
+		);
+		expect(plan.updates).toHaveLength(0);
+		expect(plan.inserts).toHaveLength(1);
+	});
+
+	it('stamps captured_at fresh when now is supplied', () => {
+		const plan = reconcileObservations(
+			[bb({ id: 'e1', check_in: '2026-06-20', check_out: '2026-06-30' })],
+			[quad({ checkIn: '2026-06-21', checkOut: '2026-06-28' })],
+			{ ...ctx, now: '2026-06-13T10:00:00Z' }
+		);
+		expect(plan.updates[0]?.patch.captured_at).toBe('2026-06-13T10:00:00Z');
+	});
+
+	it('merges overlapping captures within one save before inserting', () => {
+		const plan = reconcileObservations(
+			[],
+			[
+				quad({ checkIn: '2026-07-01', checkOut: '2026-07-05', rooms: [{ roomType: 'quad', occupancy: 4, cost: 600 }] }),
+				quad({ checkIn: '2026-07-04', checkOut: '2026-07-10', rooms: [{ roomType: 'quad', occupancy: 4, cost: 620 }] })
+			],
+			ctx
+		);
+		expect(plan.inserts).toHaveLength(1);
+		expect(plan.inserts[0]).toMatchObject({ check_in: '2026-07-01', check_out: '2026-07-10', rate: 620 });
 	});
 });
 

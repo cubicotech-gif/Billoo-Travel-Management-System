@@ -1,3 +1,4 @@
+import type { Currency } from '$lib/database.types';
 import type { RateObservation } from './observations';
 
 // Pure filter/sort core for the Hotel Rates explorer. Kept free of Svelte and
@@ -80,6 +81,122 @@ export function filterObservations(rows: EnrichedObs[], f: ObsFilters): Enriched
 		}
 		return true;
 	});
+}
+
+// --- Nested grouping: Hotel → Vendor → Room line → date bands (seasons) ------
+//
+// The flat table grew one row per (room × meal × season × vendor), so a single
+// hotel sprawled across 8–10 lines. The explorer instead collapses to one card
+// per hotel, grouped by vendor, with each room line listing its seasons. Pure so
+// it can be unit tested; the Svelte panel just renders the tree.
+
+const ROOM_ORDER: Record<string, number> = { double: 0, triple: 1, quad: 2, sharing: 3, custom: 4 };
+const MEAL_ORDER: Record<string, number> = { RO: 0, BB: 1, HB: 2, FB: 3 };
+
+export interface RateBand {
+	id: string;
+	rate: number;
+	currency: Currency;
+	from: string | null;
+	to: string | null;
+	needsVerify: boolean;
+	invalidated: boolean;
+	capturedAt: string;
+}
+export interface RoomLine {
+	roomType: string | null;
+	occupancy: number | null;
+	mealPlan: string;
+	bands: RateBand[];
+}
+export interface ExplorerVendorGroup {
+	vendorId: string | null;
+	vendor: string;
+	rooms: RoomLine[];
+	cheapest: number;
+}
+export interface HotelGroup {
+	hotelId: string;
+	hotelName: string;
+	hotelCity: string;
+	bandCount: number;
+	cheapest: number;
+	vendors: ExplorerVendorGroup[];
+}
+
+export function groupObservationsByHotel(rows: EnrichedObs[]): HotelGroup[] {
+	const hotels = new Map<string, { meta: EnrichedObs; vendors: Map<string, EnrichedObs[]> }>();
+	for (const r of rows) {
+		let h = hotels.get(r.hotel_id);
+		if (!h) {
+			h = { meta: r, vendors: new Map() };
+			hotels.set(r.hotel_id, h);
+		}
+		const vkey = r.vendor_id ?? '';
+		const list = h.vendors.get(vkey);
+		if (list) list.push(r);
+		else h.vendors.set(vkey, [r]);
+	}
+
+	const out: HotelGroup[] = [];
+	for (const h of hotels.values()) {
+		const vendors: ExplorerVendorGroup[] = [];
+		let hotelMin = Infinity;
+		let bandCount = 0;
+		for (const obsList of h.vendors.values()) {
+			// Bucket a vendor's rows into room lines (room + occupancy + meal).
+			const lines = new Map<string, RoomLine>();
+			let vendorMin = Infinity;
+			for (const o of obsList) {
+				const lk = `${o.room_type ?? ''}|${o.occupancy ?? ''}|${o.meal_plan}`;
+				let line = lines.get(lk);
+				if (!line) {
+					line = { roomType: o.room_type, occupancy: o.occupancy, mealPlan: o.meal_plan, bands: [] };
+					lines.set(lk, line);
+				}
+				line.bands.push({
+					id: o.id,
+					rate: Number(o.rate),
+					currency: o.currency,
+					from: o.check_in,
+					to: o.check_out,
+					needsVerify: o.needsVerify,
+					invalidated: o.invalidated,
+					capturedAt: o.captured_at
+				});
+				bandCount += 1;
+				if (!o.invalidated && Number(o.rate) > 0) vendorMin = Math.min(vendorMin, Number(o.rate));
+			}
+			const roomLines = [...lines.values()];
+			for (const line of roomLines) {
+				line.bands.sort((a, b) => (a.from ?? '').localeCompare(b.from ?? ''));
+			}
+			roomLines.sort(
+				(a, b) =>
+					(ROOM_ORDER[a.roomType ?? ''] ?? 9) - (ROOM_ORDER[b.roomType ?? ''] ?? 9) ||
+					(MEAL_ORDER[a.mealPlan] ?? 9) - (MEAL_ORDER[b.mealPlan] ?? 9)
+			);
+			const first = obsList[0];
+			vendors.push({
+				vendorId: first?.vendor_id ?? null,
+				vendor: first?.vendorName ?? 'Own / unspecified',
+				rooms: roomLines,
+				cheapest: vendorMin === Infinity ? 0 : vendorMin
+			});
+			if (vendorMin !== Infinity) hotelMin = Math.min(hotelMin, vendorMin);
+		}
+		vendors.sort((a, b) => a.vendor.localeCompare(b.vendor));
+		out.push({
+			hotelId: h.meta.hotel_id,
+			hotelName: h.meta.hotelName,
+			hotelCity: h.meta.hotelCity,
+			bandCount,
+			cheapest: hotelMin === Infinity ? 0 : hotelMin,
+			vendors
+		});
+	}
+	out.sort((a, b) => a.hotelName.localeCompare(b.hotelName));
+	return out;
 }
 
 export function sortObservations(rows: EnrichedObs[], s: ObsSort): EnrichedObs[] {

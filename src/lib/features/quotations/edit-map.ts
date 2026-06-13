@@ -24,6 +24,22 @@ export function roomTypeEnum(rt: string): ObsRoomType {
 			return 'custom';
 	}
 }
+/** Reverse of roomTypeEnum: map an observation enum back to a display label. */
+export function roomLabelFromEnum(rt: string | null): string {
+	switch (rt) {
+		case 'double':
+			return 'Double';
+		case 'triple':
+			return 'Triple';
+		case 'quad':
+			return 'Quad';
+		case 'sharing':
+			return 'Sharing';
+		default:
+			return 'Custom';
+	}
+}
+
 export const VEHICLES = ['4-seater', '7-seater', '14-seater', '50-seater', 'Custom'];
 export const ROUTES = [
 	'Airport → Makkah',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	enrichObservations,
 	filterObservations,
+	groupObservationsByHotel,
 	sortObservations,
 	EMPTY_FILTERS,
 	type EnrichedObs
@@ -75,6 +76,28 @@ describe('rate explorer filtering', () => {
 		]);
 		const r = filterObservations(rows, { ...EMPTY_FILTERS, from: '2026-08-01', to: '2026-12-31' });
 		expect(r.map((x) => x.id)).toEqual(['sep']);
+	});
+
+	it('groups into Hotel → Vendor → room line with date bands', () => {
+		const groups = groupObservationsByHotel(
+			enrich([
+				obs({ id: 'a', hotel_id: 'h1', vendor_id: 'v1', room_type: 'double', occupancy: 2, meal_plan: 'RO', rate: 575, check_in: '2026-06-17', check_out: '2026-07-01' }),
+				obs({ id: 'b', hotel_id: 'h1', vendor_id: 'v1', room_type: 'double', occupancy: 2, meal_plan: 'RO', rate: 670, check_in: '2026-07-13', check_out: '2026-07-20' }),
+				obs({ id: 'c', hotel_id: 'h1', vendor_id: 'v1', room_type: 'quad', occupancy: 4, meal_plan: 'RO', rate: 700, check_in: '2026-06-27', check_out: '2026-07-01' }),
+				obs({ id: 'd', hotel_id: 'h1', vendor_id: null, room_type: 'triple', occupancy: 3, meal_plan: 'RO', rate: 770, check_in: '2026-07-10', check_out: '2026-07-16' })
+			])
+		);
+		expect(groups).toHaveLength(1);
+		const h = groups[0]!;
+		expect(h.hotelName).toBe('Hilton Suites');
+		expect(h.bandCount).toBe(4);
+		expect(h.cheapest).toBe(575);
+		// Two vendors, "Own" sorts before "Vendor v1"
+		expect(h.vendors.map((v) => v.vendor)).toEqual(['Own', 'Vendor v1']);
+		const v1 = h.vendors.find((v) => v.vendor === 'Vendor v1')!;
+		// Double (2 bands) sorts before quad (1 band)
+		expect(v1.rooms.map((r) => r.roomType)).toEqual(['double', 'quad']);
+		expect(v1.rooms[0]?.bands.map((b) => b.from)).toEqual(['2026-06-17', '2026-07-13']);
 	});
 
 	it('sorts by rate ascending and captured descending', () => {

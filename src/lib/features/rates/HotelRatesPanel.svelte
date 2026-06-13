@@ -1,5 +1,17 @@
 <script lang="ts">
-	import { Plus, Pencil, Trash2, ShieldCheck, ShieldAlert, RotateCcw, X } from 'lucide-svelte';
+	import {
+		Plus,
+		Pencil,
+		Trash2,
+		ShieldCheck,
+		ShieldAlert,
+		RotateCcw,
+		X,
+		ChevronDown,
+		ChevronRight,
+		Building2,
+		AlertTriangle
+	} from 'lucide-svelte';
 	import { Badge, Button, Input, Select } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { useHotels } from '$features/hotels/queries';
@@ -8,14 +20,11 @@
 	import {
 		enrichObservations,
 		filterObservations,
-		sortObservations,
+		groupObservationsByHotel,
 		EMPTY_FILTERS,
 		type ObsFilters,
-		type ObsSort,
-		type ObsSortKey,
 		type EnrichedObs
 	} from './explorer';
-	import type { RateObservation } from './observations';
 	import ObservationModal from './ObservationModal.svelte';
 
 	const obs = useAllObservations();
@@ -25,9 +34,10 @@
 	const update = useUpdateObservation();
 
 	let filters = $state<ObsFilters>({ ...EMPTY_FILTERS });
-	let sort = $state<ObsSort>({ key: 'captured_at', dir: 'desc' });
 	let modalOpen = $state(false);
-	let editing = $state<RateObservation | null>(null);
+	let editing = $state<EnrichedObs | null>(null);
+	// Hotels render expanded; staff collapse the ones they're not working on.
+	let collapsed = $state(new Set<string>());
 
 	const hotelMap = $derived(
 		new Map(($hotels.data ?? []).map((h) => [h.id, { name: h.name, city: h.city }]))
@@ -38,7 +48,9 @@
 	});
 
 	const enriched = $derived(enrichObservations($obs.data ?? [], hotelMap, vendorName));
-	const rows = $derived(sortObservations(filterObservations(enriched, filters), sort));
+	const filtered = $derived(filterObservations(enriched, filters));
+	const groups = $derived(groupObservationsByHotel(filtered));
+	const byId = $derived(new Map(enriched.map((r) => [r.id, r])));
 
 	const hotelOptions = $derived([
 		{ value: '', label: 'All hotels' },
@@ -88,33 +100,41 @@
 		Object.entries(filters).filter(([k, v]) => v && !(k === 'status' && v === 'live')).length
 	);
 
-	function setSort(key: ObsSortKey) {
-		if (sort.key === key) sort = { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' };
-		else sort = { key, dir: key === 'rate' ? 'asc' : 'desc' };
-	}
 	function reset() {
 		filters = { ...EMPTY_FILTERS };
+	}
+	function toggleHotel(id: string) {
+		const next = new Set(collapsed);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		collapsed = next;
 	}
 	function openAdd() {
 		editing = null;
 		modalOpen = true;
 	}
-	function openEdit(r: EnrichedObs) {
-		editing = $obs.data?.find((o) => o.id === r.id) ?? null;
+	function openEdit(id: string) {
+		editing = byId.get(id) ?? null;
 		modalOpen = true;
 	}
-	function toggleVerify(r: EnrichedObs) {
+	function toggleVerify(id: string) {
+		const r = byId.get(id);
+		if (!r) return;
 		const notes = r.needsVerify
 			? (r.notes ?? '').replace(/^VERIFY:\s*/, '')
 			: `VERIFY: ${r.notes ?? ''}`.trim();
-		$update.mutate({ id: r.id, patch: { notes } });
+		$update.mutate({ id, patch: { notes } });
 	}
-	function toggleInvalid(r: EnrichedObs) {
-		$update.mutate({ id: r.id, patch: { invalidated: !r.invalidated } });
+	function toggleInvalid(id: string) {
+		const r = byId.get(id);
+		if (!r) return;
+		$update.mutate({ id, patch: { invalidated: !r.invalidated } });
 	}
-	function remove(r: EnrichedObs) {
+	function remove(id: string) {
+		const r = byId.get(id);
+		if (!r) return;
 		if (confirm(`Delete this ${r.hotelName} rate permanently? Use “invalidate” instead to keep history.`))
-			$del.mutate(r.id);
+			$del.mutate(id);
 	}
 
 	function fmtDate(s: string | null): string {
@@ -122,12 +142,14 @@
 		const d = new Date(s);
 		return isNaN(d.getTime()) ? s : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: '2-digit' });
 	}
+	const roomLabel = (rt: string | null, occ: number | null) =>
+		(rt ? rt.charAt(0).toUpperCase() + rt.slice(1) : 'Room') + (occ ? ` ·${occ}` : '');
 	const mealTone = (m: string): 'neutral' | 'info' | 'warning' => (m === 'RO' ? 'neutral' : m === 'BB' ? 'info' : 'warning');
-	const sortIcon = (key: ObsSortKey) => (sort.key === key ? (sort.dir === 'asc' ? '↑' : '↓') : '');
+	const cityLabel = (c: string) => (c ? c.charAt(0).toUpperCase() + c.slice(1) : '');
 </script>
 
 <div class="mb-3 flex items-center justify-between">
-	<p class="text-sm text-slate-500">Every captured vendor rate — auto-fed by the quote builder. Filter, compare, verify.</p>
+	<p class="text-sm text-slate-500">Captured vendor rates, grouped by hotel → vendor → room. Each room lists its seasons.</p>
 	<Button size="sm" onclick={openAdd}><Plus class="h-4 w-4" /> Add rate</Button>
 </div>
 
@@ -146,7 +168,7 @@
 		<Input label="Valid to" type="date" bind:value={filters.to} />
 	</div>
 	<div class="mt-2 flex items-center justify-between">
-		<span class="text-xs text-slate-500">{rows.length} of {enriched.length} rates</span>
+		<span class="text-xs text-slate-500">{groups.length} hotels · {filtered.length} of {enriched.length} rates</span>
 		{#if activeFilters > 0}
 			<Button size="sm" variant="ghost" onclick={reset}><X class="h-4 w-4" /> Clear filters</Button>
 		{/if}
@@ -157,56 +179,85 @@
 	<p class="text-slate-400">Loading rates…</p>
 {:else if $obs.isError}
 	<p class="text-red-600">Failed to load: {$obs.error.message}</p>
-{:else if rows.length === 0}
+{:else if groups.length === 0}
 	<div class="rounded-xl border border-dashed border-slate-200 py-12 text-center text-sm text-slate-400">
 		No rates match these filters.
 	</div>
 {:else}
-	<div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-		<table class="w-full text-sm">
-			<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-400">
-				<tr>
-					<th class="cursor-pointer px-3 py-2" onclick={() => setSort('hotel')}>Hotel {sortIcon('hotel')}</th>
-					<th class="cursor-pointer px-3 py-2" onclick={() => setSort('vendor')}>Vendor {sortIcon('vendor')}</th>
-					<th class="px-3 py-2">Room</th>
-					<th class="px-3 py-2">Meal</th>
-					<th class="cursor-pointer px-3 py-2 text-right" onclick={() => setSort('rate')}>Rate {sortIcon('rate')}</th>
-					<th class="cursor-pointer px-3 py-2" onclick={() => setSort('check_in')}>Valid {sortIcon('check_in')}</th>
-					<th class="cursor-pointer px-3 py-2" onclick={() => setSort('captured_at')}>Captured {sortIcon('captured_at')}</th>
-					<th class="px-3 py-2"></th>
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-slate-50">
-				{#each rows as r (r.id)}
-					<tr class="hover:bg-slate-50 {r.invalidated ? 'opacity-50' : ''}">
-						<td class="px-3 py-2">
-							<div class="font-medium text-slate-700">{r.hotelName}</div>
-							<div class="text-xs capitalize text-slate-400">{r.hotelCity}</div>
-						</td>
-						<td class="px-3 py-2 text-slate-600">{r.vendorName}</td>
-						<td class="px-3 py-2 capitalize text-slate-600">{r.room_type ?? '—'}{r.occupancy ? ` ·${r.occupancy}` : ''}</td>
-						<td class="px-3 py-2"><Badge tone={mealTone(r.meal_plan)}>{r.meal_plan}</Badge></td>
-						<td class="whitespace-nowrap px-3 py-2 text-right font-semibold text-slate-800">{formatAmount(Number(r.rate), r.currency)}</td>
-						<td class="whitespace-nowrap px-3 py-2 text-slate-500">{fmtDate(r.check_in)} → {fmtDate(r.check_out)}</td>
-						<td class="whitespace-nowrap px-3 py-2 text-xs text-slate-400">{fmtDate(r.captured_at)}</td>
-						<td class="px-3 py-2">
-							<div class="flex items-center justify-end gap-1">
-								{#if r.needsVerify}<Badge tone="warning">verify</Badge>{/if}
-								{#if r.invalidated}<Badge tone="danger">void</Badge>{/if}
-								<button type="button" onclick={() => openEdit(r)} class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Edit"><Pencil class="h-4 w-4" /></button>
-								<button type="button" onclick={() => toggleVerify(r)} class="rounded p-1 text-slate-400 hover:bg-amber-50 hover:text-amber-600" aria-label="Toggle verify">
-									{#if r.needsVerify}<ShieldCheck class="h-4 w-4" />{:else}<ShieldAlert class="h-4 w-4" />{/if}
-								</button>
-								<button type="button" onclick={() => toggleInvalid(r)} class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Toggle invalidate">
-									<RotateCcw class="h-4 w-4" />
-								</button>
-								<button type="button" onclick={() => remove(r)} class="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete"><Trash2 class="h-4 w-4" /></button>
+	<div class="space-y-3">
+		{#each groups as g (g.hotelId)}
+			{@const open = !collapsed.has(g.hotelId)}
+			<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+				<button
+					type="button"
+					onclick={() => toggleHotel(g.hotelId)}
+					class="flex w-full items-center justify-between gap-2 px-4 py-3 text-left hover:bg-slate-50"
+				>
+					<span class="flex items-center gap-2">
+						{#if open}<ChevronDown class="h-4 w-4 text-slate-400" />{:else}<ChevronRight class="h-4 w-4 text-slate-400" />{/if}
+						<Building2 class="h-4 w-4 text-slate-400" />
+						<span class="font-semibold text-slate-800">{g.hotelName}</span>
+						{#if g.hotelCity}<Badge tone="neutral">{cityLabel(g.hotelCity)}</Badge>{/if}
+					</span>
+					<span class="flex items-center gap-3 text-xs text-slate-400">
+						{#if g.cheapest > 0}<span>from <span class="font-semibold text-slate-600">{formatAmount(g.cheapest, 'SAR')}</span></span>{/if}
+						<span>{g.bandCount} {g.bandCount === 1 ? 'rate' : 'rates'}</span>
+					</span>
+				</button>
+
+				{#if open}
+					<div class="space-y-4 border-t border-slate-100 px-4 py-3">
+						{#each g.vendors as v (v.vendorId ?? 'own')}
+							<div>
+								<div class="mb-1.5 flex items-center justify-between">
+									<span class="text-xs font-semibold uppercase tracking-wide text-slate-500">{v.vendor}</span>
+									{#if v.cheapest > 0}<span class="text-xs text-slate-400">from {formatAmount(v.cheapest, 'SAR')}</span>{/if}
+								</div>
+								<div class="overflow-hidden rounded-lg border border-slate-100">
+									<table class="w-full text-sm">
+										<tbody class="divide-y divide-slate-50">
+											{#each v.rooms as room (room.roomType + '|' + room.occupancy + '|' + room.mealPlan)}
+												{#each room.bands as band, bi (band.id)}
+													{@const r = byId.get(band.id)}
+													<tr class="hover:bg-slate-50/60 {band.invalidated ? 'opacity-50' : ''}">
+														<td class="w-32 px-3 py-1.5 align-top">
+															{#if bi === 0}
+																<span class="font-medium text-slate-700">{roomLabel(room.roomType, room.occupancy)}</span>
+															{/if}
+														</td>
+														<td class="w-14 px-2 py-1.5 align-top">
+															{#if bi === 0}<Badge tone={mealTone(room.mealPlan)}>{room.mealPlan}</Badge>{/if}
+														</td>
+														<td class="whitespace-nowrap px-3 py-1.5 text-slate-500">{fmtDate(band.from)} → {fmtDate(band.to)}</td>
+														<td class="whitespace-nowrap px-3 py-1.5 text-right font-semibold text-slate-800">{formatAmount(band.rate, band.currency)}</td>
+														<td class="px-3 py-1.5">
+															<div class="flex items-center justify-end gap-1">
+																{#if band.needsVerify}
+																	<span class="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700">
+																		<AlertTriangle class="h-3 w-3" /> verify
+																	</span>
+																{/if}
+																{#if band.invalidated}<Badge tone="danger">void</Badge>{/if}
+																<button type="button" onclick={() => openEdit(band.id)} class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Edit"><Pencil class="h-4 w-4" /></button>
+																<button type="button" onclick={() => toggleVerify(band.id)} class="rounded p-1 text-slate-400 hover:bg-amber-50 hover:text-amber-600" aria-label="Toggle verify">
+																	{#if r?.needsVerify}<ShieldCheck class="h-4 w-4" />{:else}<ShieldAlert class="h-4 w-4" />{/if}
+																</button>
+																<button type="button" onclick={() => toggleInvalid(band.id)} class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Toggle invalidate"><RotateCcw class="h-4 w-4" /></button>
+																<button type="button" onclick={() => remove(band.id)} class="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete"><Trash2 class="h-4 w-4" /></button>
+															</div>
+														</td>
+													</tr>
+												{/each}
+											{/each}
+										</tbody>
+									</table>
+								</div>
 							</div>
-						</td>
-					</tr>
-				{/each}
-			</tbody>
-		</table>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/each}
 	</div>
 {/if}
 

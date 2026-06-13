@@ -21,8 +21,8 @@
 	import { latestHotelRoomRates } from '$features/rates/observations';
 	import { useAllObservations } from '$features/rates/queries';
 	import { rateAgeDays } from '$features/rates/validity';
-	import { insertRateObservations } from '$features/rates/api';
-	import { buildObservations, type ObsStay } from '$features/rates/observations';
+	import { applyObservationPlan } from '$features/rates/api';
+	import { reconcileObservations, type ObsStay, type RatePick } from '$features/rates/observations';
 	import HotelRatePanel from '$features/rates/HotelRatePanel.svelte';
 	import VendorPicker from '$features/vendors/VendorPicker.svelte';
 	import HotelSearchSelect from '$features/hotels/HotelSearchSelect.svelte';
@@ -63,6 +63,7 @@
 		blankForm,
 		quotationToForm,
 		roomTypeEnum,
+		roomLabelFromEnum,
 		type HotelForm,
 		type TransferForm
 	} from './edit-map';
@@ -215,6 +216,30 @@
 	}
 	function removeRoom(h: HotelForm, i: number) {
 		h.rooms.splice(i, 1);
+	}
+
+	// Click-to-fill from the hotel's known vendor rates: set vendor + meal on the
+	// stay and update (or add) the matching room row with the captured cost.
+	function applyRatePick(h: HotelForm, p: RatePick) {
+		h.vendorId = p.vendorId ?? '';
+		if (p.mealPlan) h.mealPlan = p.mealPlan;
+		const label = roomLabelFromEnum(p.roomType);
+		const occ = p.occupancy ?? OCCUPANCY[label] ?? 0;
+		const match = h.rooms.find((r) => roomTypeEnum(r.rt) === p.roomType && r.occupancy === occ);
+		if (match) {
+			match.cost = p.cost;
+		} else {
+			const room = newRoom();
+			room.rt = ROOM_TYPES.includes(label) ? label : 'Custom';
+			if (room.rt === 'Custom') room.customLabel = label;
+			room.occupancy = occ || room.occupancy;
+			room.cost = p.cost;
+			// Replace a still-blank starter row rather than stacking an empty one.
+			const blankIdx = h.rooms.findIndex((r) => num(r.cost) === 0 && num(r.sell) === 0);
+			if (blankIdx >= 0) h.rooms[blankIdx] = room;
+			else h.rooms.push(room);
+		}
+		dirty = true;
 	}
 
 	// Most recent capture age for a selected hotel — drives the "update rates" hint.
@@ -490,14 +515,19 @@
 		} catch (e) {
 			console.warn('[quote] rate auto-save failed', e);
 		}
-		// Silent rate capture — must NEVER block the quotation save.
+		// Silent rate capture — must NEVER block the quotation save. Reconciles
+		// against existing observations: overlapping windows are price-refreshed and
+		// stretched; only genuinely new seasons add a row.
 		try {
-			const rows = buildObservations(buildCaptureStays(), {
+			const plan = reconcileObservations($observations.data ?? [], buildCaptureStays(), {
 				quotationId: quotation.id,
 				queryId,
-				capturedBy: auth.user?.id ?? null
+				capturedBy: auth.user?.id ?? null,
+				now: new Date().toISOString()
 			});
-			await insertRateObservations(rows);
+			await applyObservationPlan(plan);
+			await client.invalidateQueries({ queryKey: ['observations'] });
+			await client.invalidateQueries({ queryKey: ['hotel-observations'] });
 		} catch (e) {
 			console.warn('[quote] rate observation capture failed', e);
 		}
@@ -650,7 +680,7 @@
 
 					{#if slot.hotelId}
 						{#key slot.hotelId}
-							<HotelRatePanel hotelId={slot.hotelId} />
+							<HotelRatePanel hotelId={slot.hotelId} onPick={(p) => applyRatePick(slot, p)} />
 						{/key}
 					{/if}
 				</div>
