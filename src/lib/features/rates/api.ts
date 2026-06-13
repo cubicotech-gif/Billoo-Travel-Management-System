@@ -1,6 +1,6 @@
 import { supabase } from '$lib/supabase';
 import type { ExchangeRate, NewRateCard, RateCard, RateCardUpdate } from './types';
-import type { RateObservationInsert } from './observations';
+import type { RateObservation, RateObservationInsert } from './observations';
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
 	if (result.error) throw new Error(result.error.message);
@@ -31,6 +31,19 @@ export async function bulkCreateRates(rows: NewRateCard[]): Promise<number> {
 	const { error, data } = await supabase.from('rate_cards').insert(rows).select('id');
 	if (error) throw new Error(error.message);
 	return data?.length ?? 0;
+}
+
+/** All live observations for a hotel — the builder's rate-intelligence panel. */
+export async function listHotelObservations(hotelId: string): Promise<RateObservation[]> {
+	const { data, error } = await supabase
+		.from('rate_observations')
+		.select('*')
+		.eq('hotel_id', hotelId)
+		.eq('invalidated', false)
+		.order('captured_at', { ascending: false })
+		.limit(300);
+	if (error) throw new Error(error.message);
+	return data ?? [];
 }
 
 /** Append rate observations (silent workshop capture). Returns count inserted. */

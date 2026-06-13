@@ -21,8 +21,31 @@ function unwrap<T>(result: { data: T | null; error: { message: string } | null }
 
 export async function listQueries(): Promise<Query[]> {
 	return unwrap(
-		await supabase.from('queries').select('*').order('created_at', { ascending: false })
+		await supabase
+			.from('queries')
+			.select('*')
+			.eq('is_deleted', false)
+			.order('created_at', { ascending: false })
 	);
+}
+
+export async function listDeletedQueries(): Promise<Query[]> {
+	return unwrap(
+		await supabase
+			.from('queries')
+			.select('*')
+			.eq('is_deleted', true)
+			.order('deleted_at', { ascending: false })
+	);
+}
+
+/** Soft-delete: hide from the board but keep the row and its history. */
+export async function softDeleteQuery(id: string): Promise<Query> {
+	return updateQuery(id, { is_deleted: true, deleted_at: new Date().toISOString() });
+}
+
+export async function restoreQuery(id: string): Promise<Query> {
+	return updateQuery(id, { is_deleted: false, deleted_at: null });
 }
 
 export async function getQuery(id: string): Promise<Query> {

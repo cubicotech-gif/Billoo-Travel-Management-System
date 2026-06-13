@@ -140,6 +140,8 @@ export interface Database {
 					voucher_sent_at: string | null;
 					itinerary_cities: CityBlock[];
 					trip_country: string | null;
+					is_deleted: boolean;
+					deleted_at: string | null;
 					created_at: string;
 					updated_at: string;
 				};
@@ -148,6 +150,8 @@ export interface Database {
 					client_name: string;
 					client_phone: string;
 					destination: string;
+					is_deleted?: boolean;
+					deleted_at?: string | null;
 					client_email?: string | null;
 					travel_date?: string | null;
 					return_date?: string | null;

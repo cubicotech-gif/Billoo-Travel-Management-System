@@ -6,6 +6,7 @@ import type { Database, MealPlan, ObsRoomType } from '$lib/database.types';
 // with a changed rate just produces new rows; nothing is ever updated.
 
 export type RateObservationInsert = Database['public']['Tables']['rate_observations']['Insert'];
+export type RateObservation = Database['public']['Tables']['rate_observations']['Row'];
 
 export interface ObsRoom {
 	roomType: ObsRoomType;
@@ -58,5 +59,76 @@ export function buildObservations(stays: ObsStay[], ctx: ObsContext): RateObserv
 			});
 		}
 	}
+	return out;
+}
+
+// --- Read side: group a hotel's observations for the builder rate panel -----
+
+const ROOM_ORDER: Record<string, number> = { double: 0, triple: 1, quad: 2, sharing: 3, custom: 4 };
+const MEAL_ORDER: Record<string, number> = { RO: 0, BB: 1, HB: 2, FB: 3 };
+
+export interface ObsRateRow {
+	roomType: string | null;
+	occupancy: number | null;
+	mealPlan: string;
+	rate: number;
+	validFrom: string | null;
+	validTo: string | null;
+	needsVerify: boolean;
+	capturedAt: string;
+	source: string;
+}
+export interface VendorRateGroup {
+	vendor: string;
+	rows: ObsRateRow[];
+}
+
+/**
+ * Group a hotel's observations by vendor → sorted rate rows. De-dupes identical
+ * (vendor, room, meal, dates, rate) entries keeping the most recent capture, and
+ * flags rows whose notes were marked "VERIFY:". Pure & unit tested.
+ */
+export function groupHotelObservations(
+	obs: RateObservation[],
+	vendorName: (id: string | null) => string
+): VendorRateGroup[] {
+	const byKey = new Map<string, RateObservation>();
+	for (const o of obs) {
+		if (o.invalidated) continue;
+		const key = `${o.vendor_id ?? ''}|${o.room_type ?? ''}|${o.meal_plan}|${o.check_in ?? ''}|${o.check_out ?? ''}|${o.rate}`;
+		const ex = byKey.get(key);
+		if (!ex || o.captured_at > ex.captured_at) byKey.set(key, o);
+	}
+
+	const groups = new Map<string, ObsRateRow[]>();
+	for (const o of byKey.values()) {
+		const vendor = vendorName(o.vendor_id);
+		const row: ObsRateRow = {
+			roomType: o.room_type,
+			occupancy: o.occupancy,
+			mealPlan: o.meal_plan,
+			rate: Number(o.rate),
+			validFrom: o.check_in,
+			validTo: o.check_out,
+			needsVerify: (o.notes ?? '').startsWith('VERIFY:'),
+			capturedAt: o.captured_at,
+			source: o.source
+		};
+		const list = groups.get(vendor);
+		if (list) list.push(row);
+		else groups.set(vendor, [row]);
+	}
+
+	const out: VendorRateGroup[] = [];
+	for (const [vendor, rows] of groups) {
+		rows.sort(
+			(a, b) =>
+				(ROOM_ORDER[a.roomType ?? ''] ?? 9) - (ROOM_ORDER[b.roomType ?? ''] ?? 9) ||
+				(MEAL_ORDER[a.mealPlan] ?? 9) - (MEAL_ORDER[b.mealPlan] ?? 9) ||
+				(a.validFrom ?? '').localeCompare(b.validFrom ?? '')
+		);
+		out.push({ vendor, rows });
+	}
+	out.sort((a, b) => a.vendor.localeCompare(b.vendor));
 	return out;
 }

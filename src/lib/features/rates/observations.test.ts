@@ -1,6 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { buildObservations, type ObsStay } from './observations';
+import {
+	buildObservations,
+	groupHotelObservations,
+	type ObsStay,
+	type RateObservation
+} from './observations';
 import { roomTypeEnum } from '$features/quotations/edit-map';
+
+function obs(p: Partial<RateObservation>): RateObservation {
+	return {
+		id: 'o1',
+		hotel_id: 'h1',
+		room_type: 'quad',
+		occupancy: 4,
+		vendor_id: 'v1',
+		check_in: '2026-06-30',
+		check_out: '2026-08-20',
+		rate: 290,
+		currency: 'SAR',
+		meal_plan: 'RO',
+		source: 'rate_sheet_import',
+		query_id: null,
+		quotation_id: null,
+		captured_at: '2026-06-13T00:00:00Z',
+		captured_by: null,
+		invalidated: false,
+		invalidated_reason: null,
+		notes: null,
+		...p
+	} as RateObservation;
+}
+const vname = (id: string | null) => (id ? `Vendor ${id}` : 'Own / unspecified');
 
 const ctx = { quotationId: 'q1', queryId: 'qry1', capturedBy: 'user1' };
 
@@ -58,5 +88,34 @@ describe('workshop rate capture', () => {
 		const rows = buildObservations([stay({ vendorId: '', mealPlan: 'XX' })], ctx);
 		expect(rows[0]?.vendor_id).toBeNull();
 		expect(rows[0]?.meal_plan).toBe('RO');
+	});
+});
+
+describe('hotel observation grouping (rate panel)', () => {
+	it('groups by vendor, sorts by room then meal, flags VERIFY and dedupes', () => {
+		const groups = groupHotelObservations(
+			[
+				obs({ vendor_id: 'v2', room_type: 'double', meal_plan: 'BB', rate: 400 }),
+				obs({ vendor_id: 'v1', room_type: 'quad', meal_plan: 'RO', rate: 290 }),
+				obs({ vendor_id: 'v1', room_type: 'double', meal_plan: 'RO', rate: 250, notes: 'VERIFY: band-2 unclear' }),
+				// duplicate of the quad row but older → dropped
+				obs({ vendor_id: 'v1', room_type: 'quad', meal_plan: 'RO', rate: 290, captured_at: '2026-06-01T00:00:00Z' })
+			],
+			vname
+		);
+		expect(groups.map((g) => g.vendor)).toEqual(['Vendor v1', 'Vendor v2']);
+		// v1 sorted: double before quad
+		expect(groups[0]?.rows.map((r) => r.roomType)).toEqual(['double', 'quad']);
+		expect(groups[0]?.rows[0]?.needsVerify).toBe(true);
+		expect(groups[0]?.rows).toHaveLength(2); // duplicate quad collapsed
+	});
+
+	it('labels a null vendor as own/unspecified and skips invalidated rows', () => {
+		const groups = groupHotelObservations(
+			[obs({ vendor_id: null }), obs({ vendor_id: 'v1', invalidated: true })],
+			vname
+		);
+		expect(groups).toHaveLength(1);
+		expect(groups[0]?.vendor).toBe('Own / unspecified');
 	});
 });
