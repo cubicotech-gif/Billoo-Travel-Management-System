@@ -17,7 +17,9 @@
 	import { useQueryDetail, useSetQueryStatus } from '$features/queries/queries';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { useRates, useLatestRoe } from '$features/rates/queries';
-	import { latestRates, hotelRoomRates, transferRateOptions } from '$features/rates/types';
+	import { latestRates, transferRateOptions } from '$features/rates/types';
+	import { latestHotelRoomRates } from '$features/rates/observations';
+	import { useAllObservations } from '$features/rates/queries';
 	import { rateAgeDays } from '$features/rates/validity';
 	import { insertRateObservations } from '$features/rates/api';
 	import { buildObservations, type ObsStay } from '$features/rates/observations';
@@ -72,6 +74,7 @@
 	const client = useQueryClient();
 	const queryDetail = untrack(() => useQueryDetail(queryId));
 	const rates = useRates();
+	const observations = useAllObservations();
 	const roe = useLatestRoe();
 	const createQuotation = untrack(() => useCreateQuotation(queryId));
 	const setStatus = useSetQueryStatus();
@@ -182,10 +185,11 @@
 	);
 	const itineraryNights = $derived(totalNights(form.hotels));
 
-	// A canonical hotel was picked → auto-populate its room rates by occupancy.
+	// A canonical hotel was picked → auto-populate its room costs from the latest
+	// captured observations. Selling price stays blank — that's a margin call.
 	function onHotelPick(h: HotelForm) {
-		if (!h.name) return;
-		const recents = hotelRoomRates($rates.data ?? [], h.name, h.city);
+		if (!h.hotelId) return;
+		const recents = latestHotelRoomRates($observations.data ?? [], h.hotelId);
 		if (recents.length) {
 			h.rooms = recents.map((r) => {
 				const occ = r.occupancy ?? 2;
@@ -195,11 +199,11 @@
 					customLabel: rt === 'Custom' ? `Sleeps ${occ}` : '',
 					occupancy: occ,
 					qty: 1,
-					cost: Number(r.cost_price),
-					sell: Number(r.selling_price)
+					cost: r.cost,
+					sell: 0
 				};
 			});
-			const v = recents[0]?.vendor_id;
+			const v = recents[0]?.vendorId;
 			if (v) h.vendorId = v;
 		}
 	}
@@ -213,12 +217,12 @@
 		h.rooms.splice(i, 1);
 	}
 
-	// Most recent rate age for a selected hotel — drives the "update rates" hint.
+	// Most recent capture age for a selected hotel — drives the "update rates" hint.
 	function hotelRateAge(h: HotelForm): number | null {
-		if (!h.name) return null;
-		const recents = hotelRoomRates($rates.data ?? [], h.name, h.city);
+		if (!h.hotelId) return null;
+		const recents = latestHotelRoomRates($observations.data ?? [], h.hotelId);
 		const newest = recents.reduce<string | null>(
-			(a, r) => (a && a > r.rate_date ? a : r.rate_date),
+			(a, r) => (a && a > r.capturedAt ? a : r.capturedAt),
 			null
 		);
 		return newest ? rateAgeDays(newest) : null;
@@ -390,26 +394,11 @@
 		dirty = false;
 	}
 
-	// Build the rate snapshots that smart auto-save will persist.
+	// Build the rate snapshots that smart auto-save will persist. Hotels are NOT
+	// included here — hotel costs are captured as rate observations (Service
+	// Rates → Hotels), not rate cards. See buildCaptureStays / buildObservations.
 	function buildSnapshots(): RateSnapshot[] {
 		const snaps: RateSnapshot[] = [];
-		for (const h of form.hotels) {
-			if (!h.name || num(h.nights) <= 0) continue;
-			for (const r of h.rooms) {
-				snaps.push({
-					item_type: 'hotel',
-					name: h.name,
-					city: h.city || null,
-					occupancy: num(r.occupancy) || null,
-					vendor_id: h.vendorId || null,
-					hotel_id: h.hotelId || null,
-					currency: 'SAR',
-					unit: 'per room / night',
-					cost_price: num(r.cost),
-					selling_price: num(r.sell)
-				});
-			}
-		}
 		for (const t of form.transfers) {
 			if (num(t.vehicles) <= 0) continue;
 			snaps.push({
@@ -477,7 +466,7 @@
 
 	async function save(addAnother: boolean) {
 		if (num(form.roeValue) <= 0) {
-			alert('Set an exchange rate (ROE) first — see Daily Rates.');
+			alert('Set an exchange rate (ROE) first — see Rates.');
 			return;
 		}
 		const quotation = await $createQuotation.mutateAsync({
@@ -526,7 +515,7 @@
 
 <div class="mb-6">
 	<h1 class="text-2xl font-bold text-slate-800">Build quotation</h1>
-	<p class="text-sm text-slate-500">Prices pull from the latest Daily Rates. SAR converts to PKR via the ROE. Manual entries auto-save to the rate database.</p>
+	<p class="text-sm text-slate-500">Prices pull from the latest Rates. SAR converts to PKR via the ROE. Manual entries auto-save to the rate database; hotel costs are captured into Service Rates → Hotels.</p>
 </div>
 
 <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">

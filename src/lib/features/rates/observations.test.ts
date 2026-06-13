@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildObservations,
 	groupHotelObservations,
+	latestHotelRoomRates,
 	type ObsStay,
 	type RateObservation
 } from './observations';
@@ -117,5 +118,30 @@ describe('hotel observation grouping (rate panel)', () => {
 		);
 		expect(groups).toHaveLength(1);
 		expect(groups[0]?.vendor).toBe('Own / unspecified');
+	});
+});
+
+describe('latestHotelRoomRates (builder prefill)', () => {
+	it('keeps the newest cost per room/occupancy for the hotel, sorted by occupancy', () => {
+		const rows = latestHotelRoomRates(
+			[
+				obs({ id: 'a', room_type: 'quad', occupancy: 4, rate: 290, captured_at: '2026-06-01T00:00:00Z' }),
+				obs({ id: 'b', room_type: 'quad', occupancy: 4, rate: 310, captured_at: '2026-06-12T00:00:00Z' }),
+				obs({ id: 'c', room_type: 'double', occupancy: 2, rate: 500, captured_at: '2026-06-10T00:00:00Z' })
+			],
+			'h1'
+		);
+		expect(rows.map((r) => r.occupancy)).toEqual([2, 4]);
+		expect(rows.find((r) => r.occupancy === 4)?.cost).toBe(310); // newer wins
+	});
+
+	it('ignores other hotels and invalidated rows, and needs a hotelId', () => {
+		const data = [
+			obs({ id: 'a', hotel_id: 'h1', rate: 290 }),
+			obs({ id: 'b', hotel_id: 'h2', rate: 999 }),
+			obs({ id: 'c', hotel_id: 'h1', invalidated: true, rate: 1 })
+		];
+		expect(latestHotelRoomRates(data, 'h1').map((r) => r.cost)).toEqual([290]);
+		expect(latestHotelRoomRates(data, '')).toEqual([]);
 	});
 });

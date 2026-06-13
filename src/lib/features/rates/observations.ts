@@ -62,6 +62,44 @@ export function buildObservations(stays: ObsStay[], ctx: ObsContext): RateObserv
 	return out;
 }
 
+// --- Read side: latest captured cost per room, to prefill the quote builder -
+
+export interface HotelRoomRate {
+	roomType: ObsRoomType | null;
+	occupancy: number | null;
+	cost: number; // SAR vendor cost
+	vendorId: string | null;
+	mealPlan: string;
+	capturedAt: string;
+}
+
+/**
+ * Latest live observation per (room type, occupancy) for one hotel. Drives the
+ * builder's hotel auto-fill now that hotel costs live as observations, not rate
+ * cards. Only vendor cost is captured — selling price stays a margin decision.
+ * Pure & unit tested.
+ */
+export function latestHotelRoomRates(obs: RateObservation[], hotelId: string): HotelRoomRate[] {
+	if (!hotelId) return [];
+	const byKey = new Map<string, RateObservation>();
+	for (const o of obs) {
+		if (o.hotel_id !== hotelId || o.invalidated) continue;
+		const key = `${o.room_type ?? ''}|${o.occupancy ?? ''}`;
+		const ex = byKey.get(key);
+		if (!ex || o.captured_at > ex.captured_at) byKey.set(key, o);
+	}
+	return [...byKey.values()]
+		.map((o) => ({
+			roomType: o.room_type as ObsRoomType | null,
+			occupancy: o.occupancy,
+			cost: Number(o.rate),
+			vendorId: o.vendor_id,
+			mealPlan: o.meal_plan,
+			capturedAt: o.captured_at
+		}))
+		.sort((a, b) => (a.occupancy ?? 0) - (b.occupancy ?? 0));
+}
+
 // --- Read side: group a hotel's observations for the builder rate panel -----
 
 const ROOM_ORDER: Record<string, number> = { double: 0, triple: 1, quad: 2, sharing: 3, custom: 4 };

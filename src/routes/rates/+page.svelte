@@ -5,16 +5,12 @@
 	import { formatAmount } from '$lib/money';
 	import type { Currency, RateItemType } from '$lib/database.types';
 	import { useVendors } from '$features/vendors/queries';
-	import {
-		useRates,
-		useDeleteRate,
-		useLatestRoe,
-		useSetRoe
-	} from '$features/rates/queries';
+	import { useRates, useDeleteRate, useLatestRoe, useSetRoe } from '$features/rates/queries';
 	import { bulkCreateRates } from '$features/rates/api';
 	import { RATE_TYPES, RATE_TYPE_BY_KEY, latestRates, type RateCard } from '$features/rates/types';
 	import { isRateValid, RATE_VALIDITY_DAYS } from '$features/rates/validity';
 	import RateModal from '$features/rates/RateModal.svelte';
+	import HotelRatesPanel from '$features/rates/HotelRatesPanel.svelte';
 
 	const rates = useRates();
 	const vendors = useVendors();
@@ -24,13 +20,14 @@
 	const client = useQueryClient();
 
 	let bulkOpen = $state(false);
-	const RATE_KEYS: RateItemType[] = ['hotel', 'transfer', 'visa', 'airline'];
+	// Hotels live as rate observations now; rate_cards only cover these services.
+	const CARD_KEYS: RateItemType[] = ['transfer', 'visa', 'airline'];
 
 	async function importRates(rows: string[][]): Promise<number> {
 		const toInsert = rows
 			.map((r) => {
 				const type = (r[0] ?? '').trim().toLowerCase() as RateItemType;
-				if (!RATE_KEYS.includes(type) || !r[1]?.trim()) return null;
+				if (!CARD_KEYS.includes(type) || !r[1]?.trim()) return null;
 				const cfg = RATE_TYPE_BY_KEY[type];
 				return {
 					item_type: type,
@@ -98,11 +95,11 @@
 </script>
 
 <div class="mb-6">
-	<h1 class="text-2xl font-bold text-slate-800">Daily Rates</h1>
+	<h1 class="text-2xl font-bold text-slate-800">Service Rates</h1>
 	<p class="text-sm text-slate-500">
-		Set today's exchange rate and maintain per-item cost & selling prices. Quotations use the
-		latest rate per item; rates are valid for {RATE_VALIDITY_DAYS} days. Use “Update today” to
-		refresh an item's rate in one click.
+		One hub for every service's rates and today's exchange rate. Hotel rates are captured
+		automatically from the quote builder; transfer / visa / ticket rates are valid for {RATE_VALIDITY_DAYS}
+		days.
 	</p>
 </div>
 
@@ -142,13 +139,17 @@
 			</button>
 		{/each}
 	</div>
-	<div class="flex gap-2">
-		<Button size="sm" variant="secondary" onclick={() => (bulkOpen = true)}><Upload class="h-4 w-4" /> Bulk import</Button>
-		<Button size="sm" onclick={openAdd}><Plus class="h-4 w-4" /> Add {config.label} rate</Button>
-	</div>
+	{#if activeType !== 'hotel'}
+		<div class="flex gap-2">
+			<Button size="sm" variant="secondary" onclick={() => (bulkOpen = true)}><Upload class="h-4 w-4" /> Bulk import</Button>
+			<Button size="sm" onclick={openAdd}><Plus class="h-4 w-4" /> Add {config.label} rate</Button>
+		</div>
+	{/if}
 </div>
 
-{#if $rates.isLoading}
+{#if activeType === 'hotel'}
+	<HotelRatesPanel />
+{:else if $rates.isLoading}
 	<p class="text-slate-400">Loading…</p>
 {:else if $rates.isError}
 	<p class="text-red-600">Failed to load: {$rates.error.message}</p>
@@ -175,9 +176,7 @@
 				{#each rows as r (r.id)}
 					{@const margin = Number(r.selling_price) - Number(r.cost_price)}
 					<tr class="hover:bg-slate-50">
-						<td class="px-4 py-3 font-medium text-slate-700">
-							{r.name}{#if r.item_type === 'hotel' && r.occupancy}<span class="ml-1 text-xs font-normal text-slate-400">· sleeps {r.occupancy}</span>{/if}
-						</td>
+						<td class="px-4 py-3 font-medium text-slate-700">{r.name}</td>
 						{#if config.hasCity}<td class="px-4 py-3"><Badge tone="neutral">{r.city ?? '—'}</Badge></td>{/if}
 						<td class="px-4 py-3 text-slate-500">{vendorName(r.vendor_id)}</td>
 						<td class="px-4 py-3 text-right text-slate-600">{formatAmount(Number(r.cost_price), r.currency)}</td>
@@ -221,7 +220,7 @@
 	open={bulkOpen}
 	onClose={() => (bulkOpen = false)}
 	title="Bulk import rates"
-	columns={['Type (hotel/transfer/visa/airline)', 'Name', 'City', 'Cost', 'Sell']}
-	example={'hotel\tHilton Makkah\tMakkah\t200\t250\ntransfer\tSedan\t\t300\t380\nairline\tSaudia\t\t150000\t180000'}
+	columns={['Type (transfer/visa/airline)', 'Name', 'City', 'Cost', 'Sell']}
+	example={'transfer\tSedan\t\t300\t380\nvisa\tUmrah\t\t0\t0\nairline\tSaudia\t\t150000\t180000'}
 	onImport={importRates}
 />

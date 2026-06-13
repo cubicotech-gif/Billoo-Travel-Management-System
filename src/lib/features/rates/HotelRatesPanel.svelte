@@ -4,7 +4,7 @@
 	import { formatAmount } from '$lib/money';
 	import { useHotels } from '$features/hotels/queries';
 	import { useVendors } from '$features/vendors/queries';
-	import { useAllObservations, useDeleteObservation, useUpdateObservation } from '$features/rates/queries';
+	import { useAllObservations, useDeleteObservation, useUpdateObservation } from './queries';
 	import {
 		enrichObservations,
 		filterObservations,
@@ -14,9 +14,9 @@
 		type ObsSort,
 		type ObsSortKey,
 		type EnrichedObs
-	} from '$features/rates/explorer';
-	import type { RateObservation } from '$features/rates/observations';
-	import ObservationModal from '$features/rates/ObservationModal.svelte';
+	} from './explorer';
+	import type { RateObservation } from './observations';
+	import ObservationModal from './ObservationModal.svelte';
 
 	const obs = useAllObservations();
 	const hotels = useHotels();
@@ -126,12 +126,9 @@
 	const sortIcon = (key: ObsSortKey) => (sort.key === key ? (sort.dir === 'asc' ? '↑' : '↓') : '');
 </script>
 
-<div class="mb-5 flex items-center justify-between">
-	<div>
-		<h1 class="text-2xl font-bold text-slate-800">Hotel Rates</h1>
-		<p class="text-sm text-slate-500">Every vendor rate ever captured — filter, compare, and keep clean.</p>
-	</div>
-	<Button onclick={openAdd}><Plus class="h-4 w-4" /> Add rate</Button>
+<div class="mb-3 flex items-center justify-between">
+	<p class="text-sm text-slate-500">Every captured vendor rate — auto-fed by the quote builder. Filter, compare, verify.</p>
+	<Button size="sm" onclick={openAdd}><Plus class="h-4 w-4" /> Add rate</Button>
 </div>
 
 <!-- Filters -->
