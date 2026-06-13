@@ -3,7 +3,7 @@
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { page } from '$app/stores';
 	import type { Snippet } from 'svelte';
-	import { LayoutDashboard, ClipboardList, Users, Building2, Wallet, Tags } from 'lucide-svelte';
+	import { LayoutDashboard, ClipboardList, Users, Building2, Wallet, Tags, BedDouble } from 'lucide-svelte';
 	import { createQueryClient } from '$lib/query-client';
 
 	let { children }: { children: Snippet } = $props();
@@ -22,6 +22,7 @@
 		{ href: '/passengers', label: 'Passengers', icon: Users },
 		{ href: '/vendors', label: 'Vendors', icon: Building2 },
 		{ href: '/rates', label: 'Daily Rates', icon: Tags },
+		{ href: '/hotel-rates', label: 'Hotel Rates', icon: BedDouble },
 		{ href: '/finance', label: 'Finance', icon: Wallet }
 	];
 

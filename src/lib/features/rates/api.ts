@@ -46,6 +46,42 @@ export async function listHotelObservations(hotelId: string): Promise<RateObserv
 	return data ?? [];
 }
 
+/** Every observation — the Hotel Rates explorer loads and filters client-side. */
+export async function listAllObservations(): Promise<RateObservation[]> {
+	const { data, error } = await supabase
+		.from('rate_observations')
+		.select('*')
+		.order('captured_at', { ascending: false })
+		.limit(5000);
+	if (error) throw new Error(error.message);
+	return data ?? [];
+}
+
+export async function createObservation(input: RateObservationInsert): Promise<RateObservation> {
+	const { data, error } = await supabase.from('rate_observations').insert(input).select().single();
+	if (error) throw new Error(error.message);
+	return data;
+}
+
+export async function updateObservation(
+	id: string,
+	patch: Partial<RateObservationInsert>
+): Promise<RateObservation> {
+	const { data, error } = await supabase
+		.from('rate_observations')
+		.update(patch)
+		.eq('id', id)
+		.select()
+		.single();
+	if (error) throw new Error(error.message);
+	return data;
+}
+
+export async function deleteObservation(id: string): Promise<void> {
+	const { error } = await supabase.from('rate_observations').delete().eq('id', id);
+	if (error) throw new Error(error.message);
+}
+
 /** Append rate observations (silent workshop capture). Returns count inserted. */
 export async function insertRateObservations(rows: RateObservationInsert[]): Promise<number> {
 	if (rows.length === 0) return 0;
