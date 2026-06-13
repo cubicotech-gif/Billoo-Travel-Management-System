@@ -3,6 +3,7 @@ import {
 	acceptQuotation,
 	createQuotation,
 	getQuotationLines,
+	listAllQuotations,
 	listQuotations,
 	removeQuotation,
 	setQuotationStatus,
@@ -16,6 +17,10 @@ const linesKey = (quotationId: string) => ['quotation-lines', quotationId] as co
 
 export function useQuotations(queryId: string) {
 	return createQuery({ queryKey: quotationsKey(queryId), queryFn: () => listQuotations(queryId) });
+}
+
+export function useAllQuotations() {
+	return createQuery({ queryKey: ['quotations', 'all'] as const, queryFn: listAllQuotations });
 }
 
 export function useQuotationLines(quotationId: string) {

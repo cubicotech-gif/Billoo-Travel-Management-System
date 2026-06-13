@@ -19,6 +19,23 @@ export async function listQuotations(queryId: string): Promise<Quotation[]> {
 	);
 }
 
+/** All quotations across queries — the board reduces these to the latest per query. */
+export async function listAllQuotations(): Promise<Quotation[]> {
+	return unwrap(
+		await supabase.from('quotations').select('*').order('version', { ascending: false })
+	);
+}
+
+/** Map of query_id → its highest-version quotation. */
+export function latestQuotationByQuery(quotations: Quotation[]): Map<string, Quotation> {
+	const map = new Map<string, Quotation>();
+	for (const q of quotations) {
+		const ex = map.get(q.query_id);
+		if (!ex || q.version > ex.version) map.set(q.query_id, q);
+	}
+	return map;
+}
+
 export async function getQuotationLines(quotationId: string): Promise<QuotationLine[]> {
 	return unwrap(
 		await supabase

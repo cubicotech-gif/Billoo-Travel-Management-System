@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$ui';
-	import { Plus, Pencil, Trash2, RotateCcw, Archive } from 'lucide-svelte';
+	import { Plus, RotateCcw, Archive } from 'lucide-svelte';
 	import {
 		useQueries,
 		useSetQueryStatus,
@@ -9,16 +9,21 @@
 		useRestoreQuery
 	} from '$features/queries/queries';
 	import QueryEditModal from '$features/queries/QueryEditModal.svelte';
-	import { WORKFLOW_STAGES, daysSince, isStuck } from '$features/queries/workflow';
+	import QueryCard from '$features/queries/QueryCard.svelte';
+	import { useAllQuotations } from '$features/quotations/queries';
+	import { latestQuotationByQuery } from '$features/quotations/api';
+	import { WORKFLOW_STAGES } from '$features/queries/workflow';
 	import type { QueryStatus } from '$lib/database.types';
 	import type { Query } from '$features/queries/types';
-	import { formatAmount } from '$lib/money';
 
 	const queries = useQueries();
 	const setStatus = useSetQueryStatus();
 	const deleted = useDeletedQueries();
 	const softDelete = useSoftDeleteQuery();
 	const restore = useRestoreQuery();
+	const quotations = useAllQuotations();
+
+	const latestByQuery = $derived(latestQuotationByQuery($quotations.data ?? []));
 
 	let showDeleted = $state(false);
 	let editing = $state<Query | null>(null);
@@ -53,21 +58,12 @@
 		const q = ($queries.data ?? []).find((x) => x.id === id);
 		if (q && q.status !== status) $setStatus.mutate({ id, status });
 	}
-
-	// Tailwind needs literal classes — map each tone to a left border colour.
-	const borderTone: Record<string, string> = {
-		neutral: 'border-l-slate-300',
-		info: 'border-l-brand-400',
-		success: 'border-l-green-400',
-		warning: 'border-l-amber-400',
-		danger: 'border-l-red-400'
-	};
 </script>
 
 <div class="mb-6 flex items-center justify-between">
 	<div>
 		<h1 class="text-2xl font-bold text-slate-800">Queries</h1>
-		<p class="text-sm text-slate-500">Drag a card across the pipeline. Hover a card to edit or delete.</p>
+		<p class="text-sm text-slate-500">Drag across the pipeline, or click a card to expand, advance, and act.</p>
 	</div>
 	<div class="flex items-center gap-2">
 		<Button variant="secondary" onclick={() => (showDeleted = !showDeleted)}>
@@ -107,55 +103,18 @@
 				</div>
 				<div class="flex flex-1 flex-col gap-2 px-2 pb-3">
 					{#each items as q (q.id)}
-						<div
-							role="listitem"
-							draggable="true"
-							ondragstart={() => (draggingId = q.id)}
-							ondragend={() => (draggingId = null)}
-							class="group relative rounded-lg border border-l-4 border-slate-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md {borderTone[
-								stage.tone
-							]} {draggingId === q.id ? 'opacity-50' : ''}"
-						>
-							<!-- stretched link: clicking the card opens it -->
-							<a href="/queries/{q.id}" draggable="false" class="absolute inset-0 z-0" aria-label="Open {q.client_name}"></a>
-							<!-- hover actions -->
-							<div class="absolute right-1.5 top-1.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-								<button
-									type="button"
-									onclick={() => openEdit(q)}
-									class="rounded bg-white/90 p-1 text-slate-400 shadow-sm hover:bg-slate-100 hover:text-slate-600"
-									aria-label="Edit"
-								>
-									<Pencil class="h-3.5 w-3.5" />
-								</button>
-								<button
-									type="button"
-									onclick={() => remove(q)}
-									class="rounded bg-white/90 p-1 text-slate-400 shadow-sm hover:bg-red-50 hover:text-red-600"
-									aria-label="Delete"
-								>
-									<Trash2 class="h-3.5 w-3.5" />
-								</button>
-							</div>
-
-							<div class="pointer-events-none relative z-10">
-								<div class="pr-12 font-medium text-slate-800">{q.client_name}</div>
-								<div class="mt-0.5 text-xs text-slate-500">{q.destination}</div>
-								<div class="mt-2 flex items-center justify-between">
-									<span class="font-mono text-[10px] text-slate-400">{q.query_number}</span>
-									<div class="flex items-center gap-2">
-										{#if isStuck(q.status, daysSince(q.stage_changed_at))}
-											<span class="rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-600">
-												{daysSince(q.stage_changed_at)}d
-											</span>
-										{/if}
-										{#if Number(q.selling_price) > 0}
-											<span class="text-xs font-semibold text-green-600">{formatAmount(Number(q.profit))}</span>
-										{/if}
-									</div>
-								</div>
-							</div>
-						</div>
+						<QueryCard
+							query={q}
+							tone={stage.tone}
+							latest={latestByQuery.get(q.id) ?? null}
+							dragging={draggingId === q.id}
+							busy={$setStatus.isPending}
+							onDragStart={() => (draggingId = q.id)}
+							onDragEnd={() => (draggingId = null)}
+							onEdit={() => openEdit(q)}
+							onDelete={() => remove(q)}
+							onMove={(status) => $setStatus.mutate({ id: q.id, status })}
+						/>
 					{/each}
 					{#if items.length === 0}
 						<div class="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
