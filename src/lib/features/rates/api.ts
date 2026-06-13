@@ -1,6 +1,6 @@
 import { supabase } from '$lib/supabase';
 import type { ExchangeRate, NewRateCard, RateCard, RateCardUpdate } from './types';
-import type { RateObservation, RateObservationInsert } from './observations';
+import type { RateObservation, RateObservationInsert, ReconcilePlan } from './observations';
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
 	if (result.error) throw new Error(result.error.message);
@@ -88,6 +88,28 @@ export async function insertRateObservations(rows: RateObservationInsert[]): Pro
 	const { error, data } = await supabase.from('rate_observations').insert(rows).select('id');
 	if (error) throw new Error(error.message);
 	return data?.length ?? 0;
+}
+
+/**
+ * Apply a smart-capture reconcile plan: insert new seasons, refresh+stretch the
+ * bands that overlapped, and invalidate the older bands folded into a merge.
+ */
+export async function applyObservationPlan(plan: ReconcilePlan): Promise<void> {
+	if (plan.inserts.length) {
+		const { error } = await supabase.from('rate_observations').insert(plan.inserts);
+		if (error) throw new Error(error.message);
+	}
+	for (const u of plan.updates) {
+		const { error } = await supabase.from('rate_observations').update(u.patch).eq('id', u.id);
+		if (error) throw new Error(error.message);
+	}
+	for (const inv of plan.invalidations) {
+		const { error } = await supabase
+			.from('rate_observations')
+			.update({ invalidated: true, invalidated_reason: inv.reason })
+			.eq('id', inv.id);
+		if (error) throw new Error(error.message);
+	}
 }
 
 export async function updateRate(id: string, patch: RateCardUpdate): Promise<RateCard> {

@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ChevronDown, ChevronRight, AlertTriangle, Building2 } from 'lucide-svelte';
+	import { ChevronDown, ChevronRight, AlertTriangle, Building2, MousePointerClick } from 'lucide-svelte';
 	import { Badge } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { useVendors } from '$features/vendors/queries';
 	import { useHotelObservations } from './queries';
-	import { groupHotelObservations } from './observations';
+	import { groupHotelObservations, type ObsRateRow, type RatePick } from './observations';
 
-	let { hotelId }: { hotelId: string } = $props();
+	let { hotelId, onPick }: { hotelId: string; onPick?: (pick: RatePick) => void } = $props();
 
 	// The parent remounts this panel via {#key hotelId}, so the initial value is
 	// the intended one for the query.
@@ -36,6 +36,10 @@
 
 	const mealTone = (m: string): 'neutral' | 'info' | 'warning' =>
 		m === 'RO' ? 'neutral' : m === 'BB' ? 'info' : 'warning';
+
+	function applyPick(vendorId: string | null, r: ObsRateRow) {
+		onPick?.({ roomType: r.roomType, occupancy: r.occupancy, mealPlan: r.mealPlan, cost: r.rate, vendorId });
+	}
 </script>
 
 <div class="rounded-lg border border-slate-100 bg-slate-50/70">
@@ -60,15 +64,20 @@
 					No saved vendor rates for this hotel yet. Rates you enter here are captured automatically.
 				</p>
 			{:else}
+				{#if onPick}<p class="mb-2 text-[11px] text-slate-400">Click any rate to fill this stay with it.</p>{/if}
 				<div class="space-y-3">
-					{#each groups as g (g.vendor)}
+					{#each groups as g (g.vendorId ?? g.vendor)}
 						<div>
 							<div class="mb-1 text-xs font-semibold text-slate-600">{g.vendor}</div>
 							<div class="overflow-hidden rounded-md border border-slate-200 bg-white">
 								<table class="w-full text-xs">
 									<tbody class="divide-y divide-slate-50">
 										{#each g.rows as r (`${r.roomType}|${r.mealPlan}|${r.validFrom}|${r.rate}`)}
-											<tr class="hover:bg-slate-50">
+											<tr
+												class="group {onPick ? 'cursor-pointer' : ''} hover:bg-brand-50/60"
+												onclick={onPick ? () => applyPick(g.vendorId, r) : undefined}
+												title={onPick ? 'Fill this stay with this rate' : undefined}
+											>
 												<td class="px-2 py-1.5 text-slate-600">{roomLabel(r.roomType, r.occupancy)}</td>
 												<td class="px-2 py-1.5"><Badge tone={mealTone(r.mealPlan)}>{r.mealPlan}</Badge></td>
 												<td class="whitespace-nowrap px-2 py-1.5 text-right font-medium text-slate-700">{formatAmount(r.rate, 'SAR')}</td>
@@ -78,6 +87,8 @@
 														<span class="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700">
 															<AlertTriangle class="h-3 w-3" /> verify
 														</span>
+													{:else if onPick}
+														<MousePointerClick class="ml-auto h-3.5 w-3.5 text-slate-300 group-hover:text-brand-500" />
 													{/if}
 												</td>
 											</tr>
