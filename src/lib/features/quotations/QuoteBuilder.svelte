@@ -2,6 +2,7 @@
 	import { untrack } from 'svelte';
 	import {
 		ArrowLeft,
+		ArrowRight,
 		Copy,
 		Check,
 		Save,
@@ -537,6 +538,41 @@
 		}
 		if (addAnother) resetLines();
 	}
+
+	// --- Stepped flow: paginate the input column so staff fill it in order. The
+	// pricing sidebar stays visible throughout, so totals update live regardless
+	// of which step is open (hiding a card never drops its form state).
+	const STEPS = [
+		{ key: 'basics', label: 'Trip basics' },
+		{ key: 'hotels', label: 'Hotels' },
+		{ key: 'transfers', label: 'Transfers' },
+		{ key: 'extras', label: 'Visa & tickets' }
+	] as const;
+	let stepIdx = $state(0);
+	const stepKey = $derived(STEPS[stepIdx]?.key ?? 'basics');
+	function goStep(i: number) {
+		stepIdx = Math.max(0, Math.min(STEPS.length - 1, i));
+	}
+
+	const transferCount = $derived(form.transfers.filter((t) => num(t.vehicles) > 0).length);
+	const extrasCount = $derived((form.visa.include ? 1 : 0) + (form.airlineInclude ? 1 : 0));
+	const stepDone = $derived<Record<string, boolean>>({
+		basics: num(form.roeValue) > 0 && form.adults > 0,
+		hotels: form.hotels.some((h) => h.hotelId && h.checkIn && h.checkOut && num(h.nights) > 0),
+		transfers: transferCount > 0,
+		extras: extrasCount > 0
+	});
+	const stepSummary = $derived<Record<string, string>>({
+		basics: `${form.adults}+${form.children}+${form.infants} pax`,
+		hotels: `${form.hotels.length} stay${form.hotels.length === 1 ? '' : 's'} · ${itineraryNights}n`,
+		transfers: transferCount ? `${transferCount} vehicle line${transferCount === 1 ? '' : 's'}` : 'optional',
+		extras:
+			extrasCount > 0
+				? [form.visa.include ? 'Visa' : '', form.airlineInclude ? 'Tickets' : '']
+						.filter(Boolean)
+						.join(' + ')
+				: 'optional'
+	});
 </script>
 
 <a href="/queries/{queryId}" class="no-print mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
@@ -550,6 +586,34 @@
 
 <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 	<div class="space-y-4 lg:col-span-2">
+		<!-- Step nav: jump freely; the sidebar prices live the whole way through. -->
+		<nav class="flex gap-2 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1.5">
+			{#each STEPS as s, i (s.key)}
+				<button
+					type="button"
+					onclick={() => goStep(i)}
+					class="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors {stepIdx === i
+						? 'bg-brand-50 ring-1 ring-brand-200'
+						: 'hover:bg-slate-50'}"
+				>
+					<span
+						class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold {stepDone[s.key]
+							? 'bg-green-500 text-white'
+							: stepIdx === i
+								? 'bg-brand-600 text-white'
+								: 'bg-slate-100 text-slate-500'}"
+					>
+						{#if stepDone[s.key]}<Check class="h-3.5 w-3.5" />{:else}{i + 1}{/if}
+					</span>
+					<span class="min-w-0">
+						<span class="block truncate text-sm font-medium {stepIdx === i ? 'text-brand-700' : 'text-slate-600'}">{s.label}</span>
+						<span class="block truncate text-[11px] text-slate-400">{stepSummary[s.key]}</span>
+					</span>
+				</button>
+			{/each}
+		</nav>
+
+		{#if stepKey === 'basics'}
 		<Card title="Pax, ROE & label">
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
 				<Input label="ROE (1 SAR = PKR)" type="number" min="0" step="0.0001" bind:value={form.roeValue} />
@@ -570,6 +634,7 @@
 				</div>
 			</div>
 		</Card>
+		{:else if stepKey === 'hotels'}
 
 		<!-- Itinerary: a free-ordered sequence of stays with chained dates. -->
 		<div class="flex items-center justify-between">
@@ -688,6 +753,7 @@
 		{/each}
 
 		<Button type="button" variant="secondary" size="sm" onclick={addStay}><Plus class="h-4 w-4" /> Add stay</Button>
+		{:else if stepKey === 'transfers'}
 
 		<Card title="Transfers (SAR · per vehicle)">
 			<div class="space-y-2">
@@ -710,6 +776,7 @@
 				<Button size="sm" variant="ghost" onclick={() => form.transfers.push(newTransfer())}><Plus class="h-4 w-4" /> Transfer</Button>
 			</div>
 		</Card>
+		{:else if stepKey === 'extras'}
 
 		<Card title="Visa (SAR · per person)">
 			<div class="flex flex-wrap items-end gap-2">
@@ -755,6 +822,21 @@
 				</div>
 			{/if}
 		</Card>
+		{/if}
+
+		<!-- Step pager -->
+		<div class="flex items-center justify-between border-t border-slate-100 pt-3">
+			<Button type="button" variant="ghost" size="sm" onclick={() => goStep(stepIdx - 1)} disabled={stepIdx === 0}>
+				<ArrowLeft class="h-4 w-4" /> Back
+			</Button>
+			{#if stepIdx < STEPS.length - 1}
+				<Button type="button" size="sm" onclick={() => goStep(stepIdx + 1)}>
+					Next: {STEPS[stepIdx + 1]?.label} <ArrowRight class="h-4 w-4" />
+				</Button>
+			{:else}
+				<span class="text-xs text-slate-400">All set — review the breakdown, then Save →</span>
+			{/if}
+		</div>
 	</div>
 
 	<div class="space-y-4">
