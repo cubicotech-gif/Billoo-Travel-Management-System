@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { ArrowLeft, ArrowRight, Ban, Map } from 'lucide-svelte';
+	import { goto } from '$app/navigation';
+	import { ArrowLeft, ArrowRight, Ban, Map, Pencil, Trash2, RotateCcw } from 'lucide-svelte';
 	import { Badge, Button, Card, WhatsAppLink } from '$ui';
 	import { formatAmount } from '$lib/money';
-	import { useQueryDetail, useSetQueryStatus } from './queries';
+	import {
+		useQueryDetail,
+		useSetQueryStatus,
+		useSoftDeleteQuery,
+		useRestoreQuery
+	} from './queries';
+	import QueryEditModal from './QueryEditModal.svelte';
 	import {
 		STAGE_BY_STATUS,
 		BOOKING_STATUS_TONE,
@@ -30,10 +37,19 @@
 
 	const query = untrack(() => useQueryDetail(id));
 	const setStatus = useSetQueryStatus();
+	const softDelete = useSoftDeleteQuery();
+	const restore = useRestoreQuery();
+
+	let editing = $state(false);
 
 	function cancelQuery() {
 		if (confirm('Cancel this query? You can move it back into the pipeline later.'))
 			$setStatus.mutate({ id, status: 'Cancelled' });
+	}
+	function deleteQuery() {
+		if (confirm('Delete this query? It will be hidden but recoverable from “Deleted”.')) {
+			$softDelete.mutate(id, { onSuccess: () => goto('/queries') });
+		}
 	}
 </script>
 
@@ -55,6 +71,14 @@
 	{@const days = daysSince(q.stage_changed_at)}
 	{@const stuck = isStuck(q.status, days)}
 	{@const reference = `BLO-${new Date(q.created_at).getFullYear()}-${q.query_number.slice(-4)}`}
+	{#if q.is_deleted}
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
+			<span>This query is deleted — hidden from the board but recoverable.</span>
+			<Button size="sm" variant="secondary" disabled={$restore.isPending} onclick={() => $restore.mutate(id)}>
+				<RotateCcw class="h-4 w-4" /> Restore
+			</Button>
+		</div>
+	{/if}
 	<!-- Rich summary header: state at a glance, not a blank form. -->
 	<div class="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
 		<div class="flex flex-wrap items-start justify-between gap-4">
@@ -93,6 +117,10 @@
 						<Ban class="h-4 w-4" /> Cancel
 					</Button>
 				{/if}
+				<Button variant="ghost" onclick={() => (editing = true)}><Pencil class="h-4 w-4" /> Edit</Button>
+				<Button variant="ghost" disabled={$softDelete.isPending} onclick={deleteQuery}>
+					<Trash2 class="h-4 w-4" /> Delete
+				</Button>
 			</div>
 		</div>
 
@@ -203,4 +231,6 @@
 			<DocumentsPanel entityType="query" entityId={id} types={QUERY_DOCUMENT_TYPES} />
 		</div>
 	{/if}
+
+	<QueryEditModal query={q} open={editing} onClose={() => (editing = false)} />
 {/if}

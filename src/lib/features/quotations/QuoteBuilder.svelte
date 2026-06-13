@@ -21,6 +21,7 @@
 	import { rateAgeDays } from '$features/rates/validity';
 	import { insertRateObservations } from '$features/rates/api';
 	import { buildObservations, type ObsStay } from '$features/rates/observations';
+	import HotelRatePanel from '$features/rates/HotelRatePanel.svelte';
 	import VendorPicker from '$features/vendors/VendorPicker.svelte';
 	import HotelSearchSelect from '$features/hotels/HotelSearchSelect.svelte';
 	import {
@@ -657,6 +658,12 @@
 							{/if}
 						</div>
 					</div>
+
+					{#if slot.hotelId}
+						{#key slot.hotelId}
+							<HotelRatePanel hotelId={slot.hotelId} />
+						{/key}
+					{/if}
 				</div>
 			</Card>
 		{/each}

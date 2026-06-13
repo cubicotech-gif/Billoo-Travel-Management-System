@@ -3,6 +3,7 @@ import {
 	createRate,
 	deleteRate,
 	getLatestRoe,
+	listHotelObservations,
 	listRates,
 	setRoe,
 	updateRate
@@ -37,6 +38,14 @@ export function useDeleteRate() {
 	return createMutation({
 		mutationFn: (id: string) => deleteRate(id),
 		onSuccess: () => client.invalidateQueries({ queryKey: RATES_KEY })
+	});
+}
+
+export function useHotelObservations(hotelId: string) {
+	return createQuery({
+		queryKey: ['hotel-observations', hotelId] as const,
+		queryFn: () => listHotelObservations(hotelId),
+		enabled: !!hotelId
 	});
 }
 

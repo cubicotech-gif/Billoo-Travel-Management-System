@@ -5,9 +5,12 @@ import {
 	createService,
 	deleteService,
 	getQuery,
+	listDeletedQueries,
 	listQueries,
 	listServices,
+	restoreQuery,
 	setQueryStatus,
+	softDeleteQuery,
 	updateQuery as apiUpdateQuery,
 	updateService
 } from './api';
@@ -17,6 +20,7 @@ import type { NewQuery, NewQueryService, QueryServiceUpdate, QueryUpdate } from 
 // stay free of data-fetching plumbing.
 
 const QUERIES_KEY = ['queries'] as const;
+const DELETED_KEY = ['queries', 'deleted'] as const;
 const queryKey = (id: string) => ['queries', id] as const;
 const servicesKey = (queryId: string) => ['queries', queryId, 'services'] as const;
 
@@ -24,6 +28,37 @@ export function useQueries() {
 	return createQuery({
 		queryKey: QUERIES_KEY,
 		queryFn: listQueries
+	});
+}
+
+export function useDeletedQueries() {
+	return createQuery({ queryKey: DELETED_KEY, queryFn: listDeletedQueries });
+}
+
+function invalidateLists(client: ReturnType<typeof useQueryClient>) {
+	client.invalidateQueries({ queryKey: QUERIES_KEY });
+	client.invalidateQueries({ queryKey: DELETED_KEY });
+}
+
+export function useSoftDeleteQuery() {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (id: string) => softDeleteQuery(id),
+		onSuccess: (q) => {
+			invalidateLists(client);
+			client.invalidateQueries({ queryKey: queryKey(q.id) });
+		}
+	});
+}
+
+export function useRestoreQuery() {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (id: string) => restoreQuery(id),
+		onSuccess: (q) => {
+			invalidateLists(client);
+			client.invalidateQueries({ queryKey: queryKey(q.id) });
+		}
 	});
 }
 
