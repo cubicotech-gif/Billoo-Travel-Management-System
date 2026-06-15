@@ -28,6 +28,7 @@
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingPanel from '$features/bookings/BookingPanel.svelte';
 	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
+	import BookingDocChecklist from '$features/documents/BookingDocChecklist.svelte';
 	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
 	import { QUERY_DOCUMENT_TYPES, PASSENGER_DOCUMENT_TYPES } from '$features/documents/api';
 
@@ -219,6 +220,10 @@
 
 		<div class="mb-8">
 			<ConfirmationPanel query={q} queryId={id} />
+		</div>
+
+		<div class="mb-8">
+			<BookingDocChecklist queryId={id} passengerId={q.passenger_id} />
 		</div>
 
 		<div class="mb-4">

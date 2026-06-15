@@ -32,8 +32,16 @@
 	}
 
 	// Re-lane a booking by changing its status; settling marks completed_date.
+	// Reopening a Completed booking is deliberate — guard against a stray pick.
 	function setStatus(card: OpsCard, next: BookingStatus) {
 		if (next === card.query.booking_status) return;
+		if (
+			card.query.booking_status === 'Completed' &&
+			next !== 'Completed' &&
+			!confirm(`Reopen the completed booking for ${card.query.client_name}?`)
+		) {
+			return;
+		}
 		$update.mutate({
 			id: card.query.id,
 			patch: {
