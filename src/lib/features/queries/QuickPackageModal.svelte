@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { Zap } from 'lucide-svelte';
 	import { Modal, Button, Input, Select } from '$ui';
+	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
 	import type { CityBlock, PackageType } from '$lib/database.types';
 	import { TRIP_TYPES, isUmrahType, newCity } from './trip';
 	import { useCreateQuery } from './queries';
@@ -13,8 +14,11 @@
 	const createQuery = useCreateQuery();
 	const createPassenger = useCreatePassenger();
 
-	// A stripped-down intake for live calls: capture only what's needed to start
-	// pricing, then drop straight into the full builder — no New→Working buffer.
+	// Two phases: a stripped-down intake for live calls, then the real calculator
+	// embedded right here — no leaving the dashboard, no New→Working buffer.
+	let phase = $state<'intake' | 'price'>('intake');
+	let createdId = $state<string | null>(null);
+
 	let form = $state({
 		name: '',
 		whatsapp: '',
@@ -31,7 +35,7 @@
 	const isUmrah = $derived(isUmrahType(form.packageType));
 	const saving = $derived($createPassenger.isPending || $createQuery.isPending);
 
-	function reset() {
+	function resetForm() {
 		form = {
 			name: '',
 			whatsapp: '',
@@ -45,6 +49,13 @@
 			nights: 7
 		};
 		error = null;
+	}
+
+	function close() {
+		phase = 'intake';
+		createdId = null;
+		resetForm();
+		onClose();
 	}
 
 	function buildCities(): CityBlock[] {
@@ -92,52 +103,67 @@
 			nights_madinah: isUmrah ? nightsFor('Madinah') : null
 		});
 
-		reset();
-		onClose();
-		// Reverse flow: land directly in the pricing builder. Saving a quotation
-		// there promotes the query to Quoted.
-		goto(`/queries/${query.id}/quote`);
+		createdId = query.id;
+		phase = 'price';
+	}
+
+	// Saving a quotation promotes the query to Quoted; jump to it to send/track.
+	function onPriced() {
+		const id = createdId;
+		close();
+		if (id) goto(`/queries/${id}`);
 	}
 </script>
 
-<Modal {open} {onClose} title="Quick Package">
-	<p class="mb-4 text-sm text-slate-500">
-		On a call? Capture the bare minimum and jump straight to pricing — it saves as a passenger and a
-		query, ready to quote.
-	</p>
+<Modal
+	{open}
+	onClose={close}
+	title={phase === 'intake' ? 'Quick Package' : 'Quick Package · price & quote'}
+	fullScreen={phase === 'price'}
+>
+	{#if phase === 'intake'}
+		<p class="mb-4 text-sm text-slate-500">
+			On a call? Capture the bare minimum and jump straight to pricing — it saves as a passenger
+			and a query, ready to quote.
+		</p>
 
-	<div class="space-y-4">
-		<div class="grid grid-cols-2 gap-3">
-			<Input label="Passenger name" bind:value={form.name} placeholder="e.g. Sajjad Rajar" />
-			<Input label="WhatsApp number" bind:value={form.whatsapp} placeholder="03xx…" />
-		</div>
-
-		<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-			<Select label="Trip type" bind:value={form.packageType} options={[...TRIP_TYPES]} />
-			<Input label="Adults" type="number" min="0" bind:value={form.adults} />
-			<Input label="Children" type="number" min="0" bind:value={form.children} />
-			<Input label="Infants" type="number" min="0" bind:value={form.infants} />
-		</div>
-
-		{#if isUmrah}
+		<div class="space-y-4">
 			<div class="grid grid-cols-2 gap-3">
-				<Input label="Nights in Makkah" type="number" min="0" bind:value={form.nightsMakkah} />
-				<Input label="Nights in Madinah" type="number" min="0" bind:value={form.nightsMadinah} />
+				<Input label="Passenger name" bind:value={form.name} placeholder="e.g. Sajjad Rajar" />
+				<Input label="WhatsApp number" bind:value={form.whatsapp} placeholder="03xx…" />
 			</div>
-		{:else}
-			<div class="grid grid-cols-2 gap-3">
-				<Input label="Country / city" bind:value={form.country} placeholder="e.g. Turkey" />
-				<Input label="Nights" type="number" min="0" bind:value={form.nights} />
+
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+				<Select label="Trip type" bind:value={form.packageType} options={[...TRIP_TYPES]} />
+				<Input label="Adults" type="number" min="0" bind:value={form.adults} />
+				<Input label="Children" type="number" min="0" bind:value={form.children} />
+				<Input label="Infants" type="number" min="0" bind:value={form.infants} />
 			</div>
-		{/if}
 
-		{#if error}<p class="text-sm text-red-600">{error}</p>{/if}
+			{#if isUmrah}
+				<div class="grid grid-cols-2 gap-3">
+					<Input label="Nights in Makkah" type="number" min="0" bind:value={form.nightsMakkah} />
+					<Input label="Nights in Madinah" type="number" min="0" bind:value={form.nightsMadinah} />
+				</div>
+			{:else}
+				<div class="grid grid-cols-2 gap-3">
+					<Input label="Country / city" bind:value={form.country} placeholder="e.g. Turkey" />
+					<Input label="Nights" type="number" min="0" bind:value={form.nights} />
+				</div>
+			{/if}
 
-		<div class="flex justify-end gap-2 pt-1">
-			<Button type="button" variant="secondary" onclick={onClose}>Cancel</Button>
-			<Button type="button" onclick={start} disabled={saving}>
-				<Zap class="h-4 w-4" /> {saving ? 'Saving…' : 'Build & price'}
-			</Button>
+			{#if error}<p class="text-sm text-red-600">{error}</p>{/if}
+
+			<div class="flex justify-end gap-2 pt-1">
+				<Button type="button" variant="secondary" onclick={close}>Cancel</Button>
+				<Button type="button" onclick={start} disabled={saving}>
+					<Zap class="h-4 w-4" /> {saving ? 'Saving…' : 'Build & price'}
+				</Button>
+			</div>
 		</div>
-	</div>
+	{:else if createdId}
+		{#key createdId}
+			<QuoteBuilder queryId={createdId} embedded onSaved={onPriced} />
+		{/key}
+	{/if}
 </Modal>

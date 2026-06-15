@@ -72,7 +72,12 @@
 	import RangeCalendar from './RangeCalendar.svelte';
 	import QuotationList from './QuotationList.svelte';
 
-	let { queryId, editId }: { queryId: string; editId?: string } = $props();
+	let {
+		queryId,
+		editId,
+		embedded = false,
+		onSaved
+	}: { queryId: string; editId?: string; embedded?: boolean; onSaved?: () => void } = $props();
 
 	const client = useQueryClient();
 	const queryDetail = untrack(() => useQueryDetail(queryId));
@@ -569,12 +574,15 @@
 			$setStatus.mutate({ id: queryId, status: 'Quoted' });
 		}
 		if (addAnother) resetLines();
+		else onSaved?.();
 	}
 </script>
 
-<a href="/queries/{queryId}" class="no-print mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
-	<ArrowLeft class="h-4 w-4" /> Back to query
-</a>
+{#if !embedded}
+	<a href="/queries/{queryId}" class="no-print mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
+		<ArrowLeft class="h-4 w-4" /> Back to query
+	</a>
+{/if}
 
 <div class="mb-6">
 	<h1 class="text-2xl font-bold text-slate-800">Build quotation</h1>
