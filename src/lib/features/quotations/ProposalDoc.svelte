@@ -33,6 +33,9 @@
 	});
 
 	const validUntil = $derived(tiers.find((t) => t.valid_until)?.valid_until ?? null);
+	const totalNights = $derived(
+		(query?.itinerary_cities ?? []).reduce((a, c) => a + (c.nights ?? 0), 0)
+	);
 
 	function pax(q: Query): string {
 		return `${q.adults} adult${q.adults === 1 ? '' : 's'}${q.children ? `, ${q.children} child` : ''}${q.infants ? `, ${q.infants} infant` : ''}`;
@@ -77,23 +80,32 @@
 {:else if !query}
 	<p class="text-slate-400">Loading…</p>
 {:else}
-	<div class="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-8">
-		<div class="mb-6 flex items-start justify-between border-b border-slate-200 pb-4">
+	<div class="print-card mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-8">
+		<div class="mb-6 flex items-start justify-between border-b-2 border-brand-600 pb-4">
 			<div>
-				<div class="text-xl font-bold text-brand-700">Billoo Travel</div>
-				<div class="text-xs text-slate-400">Umrah & Travel Services</div>
+				<div class="text-2xl font-bold text-brand-700">Billoo Travel</div>
+				<div class="text-xs uppercase tracking-wide text-slate-400">Umrah &amp; Travel Services</div>
 			</div>
 			<div class="text-right">
 				<div class="text-lg font-semibold text-slate-800">Package Proposal</div>
-				{#if validUntil}<div class="text-xs text-amber-600">Valid until {validUntil}</div>{/if}
+				{#if validUntil}<div class="text-xs font-medium text-amber-600">Valid until {validUntil}</div>{/if}
+				<div class="text-xs text-slate-400">Prepared {new Date().toLocaleDateString()}</div>
 			</div>
 		</div>
 
-		<div class="mb-6 text-sm">
-			<div class="font-medium text-slate-800">{query.client_name}</div>
-			<div class="text-slate-500">{query.package_type ?? query.destination} · {pax(query)}</div>
+		<div class="break-avoid mb-6 rounded-lg bg-slate-50 p-4 text-sm">
+			<div class="text-base font-semibold text-slate-800">{query.client_name}</div>
+			<div class="mt-0.5 text-slate-600">
+				{query.package_type ?? query.destination} · {pax(query)}{totalNights ? ` · ${totalNights} nights` : ''}
+			</div>
 			{#if (query.itinerary_cities ?? []).length}
-				<div class="text-slate-500">{(query.itinerary_cities ?? []).map((c) => `${c.city} ${c.nights}N`).join(' · ')}</div>
+				<div class="mt-2 flex flex-wrap gap-1.5">
+					{#each query.itinerary_cities ?? [] as c (c.city + c.nights)}
+						<span class="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-600">
+							{c.city} · {c.nights}N
+						</span>
+					{/each}
+				</div>
 			{/if}
 		</div>
 
@@ -102,7 +114,7 @@
 		{:else}
 			<div class="flex flex-wrap gap-4">
 				{#each tiers as t (t.id)}
-					<div class="flex min-w-[200px] flex-1 flex-col rounded-xl border border-slate-200 p-4 {t.status === 'accepted' ? 'ring-2 ring-green-400' : ''}">
+					<div class="break-avoid flex min-w-[200px] flex-1 flex-col rounded-xl border border-slate-200 p-4 {t.status === 'accepted' ? 'ring-2 ring-green-400' : ''}">
 						<div class="text-sm font-semibold text-slate-700">{t.label ?? `Option ${t.version}`}</div>
 						<div class="mt-2 text-2xl font-bold text-slate-800">{formatAmount(Number(t.per_person_pkr), 'PKR')}</div>
 						<div class="text-xs text-slate-400">per person</div>
