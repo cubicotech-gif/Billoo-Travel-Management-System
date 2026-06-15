@@ -197,6 +197,47 @@ describe('quotation calculator', () => {
 		expect(adv.perAdult).toBeGreaterThan(adv.perChild);
 	});
 
+	it('converts USD lines via the USD rate and keeps the SAR subtotal separate', () => {
+		const r = calculateQuotation({
+			roe: 75,
+			usd: 280,
+			pax: { adults: 2, children: 0, infants: 0 },
+			hotels: [
+				// SAR stay: 250*1*5 = 1250 SAR
+				{ city: 'Makkah', name: 'Hilton', nights: 5, rooms: [{ label: 'Double', occupancy: 2, qty: 1, costSar: 200, sellSar: 250 }] },
+				// USD stay (Umrah Plus, Baku): 100*1*3 = 300 USD
+				{ city: 'Baku', name: 'Fairmont', currency: 'USD', nights: 3, rooms: [{ label: 'Double', occupancy: 2, qty: 1, costSar: 80, sellSar: 100 }] }
+			],
+			transfers: [],
+			visa: null,
+			tickets: null
+		});
+		expect(r.sarSell).toBe(1250);
+		expect(r.usdSell).toBe(300);
+		// total sell PKR = 1250*75 + 300*280 = 93750 + 84000 = 177750
+		expect(r.totalSellPkr).toBe(177750);
+	});
+
+	it('prices multiple visas (mixed currency) per person', () => {
+		const r = calculateQuotation({
+			roe: 75,
+			usd: 280,
+			pax: { adults: 2, children: 0, infants: 0 },
+			hotels: [],
+			transfers: [],
+			visas: [
+				{ visaType: 'Umrah', costSar: 180, sellSar: 220 }, // SAR, per person
+				{ visaType: 'Azerbaijan', currency: 'USD', costSar: 40, sellSar: 50 } // USD, per person
+			],
+			tickets: null
+		});
+		const visaLines = r.lines.filter((l) => l.line_type === 'visa');
+		expect(visaLines).toHaveLength(2);
+		expect(r.sarSell).toBe(440); // 220 * 2
+		expect(r.usdSell).toBe(100); // 50 * 2
+		expect(r.totalSellPkr).toBe(440 * 75 + 100 * 280);
+	});
+
 	it('handles an empty quotation as zero', () => {
 		const r = calculateQuotation({
 			roe: 75,

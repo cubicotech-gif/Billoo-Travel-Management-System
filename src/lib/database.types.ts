@@ -437,6 +437,7 @@ export interface Database {
 					id: string;
 					rate_date: string;
 					sar_to_pkr: number;
+					usd_to_pkr: number | null;
 					created_at: string;
 					updated_at: string;
 				};
@@ -444,6 +445,7 @@ export interface Database {
 					id?: string;
 					rate_date?: string;
 					sar_to_pkr: number;
+					usd_to_pkr?: number | null;
 				};
 				Update: Partial<Database['public']['Tables']['exchange_rates']['Insert']>;
 				Relationships: [];

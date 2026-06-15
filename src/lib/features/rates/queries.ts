@@ -96,7 +96,8 @@ export function useLatestRoe() {
 export function useSetRoe() {
 	const client = useQueryClient();
 	return createMutation({
-		mutationFn: ({ value, date }: { value: number; date?: string }) => setRoe(value, date),
+		mutationFn: ({ value, usd, date }: { value: number; usd?: number | null; date?: string }) =>
+			setRoe(value, usd, date),
 		onSuccess: () => client.invalidateQueries({ queryKey: ROE_KEY })
 	});
 }
