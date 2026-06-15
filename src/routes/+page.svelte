@@ -1,10 +1,14 @@
 <script lang="ts">
-	import { Card, Badge } from '$lib/ui';
+	import { Zap } from 'lucide-svelte';
+	import { Card, Badge, Button } from '$lib/ui';
 	import { useQueries } from '$features/queries/queries';
 	import { MAIN_STAGES, isCancelled, isSettled } from '$features/queries/workflow';
+	import QuickPackageModal from '$features/queries/QuickPackageModal.svelte';
 	import { formatAmount } from '$lib/money';
 
 	const queries = useQueries();
+
+	let quickOpen = $state(false);
 
 	// Live pipeline counts + headline numbers, derived from the cached list.
 	// "Open" = still active: not cancelled and not a settled (Completed) booking.
@@ -23,10 +27,17 @@
 	});
 </script>
 
-<div class="mb-6">
-	<h1 class="text-2xl font-bold text-slate-800">Dashboard</h1>
-	<p class="text-sm text-slate-500">Umrah season at a glance.</p>
+<div class="mb-6 flex items-center justify-between">
+	<div>
+		<h1 class="text-2xl font-bold text-slate-800">Dashboard</h1>
+		<p class="text-sm text-slate-500">Umrah season at a glance.</p>
+	</div>
+	<Button onclick={() => (quickOpen = true)}>
+		<Zap class="h-4 w-4" /> Quick Package
+	</Button>
 </div>
+
+<QuickPackageModal open={quickOpen} onClose={() => (quickOpen = false)} />
 
 {#if $queries.isLoading}
 	<p class="text-slate-400">Loading…</p>

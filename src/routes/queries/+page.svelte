@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$ui';
-	import { Plus, RotateCcw, Archive, XCircle } from 'lucide-svelte';
+	import { Plus, RotateCcw, Archive, XCircle, ClipboardCheck } from 'lucide-svelte';
 	import {
 		useQueries,
 		useSetQueryStatus,
@@ -13,6 +13,7 @@
 	import { useAllQuotations } from '$features/quotations/queries';
 	import { latestQuotationByQuery } from '$features/quotations/api';
 	import { MAIN_STAGES } from '$features/queries/workflow';
+	import { isBooked } from '$features/operations/lanes';
 	import type { QueryStatus } from '$lib/database.types';
 	import type { Query } from '$features/queries/types';
 
@@ -53,18 +54,22 @@
 	}
 
 	// Group queries into the four pipeline columns. Cancelled is a side-exit, not
-	// a column — it lives in its own collapsible section below.
+	// a column — it lives in its own collapsible section below. Booked deals (a
+	// booking_status is set) leave the board entirely for the Operations page, so
+	// the sales pipeline stays buffer-free.
 	const columns = $derived.by(() => {
 		const map = new Map<QueryStatus, Query[]>();
 		for (const s of MAIN_STAGES) map.set(s.status, []);
 		for (const q of $queries.data ?? []) {
 			if (q.status === 'Cancelled') continue;
+			if (isBooked(q)) continue;
 			// Unknown/legacy statuses fall into New Query so nothing disappears.
 			(map.get(q.status) ?? map.get('New Query'))?.push(q);
 		}
 		return MAIN_STAGES.map((stage) => ({ stage, items: map.get(stage.status) ?? [] }));
 	});
 	const cancelledItems = $derived(($queries.data ?? []).filter((q) => q.status === 'Cancelled'));
+	const bookedCount = $derived(($queries.data ?? []).filter(isBooked).length);
 
 	let draggingId = $state<string | null>(null);
 	let dragOverStatus = $state<QueryStatus | null>(null);
@@ -85,6 +90,11 @@
 		<p class="text-sm text-slate-500">Drag across the pipeline, or click a card to expand, advance, and act.</p>
 	</div>
 	<div class="flex items-center gap-2">
+		{#if bookedCount}
+			<Button variant="secondary" href="/operations">
+				<ClipboardCheck class="h-4 w-4" /> Operations · {bookedCount}
+			</Button>
+		{/if}
 		<Button variant="secondary" onclick={() => (showDeleted = !showDeleted)}>
 			<Archive class="h-4 w-4" /> Deleted{($deleted.data ?? []).length ? ` · ${($deleted.data ?? []).length}` : ''}
 		</Button>

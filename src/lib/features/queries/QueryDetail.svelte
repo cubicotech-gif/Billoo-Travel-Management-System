@@ -29,7 +29,7 @@
 	import BookingPanel from '$features/bookings/BookingPanel.svelte';
 	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
 	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
-	import { QUERY_DOCUMENT_TYPES } from '$features/documents/api';
+	import { QUERY_DOCUMENT_TYPES, PASSENGER_DOCUMENT_TYPES } from '$features/documents/api';
 
 	// `id` is stable for this component instance: the route keys on it, so a
 	// different query remounts us.
@@ -230,6 +230,19 @@
 		<div class="mb-8">
 			<DocumentsPanel entityType="query" entityId={id} types={QUERY_DOCUMENT_TYPES} />
 		</div>
+
+		<!-- Passenger's identity vault, attached to the profile (passport/visa/photo)
+		     so it's visible and uploadable right here in the booking workspace. -->
+		{#if q.passenger_id}
+			<div class="mb-8">
+				<DocumentsPanel
+					entityType="passenger"
+					entityId={q.passenger_id}
+					title="Passenger Documents (profile)"
+					types={PASSENGER_DOCUMENT_TYPES}
+				/>
+			</div>
+		{/if}
 	{/if}
 
 	<QueryEditModal query={q} open={editing} onClose={() => (editing = false)} />

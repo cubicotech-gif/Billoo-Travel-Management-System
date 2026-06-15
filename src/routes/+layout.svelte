@@ -3,7 +3,15 @@
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { page } from '$app/stores';
 	import type { Snippet } from 'svelte';
-	import { LayoutDashboard, ClipboardList, Users, Building2, Wallet, Tags } from 'lucide-svelte';
+	import {
+		LayoutDashboard,
+		ClipboardList,
+		ClipboardCheck,
+		Users,
+		Building2,
+		Wallet,
+		Tags
+	} from 'lucide-svelte';
 	import { createQueryClient } from '$lib/query-client';
 
 	let { children }: { children: Snippet } = $props();
@@ -19,6 +27,7 @@
 	const nav = [
 		{ href: '/', label: 'Dashboard', icon: LayoutDashboard },
 		{ href: '/queries', label: 'Queries', icon: ClipboardList },
+		{ href: '/operations', label: 'Operations', icon: ClipboardCheck },
 		{ href: '/passengers', label: 'Passengers', icon: Users },
 		{ href: '/vendors', label: 'Vendors', icon: Building2 },
 		{ href: '/rates', label: 'Service Rates', icon: Tags },
