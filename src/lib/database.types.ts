@@ -457,6 +457,7 @@ export interface Database {
 					version: number;
 					status: QuotationStatus;
 					roe: number;
+					usd_rate: number | null;
 					adults: number;
 					children: number;
 					infants: number;
@@ -484,6 +485,7 @@ export interface Database {
 					version?: number;
 					status?: QuotationStatus;
 					roe: number;
+					usd_rate?: number | null;
 					adults?: number;
 					children?: number;
 					infants?: number;

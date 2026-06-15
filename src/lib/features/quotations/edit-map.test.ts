@@ -57,7 +57,8 @@ describe('quotationToForm (edit reopen)', () => {
 		expect(makkah.rooms[0]).toMatchObject({ rt: 'Quad', qty: 1, cost: 200, sell: 250 });
 
 		expect(form.transfers[0]).toMatchObject({ vehicle: '7-seater', route: 'Jeddah Airport → Makkah', vehicles: 2, sell: 380 });
-		expect(form.visa).toMatchObject({ include: true, type: 'Umrah', sell: 220 });
+		expect(form.visas).toHaveLength(1);
+		expect(form.visas[0]).toMatchObject({ type: 'Umrah', sell: 220, currency: 'SAR' });
 		expect(form.airlineInclude).toBe(true);
 		expect(form.airline.name).toBe('Saudia');
 		expect(form.airline.adultSell).toBe(180000);
@@ -73,6 +74,6 @@ describe('quotationToForm (edit reopen)', () => {
 		const madinah = form.hotels.find((h) => h.city === 'Madinah')!;
 		expect(madinah.rooms[0]).toMatchObject({ rt: 'Custom', customLabel: 'Penthouse', occupancy: 6 });
 		expect(form.transfers[0]).toMatchObject({ vehicle: 'Custom', customVehicle: 'Bus', route: 'Custom', customRoute: 'Makkah → Taif' });
-		expect(form.visa).toMatchObject({ type: 'Other', otherLabel: 'Work' });
+		expect(form.visas[0]).toMatchObject({ type: 'Other', otherLabel: 'Work' });
 	});
 });

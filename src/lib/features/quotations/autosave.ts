@@ -14,7 +14,7 @@ export interface RateSnapshot {
 	occupancy: number | null;
 	vendor_id: string | null;
 	hotel_id?: string | null;
-	currency: 'SAR' | 'PKR';
+	currency: 'SAR' | 'USD' | 'PKR';
 	unit: string | null;
 	cost_price: number;
 	selling_price: number;

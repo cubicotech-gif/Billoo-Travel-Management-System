@@ -154,7 +154,10 @@
 			rechain(form.hotels);
 		}
 		form.validUntil = addDays(toISO(new Date()), 7);
-		if (r) form.roeValue = Number(r.sar_to_pkr);
+		if (r) {
+			form.roeValue = Number(r.sar_to_pkr);
+			if (r.usd_to_pkr) form.usdValue = Number(r.usd_to_pkr);
+		}
 		seeded = true;
 	});
 
@@ -310,6 +313,7 @@
 		return {
 			city,
 			name: h.name || city,
+			currency: h.currency,
 			hotelId: h.hotelId || null,
 			mealPlan: h.mealPlan || 'RO',
 			vendorId: h.vendorId || null,
@@ -344,21 +348,27 @@
 		const transfers = form.transfers.map((t) => ({
 			vehicleType: vehicleLabel(t),
 			route: routeLabel(t),
+			currency: t.currency,
 			vendorId: t.vendorId || null,
 			costSar: num(t.cost),
 			sellSar: num(t.sell),
 			vehicles: num(t.vehicles)
 		}));
-		const v = form.visa;
+		const visas = form.visas.map((v) => ({
+			visaType: v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah',
+			currency: v.currency,
+			vendorId: v.vendorId || null,
+			costSar: num(v.cost),
+			sellSar: num(v.sell)
+		}));
 		const ai = form.airline;
 		return {
 			roe: num(form.roeValue),
+			usd: num(form.usdValue),
 			pax: { adults: form.adults, children: form.children, infants: form.infants },
 			hotels,
 			transfers,
-			visa: v.include
-				? { visaType: v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah', vendorId: v.vendorId || null, costSar: num(v.cost), sellSar: num(v.sell) }
-				: null,
+			visas,
 			tickets: form.airlineInclude
 				? { airlineName: ai.name || 'Tickets', rateCardId: ai.sel === OTHER || !ai.sel ? null : ai.sel, route: ai.route || null, fareClass: ai.fareClass || null, pnr: ai.pnr || null, adultCost: num(ai.adultCost), adultSell: num(ai.adultSell), childCost: num(ai.childCost), childSell: num(ai.childSell), infantCost: num(ai.infantCost), infantSell: num(ai.infantSell) }
 				: null
@@ -373,7 +383,7 @@
 	let ppMode = $state<'simple' | 'advanced'>('simple');
 	let childShare = $state({ ...DEFAULT_CHILD_SHARE });
 	const advanced = $derived(
-		perPersonAdvanced(result, num(form.roeValue), { adults: form.adults, children: form.children, infants: form.infants }, childShare)
+		perPersonAdvanced(result, num(form.roeValue), { adults: form.adults, children: form.children, infants: form.infants }, childShare, num(form.usdValue))
 	);
 	const headlinePp = $derived(ppMode === 'advanced' ? advanced.perAdult : pp);
 
@@ -397,7 +407,9 @@
 			perChildPkr: ppMode === 'advanced' && form.children > 0 ? advanced.perChild : null,
 			label: form.label || null,
 			hotels: form.hotels.map(hotelWa).filter((h): h is WhatsAppHotel => h !== null),
-			visaType: form.visa.include ? (form.visa.type === 'Other' ? form.visa.otherLabel || 'Other' : 'Umrah') : null,
+			visaType: form.visas.length
+				? form.visas.map((v) => (v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah')).join(' + ')
+				: null,
 			transferRoutes: form.transfers.map(routeLabel),
 			ticketsIncluded: form.airlineInclude
 		};
@@ -429,7 +441,7 @@
 		form.exclusions = '';
 		form.hotels = [blankHotel('')];
 		form.transfers = [newTransfer()];
-		form.visa = blankVisa();
+		form.visas = [blankVisa()];
 		form.airline = blankAirline();
 		form.airlineInclude = false;
 		dirty = false;
@@ -468,15 +480,15 @@
 				selling_price: num(a.adultSell)
 			});
 		}
-		if (form.visa.include) {
-			const v = form.visa;
+		for (const v of form.visas) {
+			if (num(v.cost) <= 0 && num(v.sell) <= 0) continue;
 			snaps.push({
 				item_type: 'visa',
 				name: v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah',
 				city: null,
 				occupancy: null,
 				vendor_id: v.vendorId || null,
-				currency: 'SAR',
+				currency: v.currency,
 				unit: 'per person',
 				cost_price: num(v.cost),
 				selling_price: num(v.sell)
@@ -510,9 +522,14 @@
 			alert('Set an exchange rate (ROE) first — see Rates.');
 			return;
 		}
+		if ((result.usdCost > 0 || result.usdSell > 0) && num(form.usdValue) <= 0) {
+			alert('Some components are in USD — set the USD → PKR rate first.');
+			return;
+		}
 		const quotation = await $createQuotation.mutateAsync({
 			queryId,
 			roe: num(form.roeValue),
+			usd: num(form.usdValue) || null,
 			pax: { adults: form.adults, children: form.children, infants: form.infants },
 			result,
 			whatsappText,
@@ -566,14 +583,16 @@
 
 <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 	<div class="space-y-4 lg:col-span-2">
-		<Card title="Pax, ROE & label">
-			<div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+		<Card title="Pax, rates & label">
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-6">
 				<Input label="ROE (1 SAR = PKR)" type="number" min="0" step="0.0001" bind:value={form.roeValue} />
+				<Input label="USD (1 USD = PKR)" type="number" min="0" step="0.0001" bind:value={form.usdValue} />
 				<Input label="Adults" type="number" min="0" bind:value={form.adults} />
 				<Input label="Children" type="number" min="0" bind:value={form.children} />
 				<Input label="Infants" type="number" min="0" bind:value={form.infants} />
 				<Input label="Tier (e.g. 3★ / Premium)" bind:value={form.label} placeholder="e.g. 5-star" />
 			</div>
+			<p class="mt-1 text-xs text-slate-400">USD rate only needed if a stay/transfer/visa below is set to USD.</p>
 			<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
 				<Input label="Valid until" type="date" bind:value={form.validUntil} />
 				<div>
@@ -600,7 +619,13 @@
 			<Card title={`Stay ${hi + 1}${slot.city ? ` · ${slot.city}` : ''}`}>
 				<div class="space-y-3">
 					<div class="flex items-center justify-between">
-						<span class="text-xs font-semibold uppercase text-slate-400">Stay {hi + 1}</span>
+						<div class="flex items-center gap-2">
+							<span class="text-xs font-semibold uppercase text-slate-400">Stay {hi + 1}</span>
+							<select bind:value={slot.currency} class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-medium text-slate-600 focus:border-brand-500 focus:outline-none">
+								<option value="SAR">SAR</option>
+								<option value="USD">USD</option>
+							</select>
+						</div>
 						<div class="flex items-center gap-1">
 							<button type="button" disabled={hi === 0} onclick={() => move(hi, -1)} class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 disabled:opacity-30" aria-label="Move up">
 								<ChevronUp class="h-4 w-4" />
@@ -722,6 +747,7 @@
 						{#if t.vehicle === 'Custom'}<div class="w-28"><Input label="Custom" bind:value={t.customVehicle} /></div>{/if}
 						<div class="w-44"><Select label="Route" bind:value={t.route} options={ROUTES} /></div>
 						{#if t.route === 'Custom'}<div class="w-40"><Input label="Custom route" bind:value={t.customRoute} /></div>{/if}
+						<div class="w-20"><Select label="Cur" bind:value={t.currency} options={['SAR', 'USD']} /></div>
 						<div class="w-40"><VendorPicker service="Transfer" bind:value={t.vendorId} /></div>
 						<div class="w-16"><Input label="Qty" type="number" min="0" bind:value={t.vehicles} /></div>
 						<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={t.cost} /></div>
@@ -735,18 +761,25 @@
 			</div>
 		</Card>
 
-		<Card title="Visa (SAR · per person)">
-			<div class="flex flex-wrap items-end gap-2">
-				<label class="mb-2 flex items-center gap-2 text-sm text-slate-600">
-					<input type="checkbox" bind:checked={form.visa.include} class="rounded border-slate-300" /> Include
-				</label>
-				{#if form.visa.include}
-					<div class="w-32"><Select label="Visa type" bind:value={form.visa.type} options={['Umrah', 'Other']} /></div>
-					{#if form.visa.type === 'Other'}<div class="w-32"><Input label="Label" bind:value={form.visa.otherLabel} /></div>{/if}
-					<div class="w-36"><VendorPicker service="Visa" bind:value={form.visa.vendorId} /></div>
-					<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={form.visa.cost} /></div>
-					<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={form.visa.sell} /></div>
+		<Card title="Visas (per person)">
+			<div class="space-y-2">
+				{#each form.visas as v, i (i)}
+					<div class="flex flex-wrap items-end gap-2">
+						<div class="w-32"><Select label="Visa type" bind:value={v.type} options={['Umrah', 'Other']} /></div>
+						{#if v.type === 'Other'}<div class="w-32"><Input label="Label" bind:value={v.otherLabel} placeholder="e.g. Azerbaijan" /></div>{/if}
+						<div class="w-20"><Select label="Cur" bind:value={v.currency} options={['SAR', 'USD']} /></div>
+						<div class="w-36"><VendorPicker service="Visa" bind:value={v.vendorId} /></div>
+						<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={v.cost} /></div>
+						<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={v.sell} /></div>
+						<button type="button" onclick={() => form.visas.splice(i, 1)} class="mb-1 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove visa">
+							<Trash2 class="h-4 w-4" />
+						</button>
+					</div>
+				{/each}
+				{#if form.visas.length === 0}
+					<p class="text-xs text-slate-400">No visa on this quote.</p>
 				{/if}
+				<Button size="sm" variant="ghost" onclick={() => form.visas.push(blankVisa())}><Plus class="h-4 w-4" /> Visa</Button>
 			</div>
 		</Card>
 
@@ -801,7 +834,10 @@
 				{#if result.lines.length === 0}<p class="text-slate-400">Pick items to price.</p>{/if}
 			</div>
 			<div class="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm">
-				<div class="flex justify-between"><span class="text-slate-500">SAR subtotal</span><span>{formatAmount(result.sarSell, 'SAR')}</span></div>
+				<div class="flex justify-between"><span class="text-slate-500">SAR subtotal{num(form.roeValue) > 0 ? ` → ${formatAmount(result.sarSell * num(form.roeValue), 'PKR')}` : ''}</span><span>{formatAmount(result.sarSell, 'SAR')}</span></div>
+				{#if result.usdSell > 0}
+					<div class="flex justify-between"><span class="text-slate-500">USD subtotal{num(form.usdValue) > 0 ? ` → ${formatAmount(result.usdSell * num(form.usdValue), 'PKR')}` : ''}</span><span>{formatAmount(result.usdSell, 'USD')}</span></div>
+				{/if}
 				<div class="flex justify-between"><span class="text-slate-500">Tickets (PKR)</span><span>{formatAmount(result.ticketsSellPkr, 'PKR')}</span></div>
 				<div class="flex justify-between font-semibold text-slate-800"><span>Total (PKR)</span><span>{formatAmount(result.totalSellPkr, 'PKR')}</span></div>
 				<div class="flex justify-between font-medium text-brand-700"><span>{ppMode === 'advanced' ? 'Per adult' : 'Per person'}</span><span>{formatAmount(headlinePp, 'PKR')}</span></div>

@@ -1095,6 +1095,7 @@ CREATE TABLE IF NOT EXISTS public.exchange_rates (
 	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
 	rate_date DATE NOT NULL UNIQUE DEFAULT CURRENT_DATE,
 	sar_to_pkr NUMERIC(10, 4) NOT NULL CHECK (sar_to_pkr > 0),
+	usd_to_pkr NUMERIC(10, 4) CHECK (usd_to_pkr IS NULL OR usd_to_pkr > 0),
 	created_at TIMESTAMPTZ DEFAULT NOW(),
 	updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -1171,6 +1172,7 @@ CREATE TABLE IF NOT EXISTS public.quotations (
 
 	-- Snapshot of the inputs that produced the totals.
 	roe NUMERIC(10, 4) NOT NULL,
+	usd_rate NUMERIC(10, 4) CHECK (usd_rate IS NULL OR usd_rate > 0),
 	adults INTEGER NOT NULL DEFAULT 1,
 	children INTEGER NOT NULL DEFAULT 0,
 	infants INTEGER NOT NULL DEFAULT 0,

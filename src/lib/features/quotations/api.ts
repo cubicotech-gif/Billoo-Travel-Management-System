@@ -65,6 +65,7 @@ async function nextVersion(queryId: string): Promise<number> {
 export interface SaveQuotationArgs {
 	queryId: string;
 	roe: number;
+	usd?: number | null;
 	pax: PaxCounts;
 	result: QuotationResult;
 	whatsappText: string;
@@ -86,6 +87,7 @@ export async function createQuotation(args: SaveQuotationArgs): Promise<Quotatio
 				query_id: args.queryId,
 				version,
 				roe: args.roe,
+				usd_rate: args.usd && args.usd > 0 ? args.usd : null,
 				adults: args.pax.adults,
 				children: args.pax.children,
 				infants: args.pax.infants,
