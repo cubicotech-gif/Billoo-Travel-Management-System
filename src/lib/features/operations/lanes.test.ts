@@ -34,6 +34,17 @@ describe('operations lanes', () => {
 		expect(toCard(q({ selling_price: 100000, advance_payment_amount: 120000 })).balance).toBe(0);
 	});
 
+	it('orders payments oldest-first and check-ins by soonest travel', () => {
+		const lanes = groupIntoLanes([
+			q({ id: 'pay-new', booking_status: 'Pending Payment', stage_changed_at: '2026-06-10' }),
+			q({ id: 'pay-old', booking_status: 'Pending Payment', stage_changed_at: '2026-06-01' }),
+			q({ id: 'chk-late', booking_status: 'Payment Done - Check-in Pending', travel_date: '2026-07-20' }),
+			q({ id: 'chk-soon', booking_status: 'Payment Done - Check-in Pending', travel_date: '2026-06-20' })
+		]);
+		expect(lanes.payments.map((c) => c.query.id)).toEqual(['pay-old', 'pay-new']);
+		expect(lanes.checkins.map((c) => c.query.id)).toEqual(['chk-soon', 'chk-late']);
+	});
+
 	it('groups only booked, non-deleted deals and tallies outstanding', () => {
 		const lanes = groupIntoLanes([
 			q({ booking_status: 'Pending Payment', selling_price: 100000, advance_payment_amount: 30000 }),

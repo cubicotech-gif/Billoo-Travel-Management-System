@@ -1,17 +1,22 @@
 <script lang="ts">
-	import { Badge, Select } from '$ui';
-	import { Wallet, PlaneTakeoff, CheckCircle2, ExternalLink } from 'lucide-svelte';
+	import { Badge, Select, Button, Modal, Input } from '$ui';
+	import { Wallet, PlaneTakeoff, CheckCircle2, ExternalLink, Check, MessageCircle } from 'lucide-svelte';
 	import { useQueries, useUpdateQuery } from '$features/queries/queries';
 	import { useAllDocuments } from '$features/documents/queries';
 	import { indexDocuments, readinessFor } from '$features/documents/checklist';
 	import { BOOKING_STATUSES } from '$features/queries/workflow';
 	import { OPS_LANES, groupIntoLanes, totalOutstanding, type OpsCard } from '$features/operations/lanes';
-	import { formatAmount } from '$lib/money';
+	import { formatAmount, money, add, toNumber } from '$lib/money';
+	import { waLink } from '$lib/whatsapp';
 	import type { BookingStatus } from '$lib/database.types';
 
 	const queries = useQueries();
 	const update = useUpdateQuery();
 	const documents = useAllDocuments();
+
+	// Record-payment modal state.
+	let payCard = $state<OpsCard | null>(null);
+	let payAmount = $state('');
 
 	const lanes = $derived(groupIntoLanes($queries.data ?? []));
 	const outstanding = $derived(totalOutstanding(lanes));
@@ -56,6 +61,46 @@
 						: card.query.completed_date
 			}
 		});
+	}
+
+	// Check-in done (payment already settled) → close the booking out.
+	function markCheckinDone(card: OpsCard) {
+		$update.mutate({
+			id: card.query.id,
+			patch: {
+				booking_status: 'Completed',
+				completed_date: card.query.completed_date ?? new Date().toISOString()
+			}
+		});
+	}
+
+	// WhatsApp reminder: balance chase, or a check-in/documents nudge.
+	function remind(card: OpsCard) {
+		const msg =
+			card.balance > 0
+				? `Assalam o Alaikum ${card.query.client_name}, a gentle reminder: a balance of ${formatAmount(card.balance)} is pending for your booking ${reference(card)}. JazakAllah Khair — Billoo Travel.`
+				: `Assalam o Alaikum ${card.query.client_name}, your booking ${reference(card)} is confirmed. Please complete your check-in and share any pending documents. JazakAllah Khair — Billoo Travel.`;
+		const url = waLink(card.query.client_phone, msg);
+		if (url) window.open(url, '_blank');
+	}
+
+	// Record a payment against the advance (money-safe add), then re-lane: fully
+	// paid moves to check-ins, a part payment marks Partial.
+	function confirmPayment() {
+		const card = payCard;
+		const amt = Number(payAmount);
+		if (!card || !(amt > 0)) return;
+		const newAdvance = toNumber(add(money(card.advance), money(amt)));
+		const fullyPaid = newAdvance >= card.selling - 0.005;
+		$update.mutate({
+			id: card.query.id,
+			patch: {
+				advance_payment_amount: newAdvance,
+				booking_status: fullyPaid ? 'Payment Done - Check-in Pending' : 'Partial Payment'
+			}
+		});
+		payCard = null;
+		payAmount = '';
 	}
 </script>
 
@@ -139,6 +184,24 @@
 								{/if}
 							</div>
 
+							{#if lane.id !== 'completed'}
+								<div class="mt-2 flex flex-wrap gap-1.5">
+									{#if lane.id === 'payments'}
+										<Button size="sm" onclick={() => (payCard = card)} disabled={$update.isPending}>
+											<Wallet class="h-3.5 w-3.5" /> Record payment
+										</Button>
+									{/if}
+									{#if lane.id === 'checkins'}
+										<Button size="sm" onclick={() => markCheckinDone(card)} disabled={$update.isPending}>
+											<Check class="h-3.5 w-3.5" /> Check-in done
+										</Button>
+									{/if}
+									<Button size="sm" variant="secondary" onclick={() => remind(card)}>
+										<MessageCircle class="h-3.5 w-3.5" /> Remind
+									</Button>
+								</div>
+							{/if}
+
 							<div class="mt-2">
 								<Select
 									value={card.query.booking_status ?? ''}
@@ -168,3 +231,43 @@
 		</div>
 	{/if}
 {/if}
+
+<Modal
+	open={!!payCard}
+	onClose={() => {
+		payCard = null;
+		payAmount = '';
+	}}
+	title="Record payment"
+>
+	{#if payCard}
+		<div class="space-y-4">
+			<div class="rounded-lg bg-slate-50 p-3 text-sm">
+				<div class="font-semibold text-slate-800">{payCard.query.client_name}</div>
+				<div class="mt-0.5 text-slate-500">
+					Total {formatAmount(payCard.selling)} · Paid {formatAmount(payCard.advance)} ·
+					<span class="font-medium text-amber-600">Balance {formatAmount(payCard.balance)}</span>
+				</div>
+			</div>
+			<Input
+				label="Amount received (PKR)"
+				type="number"
+				min="0"
+				bind:value={payAmount}
+				placeholder="e.g. 50000"
+			/>
+			<div class="flex justify-end gap-2">
+				<Button
+					variant="secondary"
+					onclick={() => {
+						payCard = null;
+						payAmount = '';
+					}}>Cancel</Button
+				>
+				<Button onclick={confirmPayment} disabled={!(Number(payAmount) > 0) || $update.isPending}>
+					Record
+				</Button>
+			</div>
+		</div>
+	{/if}
+</Modal>

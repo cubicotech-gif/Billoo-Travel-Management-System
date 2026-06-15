@@ -34,5 +34,25 @@ export function attentionList(
 			out.push({ query: q, balance, needsPayment, needsCheckin, missingDocs });
 		}
 	}
-	return out;
+	return out.sort(byUrgency);
+}
+
+const ts = (v: string | null): number => (v ? new Date(v).getTime() : 0);
+/** Payments are chased first, then check-ins (soonest travel), then docs-only. */
+function byUrgency(a: AttentionItem, b: AttentionItem): number {
+	const cat = (i: AttentionItem) => (i.needsPayment ? 0 : i.needsCheckin ? 1 : 2);
+	const ca = cat(a);
+	const cb = cat(b);
+	if (ca !== cb) return ca - cb;
+	if (ca === 1) {
+		// both check-ins → soonest travel first (unknown dates last)
+		const ta = a.query.travel_date ? ts(a.query.travel_date) : Number.POSITIVE_INFINITY;
+		const tb = b.query.travel_date ? ts(b.query.travel_date) : Number.POSITIVE_INFINITY;
+		return ta - tb;
+	}
+	// payments / docs → oldest booking first
+	return (
+		ts(a.query.stage_changed_at ?? a.query.created_at) -
+		ts(b.query.stage_changed_at ?? b.query.created_at)
+	);
 }

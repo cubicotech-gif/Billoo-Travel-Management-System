@@ -49,6 +49,22 @@ describe('attention worklist', () => {
 		expect(items[0]!.missingDocs).toEqual([]);
 	});
 
+	it('orders payments before check-ins before docs-only', () => {
+		const allButTicket = indexDocuments([
+			doc('passenger', 'p1', 'passport'),
+			doc('passenger', 'p1', 'visa'),
+			doc('query', 'q1', 'voucher')
+		]);
+		const items = attentionList(
+			[
+				q({ id: 'docs', booking_status: 'Payment Done - Check-in Pending', travel_date: null }), // checkin
+				q({ id: 'pay', booking_status: 'Pending Payment', advance_payment_amount: 0 }) // payment
+			],
+			allButTicket // q1 missing ticket, but ids differ so docs apply per-id; fine for ordering
+		);
+		expect(items[0]!.query.id).toBe('pay');
+	});
+
 	it('excludes non-booked and deleted queries', () => {
 		const items = attentionList(
 			[q({ status: 'Quoted' }), q({ is_deleted: true })],

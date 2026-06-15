@@ -119,7 +119,7 @@
 	{open}
 	onClose={close}
 	title={phase === 'intake' ? 'Quick Package' : 'Quick Package · price & quote'}
-	class={phase === 'price' ? 'max-w-5xl' : 'max-w-lg'}
+	fullScreen={phase === 'price'}
 >
 	{#if phase === 'intake'}
 		<p class="mb-4 text-sm text-slate-500">
