@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$ui';
-	import { Plus, RotateCcw, Archive } from 'lucide-svelte';
+	import { Plus, RotateCcw, Archive, XCircle } from 'lucide-svelte';
 	import {
 		useQueries,
 		useSetQueryStatus,
@@ -12,7 +12,7 @@
 	import QueryCard from '$features/queries/QueryCard.svelte';
 	import { useAllQuotations } from '$features/quotations/queries';
 	import { latestQuotationByQuery } from '$features/quotations/api';
-	import { WORKFLOW_STAGES } from '$features/queries/workflow';
+	import { MAIN_STAGES } from '$features/queries/workflow';
 	import type { QueryStatus } from '$lib/database.types';
 	import type { Query } from '$features/queries/types';
 
@@ -26,7 +26,23 @@
 	const latestByQuery = $derived(latestQuotationByQuery($quotations.data ?? []));
 
 	let showDeleted = $state(false);
+	let showCancelled = $state(false);
 	let editing = $state<Query | null>(null);
+
+	const headerTone: Record<string, string> = {
+		neutral: 'text-slate-600',
+		info: 'text-brand-700',
+		success: 'text-green-700',
+		warning: 'text-amber-700',
+		danger: 'text-red-700'
+	};
+	const dotTone: Record<string, string> = {
+		neutral: 'bg-slate-300',
+		info: 'bg-brand-400',
+		success: 'bg-green-400',
+		warning: 'bg-amber-400',
+		danger: 'bg-red-400'
+	};
 
 	function openEdit(q: Query) {
 		editing = q;
@@ -36,16 +52,19 @@
 			$softDelete.mutate(q.id);
 	}
 
-	// Group queries into their stage columns.
+	// Group queries into the four pipeline columns. Cancelled is a side-exit, not
+	// a column — it lives in its own collapsible section below.
 	const columns = $derived.by(() => {
 		const map = new Map<QueryStatus, Query[]>();
-		for (const s of WORKFLOW_STAGES) map.set(s.status, []);
+		for (const s of MAIN_STAGES) map.set(s.status, []);
 		for (const q of $queries.data ?? []) {
+			if (q.status === 'Cancelled') continue;
 			// Unknown/legacy statuses fall into New Query so nothing disappears.
 			(map.get(q.status) ?? map.get('New Query'))?.push(q);
 		}
-		return WORKFLOW_STAGES.map((stage) => ({ stage, items: map.get(stage.status) ?? [] }));
+		return MAIN_STAGES.map((stage) => ({ stage, items: map.get(stage.status) ?? [] }));
 	});
+	const cancelledItems = $derived(($queries.data ?? []).filter((q) => q.status === 'Cancelled'));
 
 	let draggingId = $state<string | null>(null);
 	let dragOverStatus = $state<QueryStatus | null>(null);
@@ -69,7 +88,12 @@
 		<Button variant="secondary" onclick={() => (showDeleted = !showDeleted)}>
 			<Archive class="h-4 w-4" /> Deleted{($deleted.data ?? []).length ? ` · ${($deleted.data ?? []).length}` : ''}
 		</Button>
-		<Button href="/queries/new"><Plus class="h-4 w-4" /> New Query</Button>
+		{#if cancelledItems.length}
+				<Button variant="secondary" onclick={() => (showCancelled = !showCancelled)}>
+					<XCircle class="h-4 w-4" /> Cancelled · {cancelledItems.length}
+				</Button>
+			{/if}
+			<Button href="/queries/new"><Plus class="h-4 w-4" /> New Query</Button>
 	</div>
 </div>
 
@@ -78,11 +102,11 @@
 {:else if $queries.isError}
 	<p class="text-red-600">Failed to load: {$queries.error.message}</p>
 {:else}
-	<div class="flex gap-4 overflow-x-auto pb-4">
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 		{#each columns as { stage, items } (stage.status)}
 			<div
 				role="list"
-				class="flex w-72 shrink-0 flex-col rounded-xl border bg-slate-100/60 transition-colors {dragOverStatus ===
+				class="flex min-h-32 flex-col rounded-xl border bg-slate-100/60 transition-colors {dragOverStatus ===
 				stage.status
 					? 'border-brand-400 bg-brand-50'
 					: 'border-transparent'}"
@@ -95,9 +119,12 @@
 				}}
 				ondrop={() => onDrop(stage.status)}
 			>
-				<div class="flex items-center justify-between px-3 py-2.5">
-					<span class="text-sm font-semibold text-slate-700">{stage.label}</span>
-					<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500">
+				<div class="flex items-center justify-between border-b border-slate-200/70 px-3 py-2.5">
+					<span class="flex items-center gap-2 text-sm font-semibold {headerTone[stage.tone] ?? 'text-slate-700'}">
+						<span class="h-2 w-2 rounded-full {dotTone[stage.tone] ?? 'bg-slate-300'}"></span>
+						{stage.label}
+					</span>
+					<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
 						{items.length}
 					</span>
 				</div>
@@ -125,6 +152,32 @@
 			</div>
 		{/each}
 	</div>
+
+	{#if showCancelled && cancelledItems.length}
+		<div class="mt-6 rounded-xl border border-red-100 bg-white p-4">
+			<div class="mb-3 flex items-center gap-2">
+				<XCircle class="h-4 w-4 text-red-400" />
+				<h2 class="text-sm font-semibold text-slate-700">Cancelled queries</h2>
+				<span class="text-xs text-slate-400">use a card's Move menu to bring one back</span>
+			</div>
+			<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+				{#each cancelledItems as q (q.id)}
+					<QueryCard
+						query={q}
+						tone="danger"
+						latest={latestByQuery.get(q.id) ?? null}
+						dragging={draggingId === q.id}
+						busy={$setStatus.isPending}
+						onDragStart={() => (draggingId = q.id)}
+						onDragEnd={() => (draggingId = null)}
+						onEdit={() => openEdit(q)}
+						onDelete={() => remove(q)}
+						onMove={(status) => $setStatus.mutate({ id: q.id, status })}
+					/>
+				{/each}
+			</div>
+		</div>
+	{/if}
 
 	{#if showDeleted}
 		<div class="mt-6 rounded-xl border border-slate-200 bg-white p-4">
