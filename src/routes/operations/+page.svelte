@@ -2,6 +2,8 @@
 	import { Badge, Select } from '$ui';
 	import { Wallet, PlaneTakeoff, CheckCircle2, ExternalLink } from 'lucide-svelte';
 	import { useQueries, useUpdateQuery } from '$features/queries/queries';
+	import { useAllDocuments } from '$features/documents/queries';
+	import { indexDocuments, readinessFor } from '$features/documents/checklist';
 	import { BOOKING_STATUSES } from '$features/queries/workflow';
 	import { OPS_LANES, groupIntoLanes, totalOutstanding, type OpsCard } from '$features/operations/lanes';
 	import { formatAmount } from '$lib/money';
@@ -9,9 +11,11 @@
 
 	const queries = useQueries();
 	const update = useUpdateQuery();
+	const documents = useAllDocuments();
 
 	const lanes = $derived(groupIntoLanes($queries.data ?? []));
 	const outstanding = $derived(totalOutstanding(lanes));
+	const docIndex = $derived(indexDocuments($documents.data ?? []));
 
 	const laneIcon = { payments: Wallet, checkins: PlaneTakeoff, completed: CheckCircle2 } as const;
 	const headerTone: Record<string, string> = {
@@ -94,6 +98,7 @@
 
 				<div class="flex flex-1 flex-col gap-2 p-3">
 					{#each cards as card (card.query.id)}
+						{@const docs = readinessFor(docIndex, card.query.id, card.query.passenger_id)}
 						<div class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
 							<div class="flex items-start justify-between gap-2">
 								<div class="min-w-0">
@@ -122,6 +127,15 @@
 									<Badge tone="warning">Balance {formatAmount(card.balance)}</Badge>
 								{:else}
 									<Badge tone="success">Paid</Badge>
+								{/if}
+							</div>
+
+							<div class="mt-1.5 flex items-center gap-1.5 text-xs">
+								{#if docs.complete}
+									<Badge tone="success">Docs ✓</Badge>
+								{:else}
+									<Badge tone="neutral">Docs {docs.done}/{docs.total}</Badge>
+									<span class="truncate text-slate-400">{docs.missing.join(', ')}</span>
 								{/if}
 							</div>
 

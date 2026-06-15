@@ -3,6 +3,7 @@
 // voucher) live on the query — this merges both into one checklist so a booking
 // shows, at a glance, what's done and what's still missing.
 import type { DocumentType } from '$lib/database.types';
+import type { Document } from './api';
 
 export interface DocRequirement {
 	type: DocumentType;
@@ -41,4 +42,40 @@ export function readinessSummary(items: ChecklistItem[]): ReadinessSummary {
 	const done = items.filter((i) => i.done).length;
 	const missing = items.filter((i) => !i.done).map((i) => i.label);
 	return { done, total: items.length, missing, complete: items.length > 0 && done === items.length };
+}
+
+/**
+ * Index every document by `${entity_type}:${entity_id}` → its types, so a board
+ * can compute readiness for many bookings from a single fetch.
+ */
+export function indexDocuments(docs: Document[]): Map<string, DocumentType[]> {
+	const m = new Map<string, DocumentType[]>();
+	for (const d of docs) {
+		const k = `${d.entity_type}:${d.entity_id}`;
+		const arr = m.get(k);
+		if (arr) arr.push(d.document_type);
+		else m.set(k, [d.document_type]);
+	}
+	return m;
+}
+
+/** Document types collected for a booking, merging trip + passenger docs. */
+export function presentTypesFor(
+	index: Map<string, DocumentType[]>,
+	queryId: string,
+	passengerId: string | null
+): DocumentType[] {
+	return [
+		...(index.get(`query:${queryId}`) ?? []),
+		...(passengerId ? (index.get(`passenger:${passengerId}`) ?? []) : [])
+	];
+}
+
+/** Readiness for one booking, straight from the indexed document set. */
+export function readinessFor(
+	index: Map<string, DocumentType[]>,
+	queryId: string,
+	passengerId: string | null
+): ReadinessSummary {
+	return readinessSummary(documentChecklist(presentTypesFor(index, queryId, passengerId)));
 }

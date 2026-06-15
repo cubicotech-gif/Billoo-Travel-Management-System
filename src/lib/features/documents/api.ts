@@ -65,6 +65,11 @@ export async function listDocuments(
 	);
 }
 
+/** Every document, for board-wide readiness checks (avoids per-card fetches). */
+export async function listAllDocuments(): Promise<Document[]> {
+	return unwrap(await supabase.from('documents').select('*'));
+}
+
 export interface UploadArgs {
 	file: File;
 	entityType: DocumentEntity;

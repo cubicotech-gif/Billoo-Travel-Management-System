@@ -1,6 +1,7 @@
 import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 import {
 	deleteDocument,
+	listAllDocuments,
 	listDocuments,
 	uploadDocument,
 	type Document,
@@ -11,6 +12,8 @@ import {
 const key = (entityType: DocumentEntity, entityId: string) =>
 	['documents', entityType, entityId] as const;
 
+const ALL_KEY = ['documents', 'all'] as const;
+
 export function useDocuments(entityType: DocumentEntity, entityId: string) {
 	return createQuery({
 		queryKey: key(entityType, entityId),
@@ -18,11 +21,20 @@ export function useDocuments(entityType: DocumentEntity, entityId: string) {
 	});
 }
 
+export function useAllDocuments() {
+	return createQuery({ queryKey: ALL_KEY, queryFn: listAllDocuments });
+}
+
+// Invalidate the entity's list *and* the board-wide ['documents','all'] cache
+// (prefix match) so readiness badges on the dashboard/Operations stay live.
 export function useUploadDocument(entityType: DocumentEntity, entityId: string) {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (args: UploadArgs) => uploadDocument(args),
-		onSuccess: () => client.invalidateQueries({ queryKey: key(entityType, entityId) })
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: key(entityType, entityId) });
+			client.invalidateQueries({ queryKey: ALL_KEY });
+		}
 	});
 }
 
@@ -30,6 +42,9 @@ export function useDeleteDocument(entityType: DocumentEntity, entityId: string) 
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (doc: Document) => deleteDocument(doc),
-		onSuccess: () => client.invalidateQueries({ queryKey: key(entityType, entityId) })
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: key(entityType, entityId) });
+			client.invalidateQueries({ queryKey: ALL_KEY });
+		}
 	});
 }

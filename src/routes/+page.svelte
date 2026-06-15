@@ -1,14 +1,22 @@
 <script lang="ts">
-	import { Zap } from 'lucide-svelte';
+	import { Zap, Wallet, PlaneTakeoff, FileWarning } from 'lucide-svelte';
 	import { Card, Badge, Button } from '$lib/ui';
 	import { useQueries } from '$features/queries/queries';
+	import { useAllDocuments } from '$features/documents/queries';
+	import { indexDocuments } from '$features/documents/checklist';
+	import { attentionList } from '$features/operations/attention';
 	import { MAIN_STAGES, isCancelled, isSettled } from '$features/queries/workflow';
 	import QuickPackageModal from '$features/queries/QuickPackageModal.svelte';
 	import { formatAmount } from '$lib/money';
 
 	const queries = useQueries();
+	const documents = useAllDocuments();
 
 	let quickOpen = $state(false);
+
+	const attention = $derived(
+		attentionList($queries.data ?? [], indexDocuments($documents.data ?? []))
+	);
 
 	// Live pipeline counts + headline numbers, derived from the cached list.
 	// "Open" = still active: not cancelled and not a settled (Completed) booking.
@@ -62,6 +70,43 @@
 			<div class="mt-1 text-2xl font-bold text-green-600">{formatAmount(stats.projectedProfit)}</div>
 		</Card>
 	</div>
+
+	{#if attention.length}
+		<div class="mb-6">
+			<Card title="Needs attention">
+				<ul class="divide-y divide-slate-100">
+					{#each attention as item (item.query.id)}
+						<li class="flex items-center justify-between gap-3 py-2">
+							<a
+								href="/queries/{item.query.id}"
+								class="min-w-0 text-sm font-medium text-slate-700 hover:text-brand-700"
+							>
+								<span class="truncate">{item.query.client_name}</span>
+							</a>
+							<div class="flex flex-wrap items-center justify-end gap-1.5">
+								{#if item.needsPayment}
+									<Badge tone="warning">
+										<Wallet class="mr-1 h-3 w-3" /> Balance {formatAmount(item.balance)}
+									</Badge>
+								{/if}
+								{#if item.needsCheckin}
+									<Badge tone="info"><PlaneTakeoff class="mr-1 h-3 w-3" /> Check-in</Badge>
+								{/if}
+								{#if item.missingDocs.length}
+									<Badge tone="neutral">
+										<FileWarning class="mr-1 h-3 w-3" /> {item.missingDocs.length} docs
+									</Badge>
+								{/if}
+							</div>
+						</li>
+					{/each}
+				</ul>
+				<div class="mt-3 text-right">
+					<Button variant="secondary" size="sm" href="/operations">Open Operations</Button>
+				</div>
+			</Card>
+		</div>
+	{/if}
 
 	<Card title="Pipeline">
 		<div class="flex flex-wrap gap-2">
