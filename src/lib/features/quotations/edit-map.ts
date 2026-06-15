@@ -41,14 +41,38 @@ export function roomLabelFromEnum(rt: string | null): string {
 }
 
 export const VEHICLES = ['4-seater', '7-seater', '14-seater', '50-seater', 'Custom'];
+// Named airports (Jeddah vs Madinah) so a route reads unambiguously on the quote.
 export const ROUTES = [
-	'Airport → Makkah',
+	'Jeddah Airport → Makkah',
 	'Makkah → Madinah',
+	'Madinah → Madinah Airport',
+	'Madinah Airport → Madinah',
 	'Madinah → Makkah',
-	'Madinah → Airport',
-	'Makkah → Airport',
-	'Airport → Madinah',
+	'Makkah → Jeddah Airport',
+	'Jeddah Airport → Madinah',
+	'Makkah → Madinah Airport',
+	'Madinah → Jeddah Airport',
 	'Custom'
+];
+
+// One-tap full-transport chains. Picking one fills the transfer list with its
+// legs (vehicle/price still entered per leg). Covers the common arrival/return
+// airport combinations agents quote most.
+export const TRANSFER_PRESETS: { label: string; routes: string[] }[] = [
+	{ label: 'Jeddah in → Madinah out', routes: ['Jeddah Airport → Makkah', 'Makkah → Madinah', 'Madinah → Madinah Airport'] },
+	{ label: 'Madinah in → Jeddah out', routes: ['Madinah Airport → Madinah', 'Madinah → Makkah', 'Makkah → Jeddah Airport'] },
+	{ label: 'Round-trip via Jeddah', routes: ['Jeddah Airport → Makkah', 'Makkah → Madinah', 'Madinah → Jeddah Airport'] }
+];
+
+// Common air-ticket routings (incl. multi-city). Chips that fill the route field.
+export const AIRLINE_ROUTES = [
+	'KHI → JED → KHI',
+	'KHI → JED → MED → KHI',
+	'KHI → MED → JED → KHI',
+	'LHE → JED → LHE',
+	'LHE → JED → MED → LHE',
+	'ISB → JED → ISB',
+	'ISB → MED → JED → ISB'
 ];
 
 let uidSeq = 0;
@@ -66,10 +90,14 @@ export interface RoomRow {
 // A "stay" = city + hotel + dates + nights + rooms. The itinerary is a sequence
 // of stays (split-stay and return visits are just more stays), dates auto-chain.
 export type BreakfastMode = 'none' | 'included' | 'separate';
+/** Foreign currency a line is priced in (final selling price is always PKR). */
+export type LineCurrency = 'SAR' | 'USD';
+
 export interface HotelForm {
 	id: string;
 	hotelId: string; // canonical hotels.id (from the searchable select)
 	city: string;
+	currency: LineCurrency; // SAR (Umrah) or USD (Umrah-Plus / other)
 	sel: string; // '' | OTHER | a saved hotel name
 	name: string;
 	vendorId: string;
@@ -90,6 +118,7 @@ export interface TransferForm {
 	customVehicle: string;
 	route: string;
 	customRoute: string;
+	currency: LineCurrency;
 	vendorId: string;
 	cost: number;
 	sell: number;
@@ -98,10 +127,10 @@ export interface TransferForm {
 export interface VisaForm {
 	type: string;
 	otherLabel: string;
+	currency: LineCurrency;
 	vendorId: string;
 	cost: number;
 	sell: number;
-	include: boolean;
 }
 export interface AirlineForm {
 	sel: string;
@@ -118,6 +147,7 @@ export interface AirlineForm {
 }
 export interface BuilderForm {
 	roeValue: number;
+	usdValue: number; // 1 USD = ? PKR (for USD components)
 	adults: number;
 	children: number;
 	infants: number;
@@ -128,20 +158,21 @@ export interface BuilderForm {
 	exclusions: string;
 	hotels: HotelForm[];
 	transfers: TransferForm[];
-	visa: VisaForm;
+	visas: VisaForm[];
 	airline: AirlineForm;
 	airlineInclude: boolean;
 }
 
 export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 });
-export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0 });
-export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Airport → Makkah', customRoute: '', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
-export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', vendorId: '', cost: 0, sell: 0, include: true });
+export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, currency: 'SAR', sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0 });
+export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Jeddah Airport → Makkah', customRoute: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
+export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0 });
 export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 });
 
 export function blankForm(): BuilderForm {
 	return {
 		roeValue: 0,
+		usdValue: 0,
 		adults: 1,
 		children: 0,
 		infants: 0,
@@ -152,7 +183,7 @@ export function blankForm(): BuilderForm {
 		exclusions: '',
 		hotels: [blankHotel('')],
 		transfers: [newTransfer()],
-		visa: blankVisa(),
+		visas: [blankVisa()],
 		airline: blankAirline(),
 		airlineInclude: false
 	};
@@ -175,6 +206,7 @@ function pick(value: string, list: string[]): { choice: string; custom: string }
 export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderForm {
 	const form = blankForm();
 	form.roeValue = Number(q.roe);
+	form.usdValue = q.usd_rate ? Number(q.usd_rate) : 0;
 	form.adults = q.adults;
 	form.children = q.children;
 	form.infants = q.infants;
@@ -189,10 +221,9 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 	const staySlots = new Map<string, HotelForm>();
 	const stayOrder: string[] = [];
 	const transfers: TransferForm[] = [];
-	let visaSet = false;
+	const visas: VisaForm[] = [];
 	let airlineSet = false;
-
-	form.visa.include = false; // only enable if a visa line exists
+	const cur = (c: string | null | undefined): LineCurrency => (c === 'USD' ? 'USD' : 'SAR');
 
 	for (const l of lines) {
 		const meta = l.meta ?? {};
@@ -203,6 +234,7 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 			if (!slot) {
 				slot = blankHotel(city);
 				slot.rooms = [];
+				slot.currency = cur(l.currency);
 				slot.sel = OTHER;
 				slot.hotelId = s(meta, 'hotel_id');
 				slot.name = s(meta, 'hotel') || l.label;
@@ -241,6 +273,7 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				customVehicle: veh.custom,
 				route: rt.choice,
 				customRoute: rt.custom,
+				currency: cur(l.currency),
 				vendorId: l.vendor_id ?? '',
 				cost: Number(l.unit_cost),
 				sell: Number(l.unit_sell),
@@ -248,15 +281,14 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 			});
 		} else if (l.line_type === 'visa') {
 			const vt = s(meta, 'visa_type') || 'Umrah';
-			form.visa = {
-				include: true,
+			visas.push({
 				type: vt === 'Umrah' ? 'Umrah' : 'Other',
 				otherLabel: vt === 'Umrah' ? '' : vt,
+				currency: cur(l.currency),
 				vendorId: l.vendor_id ?? '',
 				cost: Number(l.unit_cost),
 				sell: Number(l.unit_sell)
-			};
-			visaSet = true;
+			});
 		} else if (l.line_type === 'ticket') {
 			form.airlineInclude = true;
 			if (!airlineSet) {
@@ -283,7 +315,7 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 
 	if (staySlots.size) form.hotels = stayOrder.map((k) => staySlots.get(k)!);
 	form.transfers = transfers.length ? transfers : [newTransfer()];
-	if (!visaSet) form.visa.include = false;
+	form.visas = visas; // empty = no visa on this quote
 
 	return form;
 }

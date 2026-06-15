@@ -63,15 +63,18 @@
 		return (id: string | null) => (id ? (map.get(id) ?? '—') : '—');
 	});
 
-	// ROE-of-the-day input, seeded from the latest known rate.
+	// Rates-of-the-day inputs, seeded from the latest known rates.
 	let roeInput = $state('');
+	let usdInput = $state('');
 	$effect(() => {
 		if ($latestRoe.data && roeInput === '') roeInput = String($latestRoe.data.sar_to_pkr);
+		if ($latestRoe.data?.usd_to_pkr && usdInput === '') usdInput = String($latestRoe.data.usd_to_pkr);
 	});
 
 	function saveRoe() {
 		const value = Number(roeInput);
-		if (value > 0) $setRoe.mutate({ value });
+		const usd = Number(usdInput) || null;
+		if (value > 0) $setRoe.mutate({ value, usd });
 	}
 
 	function openAdd() {
@@ -103,25 +106,30 @@
 	</p>
 </div>
 
-<!-- ROE of the day -->
+<!-- Exchange rates of the day -->
 <div class="mb-6">
-	<Card title="Exchange rate · SAR → PKR">
+	<Card title="Exchange rates → PKR">
 		<div class="flex flex-wrap items-end gap-4">
-			<div class="w-40">
+			<div class="w-36">
 				<Input label="1 SAR = ? PKR" type="number" min="0" step="0.0001" bind:value={roeInput} />
 			</div>
+			<div class="w-36">
+				<Input label="1 USD = ? PKR" type="number" min="0" step="0.0001" bind:value={usdInput} />
+			</div>
 			<Button onclick={saveRoe} disabled={$setRoe.isPending}>
-				<RefreshCw class="h-4 w-4" /> Set today's rate
+				<RefreshCw class="h-4 w-4" /> Set today's rates
 			</Button>
 			{#if $latestRoe.data}
 				<span class="pb-2 text-sm text-slate-500">
 					Latest: <span class="font-semibold text-slate-700">1 SAR = {$latestRoe.data.sar_to_pkr} PKR</span>
+					{#if $latestRoe.data.usd_to_pkr}<span class="font-semibold text-slate-700"> · 1 USD = {$latestRoe.data.usd_to_pkr} PKR</span>{/if}
 					(set {new Date($latestRoe.data.rate_date).toLocaleDateString()})
 				</span>
 			{:else}
 				<span class="pb-2 text-sm text-amber-600">No rate set yet — quotations need this.</span>
 			{/if}
 		</div>
+		<p class="mt-2 text-xs text-slate-400">SAR is required (Umrah is priced in SAR). USD is optional — used by Umrah-Plus / other components priced in USD.</p>
 	</Card>
 </div>
 

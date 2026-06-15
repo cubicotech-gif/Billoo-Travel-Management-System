@@ -137,13 +137,16 @@ export async function getLatestRoe(): Promise<ExchangeRate | null> {
 	return data;
 }
 
-/** Set the ROE for a date (defaults to today), upserting on rate_date. */
-export async function setRoe(sarToPkr: number, date?: string): Promise<ExchangeRate> {
+/** Set the day's rates (defaults to today), upserting on rate_date. USD is
+ * optional — pass null/undefined to leave it unset. */
+export async function setRoe(sarToPkr: number, usdToPkr?: number | null, date?: string): Promise<ExchangeRate> {
 	const rate_date = date ?? new Date().toISOString().slice(0, 10);
+	const row: { rate_date: string; sar_to_pkr: number; usd_to_pkr?: number | null } = { rate_date, sar_to_pkr: sarToPkr };
+	if (usdToPkr !== undefined) row.usd_to_pkr = usdToPkr && usdToPkr > 0 ? usdToPkr : null;
 	return unwrap<ExchangeRate>(
 		await supabase
 			.from('exchange_rates')
-			.upsert({ rate_date, sar_to_pkr: sarToPkr }, { onConflict: 'rate_date' })
+			.upsert(row, { onConflict: 'rate_date' })
 			.select()
 			.single()
 	);

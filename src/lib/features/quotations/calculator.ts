@@ -11,9 +11,14 @@ import {
 
 // ---------------------------------------------------------------------------
 // Quotation calculator. Pure functions — no UI, no I/O — unit tested to the
-// penny. Hotels / Transfer / Visa are SAR; Tickets are PKR; a single ROE
-// (SAR->PKR) converts the SAR side. All math goes through the money layer.
+// penny. Hotels / Transfer / Visa are priced in SAR by default, but any line
+// may be USD (Umrah-Plus / non-Saudi components); Tickets are PKR. Each foreign
+// line converts to PKR via its currency's rate (ROE for SAR, USD rate for USD),
+// then everything sums in PKR. All math goes through the money layer.
 // ---------------------------------------------------------------------------
+
+/** Currency a foreign (non-PKR) line can be priced in. */
+export type LineCurrency = 'SAR' | 'USD';
 
 export interface PaxCounts {
 	adults: number;
@@ -47,6 +52,7 @@ export interface BreakfastInput {
 export interface HotelInput {
 	city: string;
 	name: string;
+	currency?: LineCurrency; // SAR (default) or USD
 	hotelId?: string | null;
 	mealPlan?: string | null;
 	rateCardId?: string | null;
@@ -66,17 +72,19 @@ export function personsInRooms(rooms: RoomType[]): number {
 export interface TransferRow {
 	vehicleType: string; // 4 / 7 / 14 / 50-seater / custom
 	route: string; // Airport → Makkah, etc.
+	currency?: LineCurrency;
 	vendorId?: string | null;
-	costSar: number;
-	sellSar: number; // per vehicle
+	costSar: number; // in `currency` (named for the SAR default)
+	sellSar: number; // per vehicle, in `currency`
 	vehicles: number;
 }
 
 export interface VisaInput {
 	visaType: string; // 'Umrah' or a custom label
+	currency?: LineCurrency;
 	vendorId?: string | null;
-	costSar: number;
-	sellSar: number; // per person (infant = adult rate)
+	costSar: number; // in `currency`
+	sellSar: number; // per person (infant = adult rate), in `currency`
 }
 
 export interface TicketsInput {
@@ -95,11 +103,14 @@ export interface TicketsInput {
 }
 
 export interface QuotationInput {
-	roe: number;
+	roe: number; // 1 SAR = ? PKR
+	usd?: number; // 1 USD = ? PKR (required only if any line is USD)
 	pax: PaxCounts;
 	hotels: HotelInput[];
 	transfers: TransferRow[];
-	visa: VisaInput | null;
+	/** Visa(s). `visas` (multiple) is preferred; `visa` kept for back-compat. */
+	visa?: VisaInput | null;
+	visas?: VisaInput[];
 	tickets: TicketsInput | null;
 }
 
@@ -108,7 +119,7 @@ export interface QuotationLineResult {
 	label: string;
 	rateCardId: string | null;
 	vendorId: string | null;
-	currency: 'SAR' | 'PKR';
+	currency: 'SAR' | 'USD' | 'PKR';
 	unitCost: number;
 	unitSell: number;
 	quantity: number;
@@ -121,6 +132,8 @@ export interface QuotationResult {
 	lines: QuotationLineResult[];
 	sarCost: number;
 	sarSell: number;
+	usdCost: number;
+	usdSell: number;
 	ticketsCostPkr: number;
 	ticketsSellPkr: number;
 	totalCostPkr: number;
@@ -185,20 +198,23 @@ export function perPersonAdvanced(
 	result: QuotationResult,
 	roe: number,
 	pax: PaxCounts,
-	share: ChildShare = DEFAULT_CHILD_SHARE
+	share: ChildShare = DEFAULT_CHILD_SHARE,
+	usd = 0
 ): AdvancedPerPerson {
 	const adults = pax.adults > 0 ? pax.adults : 1;
 	const children = pax.children;
 
-	const sar = (n: number) => n * roe;
-	const sumSell = (pred: (l: QuotationLineResult) => boolean) =>
-		result.lines.filter(pred).reduce((a, l) => a + l.lineSell, 0);
+	// Convert a line amount to PKR by its own currency.
+	const rateOf = (c: QuotationLineResult['currency']) => (c === 'USD' ? usd : c === 'PKR' ? 1 : roe);
+	const sumSellPkr = (pred: (l: QuotationLineResult) => boolean) =>
+		result.lines.filter(pred).reduce((a, l) => a + l.lineSell * rateOf(l.currency), 0);
 
-	const hotelsPkr = sar(sumSell((l) => l.line_type === 'hotel'));
-	const transfersPkr = sar(sumSell((l) => l.line_type === 'transfer'));
-	// Visa is stored per-person (quantity = persons); recover the unit rate.
-	const visaLine = result.lines.find((l) => l.line_type === 'visa');
-	const visaPerPersonPkr = visaLine ? sar(visaLine.unitSell) : 0;
+	const hotelsPkr = sumSellPkr((l) => l.line_type === 'hotel');
+	const transfersPkr = sumSellPkr((l) => l.line_type === 'transfer');
+	// Visa is per-person (quantity = persons); sum each visa's per-person rate.
+	const visaPerPersonPkr = result.lines
+		.filter((l) => l.line_type === 'visa')
+		.reduce((a, l) => a + l.unitSell * rateOf(l.currency), 0);
 	const ticketUnit = (paxType: string) =>
 		result.lines.find((l) => l.line_type === 'ticket' && l.meta?.pax_type === paxType)?.unitSell ?? 0;
 	const adultTicketPkr = ticketUnit('adult');
@@ -233,24 +249,36 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 	const lines: QuotationLineResult[] = [];
 	const sarCosts: Money[] = [];
 	const sarSells: Money[] = [];
+	const usdCosts: Money[] = [];
+	const usdSells: Money[] = [];
+	// Route a foreign line's money into the right currency bucket.
+	const push = (cur: LineCurrency, cost: Money, sell: Money) => {
+		if (cur === 'USD') {
+			usdCosts.push(cost);
+			usdSells.push(sell);
+		} else {
+			sarCosts.push(cost);
+			sarSells.push(sell);
+		}
+	};
 
 	// Hotels: one line per room type — total = perNight × qty × nights.
 	for (let hi = 0; hi < input.hotels.length; hi++) {
 		const h = input.hotels[hi];
 		if (!h || h.nights <= 0) continue;
+		const hcur: LineCurrency = h.currency ?? 'SAR';
 		for (const rt of h.rooms) {
 			const units = rt.qty * h.nights;
 			if (units <= 0) continue;
-			const lineCost = multiply(money(rt.costSar, 'SAR'), units);
-			const lineSell = multiply(money(rt.sellSar, 'SAR'), units);
-			sarCosts.push(lineCost);
-			sarSells.push(lineSell);
+			const lineCost = multiply(money(rt.costSar, hcur), units);
+			const lineSell = multiply(money(rt.sellSar, hcur), units);
+			push(hcur, lineCost, lineSell);
 			lines.push({
 				line_type: 'hotel',
 				label: `${h.city} — ${h.name} (${rt.label} ×${rt.qty})`,
 				rateCardId: h.rateCardId ?? null,
 				vendorId: h.vendorId ?? null,
-				currency: 'SAR',
+				currency: hcur,
 				unitCost: rt.costSar,
 				unitSell: rt.sellSar,
 				quantity: units,
@@ -280,10 +308,9 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 				const units = b.persons * h.nights;
 				const unitCost = b.included ? 0 : b.costSar;
 				const unitSell = b.included ? 0 : b.sellSar;
-				const lineCost = multiply(money(unitCost, 'SAR'), units);
-				const lineSell = multiply(money(unitSell, 'SAR'), units);
-				sarCosts.push(lineCost);
-				sarSells.push(lineSell);
+				const lineCost = multiply(money(unitCost, hcur), units);
+				const lineSell = multiply(money(unitSell, hcur), units);
+				push(hcur, lineCost, lineSell);
 				lines.push({
 					line_type: 'hotel',
 					label: b.included
@@ -291,7 +318,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 						: `${h.city} — ${h.name} (breakfast ×${b.persons}/night)`,
 					rateCardId: null,
 					vendorId: h.vendorId ?? null,
-					currency: 'SAR',
+					currency: hcur,
 					unitCost,
 					unitSell,
 					quantity: units,
@@ -317,16 +344,16 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 	// Transfers: one line per route.
 	for (const t of input.transfers) {
 		if (t.vehicles <= 0) continue;
-		const lineCost = multiply(money(t.costSar, 'SAR'), t.vehicles);
-		const lineSell = multiply(money(t.sellSar, 'SAR'), t.vehicles);
-		sarCosts.push(lineCost);
-		sarSells.push(lineSell);
+		const tcur: LineCurrency = t.currency ?? 'SAR';
+		const lineCost = multiply(money(t.costSar, tcur), t.vehicles);
+		const lineSell = multiply(money(t.sellSar, tcur), t.vehicles);
+		push(tcur, lineCost, lineSell);
 		lines.push({
 			line_type: 'transfer',
 			label: `${t.route} (${t.vehicleType})`,
 			rateCardId: null,
 			vendorId: t.vendorId ?? null,
-			currency: 'SAR',
+			currency: tcur,
 			unitCost: t.costSar,
 			unitSell: t.sellSar,
 			quantity: t.vehicles,
@@ -336,27 +363,28 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 		});
 	}
 
-	if (input.visa) {
-		const v = input.visa;
-		const persons = totalPersons(input.pax);
-		const lineCost = multiply(money(v.costSar, 'SAR'), persons);
-		const lineSell = multiply(money(v.sellSar, 'SAR'), persons);
-		sarCosts.push(lineCost);
-		sarSells.push(lineSell);
+	const visaList = input.visas ?? (input.visa ? [input.visa] : []);
+	const persons = totalPersons(input.pax);
+	visaList.forEach((v, vi) => {
+		if (!v) return;
+		const vcur: LineCurrency = v.currency ?? 'SAR';
+		const lineCost = multiply(money(v.costSar, vcur), persons);
+		const lineSell = multiply(money(v.sellSar, vcur), persons);
+		push(vcur, lineCost, lineSell);
 		lines.push({
 			line_type: 'visa',
 			label: `${v.visaType} visa`,
 			rateCardId: null,
 			vendorId: v.vendorId ?? null,
-			currency: 'SAR',
+			currency: vcur,
 			unitCost: v.costSar,
 			unitSell: v.sellSar,
 			quantity: persons,
 			lineCost: toNumber(lineCost),
 			lineSell: toNumber(lineSell),
-			meta: { visa_type: v.visaType }
+			meta: { visa_type: v.visaType, visa_index: vi }
 		});
-	}
+	});
 
 	const ticketsCost: Money[] = [];
 	const ticketsSell: Money[] = [];
@@ -396,17 +424,28 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 
 	const sarCost = sum(sarCosts, 'SAR');
 	const sarSell = sum(sarSells, 'SAR');
+	const usdCost = sum(usdCosts, 'USD');
+	const usdSell = sum(usdSells, 'USD');
 	const ticketsCostPkr = sum(ticketsCost, 'PKR');
 	const ticketsSellPkr = sum(ticketsSell, 'PKR');
 
-	const totalCostPkr = add(convertToPkr(sarCost, input.roe), ticketsCostPkr);
-	const totalSellPkr = add(convertToPkr(sarSell, input.roe), ticketsSellPkr);
+	const usd = input.usd ?? 0;
+	const totalCostPkr = add(
+		add(convertToPkr(sarCost, input.roe), convertToPkr(usdCost, usd)),
+		ticketsCostPkr
+	);
+	const totalSellPkr = add(
+		add(convertToPkr(sarSell, input.roe), convertToPkr(usdSell, usd)),
+		ticketsSellPkr
+	);
 	const profitPkr = subtract(totalSellPkr, totalCostPkr);
 
 	return {
 		lines,
 		sarCost: toNumber(sarCost),
 		sarSell: toNumber(sarSell),
+		usdCost: toNumber(usdCost),
+		usdSell: toNumber(usdSell),
 		ticketsCostPkr: toNumber(ticketsCostPkr),
 		ticketsSellPkr: toNumber(ticketsSellPkr),
 		totalCostPkr: toNumber(totalCostPkr),

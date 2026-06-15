@@ -41,18 +41,19 @@ export function renderStructured(d: WhatsAppData): string {
 	const tier = d.label ? ` (${d.label})` : '';
 	const lines: string[] = [
 		`🌙 ${d.totalNights} Nights ${d.packageType} Package${tier} 🌙`,
-		`Package Cost: PKR ${pkr(d.perPersonPkr)}/- Per Person`,
-		...(d.perChildPkr ? [`Child: PKR ${pkr(d.perChildPkr)}/- Per Child`] : []),
+		'',
+		`💰 PKR ${pkr(d.perPersonPkr)}/- Per Person`,
+		...(d.perChildPkr ? [`🧒 PKR ${pkr(d.perChildPkr)}/- Per Child`] : []),
 		''
 	];
 
 	for (const h of d.hotels) lines.push(...hotelBlock(h), '');
 
 	lines.push('✅ Package Includes:');
-	lines.push('');
-	if (d.visaType) lines.push(`${d.visaType} Visa`);
-	for (const route of d.transferRoutes) lines.push(route);
-	if (d.ticketsIncluded) lines.push('Air Tickets');
+	if (d.visaType) lines.push(`🛂 ${d.visaType} Visa`);
+	// Transfers collapse to a single line — clients don't need each leg spelled out.
+	if (d.transferRoutes.length) lines.push('🚐 Private Transfers');
+	if (d.ticketsIncluded) lines.push('✈️ Air Tickets');
 
 	lines.push('');
 	lines.push('📞 Contact us for booking and further details.');

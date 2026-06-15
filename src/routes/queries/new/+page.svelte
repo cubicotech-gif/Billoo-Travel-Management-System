@@ -6,7 +6,7 @@
 	import { useStaff } from '$features/staff/queries';
 	import StaffManagerModal from '$features/staff/StaffManagerModal.svelte';
 	import CityBlockRow from '$features/queries/CityBlock.svelte';
-	import { TRIP_TYPES, newCity, seedCities, isUmrahType, isFixedCity } from '$features/queries/trip';
+	import { TRIP_TYPES, newCity, seedCities, isUmrahType, nightsForCity, UMRAH_CITIES } from '$features/queries/trip';
 	import { usePassengers, useCreatePassenger } from '$features/passengers/queries';
 	import { fullName, splitName } from '$features/passengers/types';
 	import { useCreateQuery } from '$features/queries/queries';
@@ -33,26 +33,31 @@
 		travelDate: '',
 		country: '',
 		cities: seedCities('Umrah') as CityBlock[],
-		clientPreference: '',
-		// capture modes
+		// capture
 		customerPlan: '',
-		quickNote: '',
 		// initial response
 		responded: false,
-		responseText: '',
-		initialQuotation: ''
+		responseText: ''
 	});
 
 	const isUmrah = $derived(isUmrahType(form.packageType));
+	// Pure Umrah only visits the two holy cities → offer them as a dropdown.
+	const isPureUmrah = $derived(form.packageType === 'Umrah');
 
 	function onTripType() {
 		form.cities = seedCities(form.packageType);
 	}
 	function addCity() {
-		form.cities.push(newCity());
+		form.cities.push(newCity(isPureUmrah ? 'Makkah' : ''));
 	}
 	function removeCity(i: number) {
 		form.cities.splice(i, 1);
+	}
+	function moveCity(i: number, dir: -1 | 1) {
+		const j = i + dir;
+		if (j < 0 || j >= form.cities.length) return;
+		const [moved] = form.cities.splice(i, 1);
+		if (moved) form.cities.splice(j, 0, moved);
 	}
 
 	const staffOptions = $derived([
@@ -111,7 +116,6 @@
 				hotel_preference: c.hotel_preference.trim(),
 				activities: Number(c.activities) || 0
 			}));
-		const cityNights = (name: string) => cities.find((c) => c.city === name)?.nights ?? null;
 		const totalNights = cities.reduce((a, c) => a + c.nights, 0);
 		const hotelPref = cities
 			.filter((c) => c.hotel_preference)
@@ -133,15 +137,12 @@
 			trip_country: form.country || null,
 			itinerary_cities: cities,
 			duration_days: totalNights || null,
-			nights_makkah: isUmrah ? cityNights('Makkah') : null,
-			nights_madinah: isUmrah ? cityNights('Madinah') : null,
+			nights_makkah: isUmrah ? nightsForCity(cities, 'Makkah') : null,
+			nights_madinah: isUmrah ? nightsForCity(cities, 'Madinah') : null,
 			hotel_preference: hotelPref || null,
-			client_preference: form.clientPreference || null,
 			customer_plan: form.customerPlan || null,
-			quick_note: form.quickNote || null,
 			responded: form.responded,
-			response_text: form.responseText || null,
-			initial_quotation: form.initialQuotation || null
+			response_text: form.responseText || null
 		});
 
 		goto(`/queries/${query.id}`);
@@ -215,38 +216,34 @@
 					<span class="text-xs font-semibold uppercase text-slate-400">
 						{isUmrah ? 'Cities & nights' : 'Itinerary (cities)'}
 					</span>
-					{#if form.packageType !== 'Umrah'}
-						<Button type="button" size="sm" variant="ghost" onclick={addCity}><Plus class="h-4 w-4" /> City</Button>
-					{/if}
+					<Button type="button" size="sm" variant="ghost" onclick={addCity}><Plus class="h-4 w-4" /> City</Button>
 				</div>
+				{#if isPureUmrah}
+					<p class="text-xs text-slate-400">Reorder or repeat cities — e.g. Madinah first, or Makkah → Madinah → Makkah on a long package.</p>
+				{/if}
 				{#each form.cities as block, i (i)}
 					<CityBlockRow
 						{block}
-						cityEditable={!isFixedCity(form.packageType, i)}
+						cityChoices={isPureUmrah ? [...UMRAH_CITIES] : undefined}
 						showArrival={!isUmrah}
 						showActivities={!isUmrah}
-						onRemove={isFixedCity(form.packageType, i) ? undefined : () => removeCity(i)}
+						onRemove={form.cities.length > 1 ? () => removeCity(i) : undefined}
+						onMoveUp={() => moveCity(i, -1)}
+						onMoveDown={() => moveCity(i, 1)}
+						disableUp={i === 0}
+						disableDown={i === form.cities.length - 1}
 					/>
 				{/each}
 			</div>
-
-			<Input label="Client preference / special requirements" bind:value={form.clientPreference} />
 		</div>
 	</Card>
 
-	<!-- Flexible capture -->
-	<Card title="Capture (any combination)">
-		<div class="space-y-4">
-			<div>
-				<span class="mb-1 block text-sm font-medium text-slate-700">Customer's own plan (pasted)</span>
-				<textarea bind:value={form.customerPlan} rows="3" placeholder="Paste the customer's WhatsApp plan here…"
-					class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
-			</div>
-			<div>
-				<span class="mb-1 block text-sm font-medium text-slate-700">Quick / informal note</span>
-				<textarea bind:value={form.quickNote} rows="2" placeholder="Dump the request informally…"
-					class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
-			</div>
+	<!-- Customer's own plan -->
+	<Card title="Customer's plan">
+		<div>
+			<span class="mb-1 block text-sm font-medium text-slate-700">Customer's own plan (pasted)</span>
+			<textarea bind:value={form.customerPlan} rows="4" placeholder="Paste the customer's WhatsApp plan here…"
+				class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
 		</div>
 	</Card>
 
@@ -257,8 +254,11 @@
 				<input type="checkbox" bind:checked={form.responded} class="rounded border-slate-300" />
 				Already responded to the client
 			</label>
-			<Input label="Response given" bind:value={form.responseText} />
-			<Input label="Initial quotation (text)" bind:value={form.initialQuotation} />
+			<div>
+				<span class="mb-1 block text-sm font-medium text-slate-700">Response given</span>
+				<textarea bind:value={form.responseText} rows="6" placeholder="What you told the client…"
+					class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
+			</div>
 		</div>
 	</Card>
 
