@@ -41,14 +41,38 @@ export function roomLabelFromEnum(rt: string | null): string {
 }
 
 export const VEHICLES = ['4-seater', '7-seater', '14-seater', '50-seater', 'Custom'];
+// Named airports (Jeddah vs Madinah) so a route reads unambiguously on the quote.
 export const ROUTES = [
-	'Airport → Makkah',
+	'Jeddah Airport → Makkah',
 	'Makkah → Madinah',
+	'Madinah → Madinah Airport',
+	'Madinah Airport → Madinah',
 	'Madinah → Makkah',
-	'Madinah → Airport',
-	'Makkah → Airport',
-	'Airport → Madinah',
+	'Makkah → Jeddah Airport',
+	'Jeddah Airport → Madinah',
+	'Makkah → Madinah Airport',
+	'Madinah → Jeddah Airport',
 	'Custom'
+];
+
+// One-tap full-transport chains. Picking one fills the transfer list with its
+// legs (vehicle/price still entered per leg). Covers the common arrival/return
+// airport combinations agents quote most.
+export const TRANSFER_PRESETS: { label: string; routes: string[] }[] = [
+	{ label: 'Jeddah in → Madinah out', routes: ['Jeddah Airport → Makkah', 'Makkah → Madinah', 'Madinah → Madinah Airport'] },
+	{ label: 'Madinah in → Jeddah out', routes: ['Madinah Airport → Madinah', 'Madinah → Makkah', 'Makkah → Jeddah Airport'] },
+	{ label: 'Round-trip via Jeddah', routes: ['Jeddah Airport → Makkah', 'Makkah → Madinah', 'Madinah → Jeddah Airport'] }
+];
+
+// Common air-ticket routings (incl. multi-city). Chips that fill the route field.
+export const AIRLINE_ROUTES = [
+	'KHI → JED → KHI',
+	'KHI → JED → MED → KHI',
+	'KHI → MED → JED → KHI',
+	'LHE → JED → LHE',
+	'LHE → JED → MED → LHE',
+	'ISB → JED → ISB',
+	'ISB → MED → JED → ISB'
 ];
 
 let uidSeq = 0;
@@ -135,7 +159,7 @@ export interface BuilderForm {
 
 export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 });
 export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0 });
-export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Airport → Makkah', customRoute: '', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
+export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Jeddah Airport → Makkah', customRoute: '', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
 export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', vendorId: '', cost: 0, sell: 0, include: true });
 export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 });
 

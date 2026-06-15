@@ -55,6 +55,8 @@
 		OCCUPANCY,
 		VEHICLES,
 		ROUTES,
+		TRANSFER_PRESETS,
+		AIRLINE_ROUTES,
 		newRoom,
 		newTransfer,
 		blankHotel,
@@ -280,6 +282,20 @@
 
 	function roomTypeLabel(room: ReturnType<typeof newRoom>) {
 		return room.rt === 'Custom' ? room.customLabel || 'Room' : room.rt;
+	}
+	// Fill the transfer list from a full-transport preset (one leg per route).
+	function applyTransferPreset(routes: string[]) {
+		form.transfers = routes.map((route) => {
+			const t = newTransfer();
+			if (ROUTES.includes(route)) {
+				t.route = route;
+			} else {
+				t.route = 'Custom';
+				t.customRoute = route;
+			}
+			return t;
+		});
+		dirty = true;
 	}
 	function vehicleLabel(t: ReturnType<typeof newTransfer>) {
 		return t.vehicle === 'Custom' ? t.customVehicle || 'Vehicle' : t.vehicle;
@@ -690,6 +706,14 @@
 		<Button type="button" variant="secondary" size="sm" onclick={addStay}><Plus class="h-4 w-4" /> Add stay</Button>
 
 		<Card title="Transfers (SAR · per vehicle)">
+			<div class="mb-3 flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-3">
+				<span class="text-xs font-medium text-slate-400">Full transport:</span>
+				{#each TRANSFER_PRESETS as p (p.label)}
+					<button type="button" onclick={() => applyTransferPreset(p.routes)} class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+						{p.label}
+					</button>
+				{/each}
+			</div>
 			<div class="space-y-2">
 				{#each form.transfers as t, i (i)}
 					<div class="flex flex-wrap items-end gap-2">
@@ -738,7 +762,15 @@
 						{#if form.airline.sel === OTHER}
 							<Input label="Airline name" bind:value={form.airline.name} placeholder="e.g. Saudia" />
 						{/if}
-						<Input label="Route" bind:value={form.airline.route} placeholder="e.g. KHI → JED → KHI" />
+						<Input label="Route (multi-city ok)" bind:value={form.airline.route} placeholder="e.g. KHI → JED → MED → KHI" />
+					</div>
+					<div class="flex flex-wrap items-center gap-1.5">
+						<span class="text-xs font-medium text-slate-400">Common:</span>
+						{#each AIRLINE_ROUTES as r (r)}
+							<button type="button" onclick={() => (form.airline.route = r)} class="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-brand-300 hover:bg-brand-50 hover:text-brand-700">
+								{r}
+							</button>
+						{/each}
 					</div>
 					<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
 						<Input label="Fare class" bind:value={form.airline.fareClass} placeholder="e.g. Economy" />

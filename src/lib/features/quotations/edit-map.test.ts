@@ -37,7 +37,7 @@ describe('quotationToForm (edit reopen)', () => {
 		const lines: QuotationLine[] = [
 			line({ line_type: 'hotel', unit_cost: 200, unit_sell: 250, meta: { city: 'Makkah', hotel: 'Hilton', room_type: 'Quad', occupancy: 4, qty: 1, nights: 5, check_in: '2026-03-03', check_out: '2026-03-08' } }),
 			line({ line_type: 'hotel', unit_cost: 150, unit_sell: 190, meta: { city: 'Makkah', hotel: 'Hilton', room_type: 'Double', occupancy: 2, qty: 1, nights: 5 } }),
-			line({ line_type: 'transfer', unit_cost: 300, unit_sell: 380, quantity: 2, meta: { vehicle_type: '7-seater', route: 'Airport → Makkah' } }),
+			line({ line_type: 'transfer', unit_cost: 300, unit_sell: 380, quantity: 2, meta: { vehicle_type: '7-seater', route: 'Jeddah Airport → Makkah' } }),
 			line({ line_type: 'visa', unit_cost: 180, unit_sell: 220, meta: { visa_type: 'Umrah' } }),
 			line({ line_type: 'ticket', currency: 'PKR', unit_cost: 150000, unit_sell: 180000, label: 'Saudia (adult ×4)', meta: { pax_type: 'adult' } })
 		];
@@ -56,7 +56,7 @@ describe('quotationToForm (edit reopen)', () => {
 		expect(makkah.rooms).toHaveLength(2);
 		expect(makkah.rooms[0]).toMatchObject({ rt: 'Quad', qty: 1, cost: 200, sell: 250 });
 
-		expect(form.transfers[0]).toMatchObject({ vehicle: '7-seater', route: 'Airport → Makkah', vehicles: 2, sell: 380 });
+		expect(form.transfers[0]).toMatchObject({ vehicle: '7-seater', route: 'Jeddah Airport → Makkah', vehicles: 2, sell: 380 });
 		expect(form.visa).toMatchObject({ include: true, type: 'Umrah', sell: 220 });
 		expect(form.airlineInclude).toBe(true);
 		expect(form.airline.name).toBe('Saudia');
