@@ -12,7 +12,9 @@ const base: WhatsAppData = {
 	],
 	visaType: 'Umrah',
 	transferRoutes: ['Jeddah Airport → Makkah', 'Makkah → Madinah', 'Madinah → Madinah Airport'],
-	ticketsIncluded: true
+	ticketsIncluded: true,
+	airlineName: 'Saudia',
+	airlineRoute: 'KHI → JED → KHI'
 };
 
 describe('renderStructured (WhatsApp)', () => {
@@ -37,6 +39,28 @@ describe('renderStructured (WhatsApp)', () => {
 		const out = renderStructured({ ...base, visaType: 'Umrah + Azerbaijan', perChildPkr: 120000 });
 		expect(out).toContain('🛂 Umrah + Azerbaijan Visa');
 		expect(out).toContain('🧒 PKR 120,000/- Per Child');
+	});
+
+	it('shows the visa total and any other services as their own lines', () => {
+		const out = renderStructured({
+			...base,
+			visaType: 'Masar + Non-Masar',
+			visaTotalPkr: 78000,
+			otherServices: ['Polio certificate', 'Travel insurance']
+		});
+		expect(out).toContain('🛂 Masar + Non-Masar Visa: PKR 78,000/-');
+		expect(out).toContain('➕ Polio certificate');
+		expect(out).toContain('➕ Travel insurance');
+	});
+
+	it('shows the airline name and route on the tickets line', () => {
+		const out = renderStructured(base);
+		expect(out).toContain('✈️ Saudia · KHI → JED → KHI');
+	});
+
+	it('falls back to a generic tickets line when airline detail is absent', () => {
+		const out = renderStructured({ ...base, airlineName: null, airlineRoute: null });
+		expect(out).toContain('✈️ Air Tickets');
 	});
 
 	it('omits optional lines when absent', () => {

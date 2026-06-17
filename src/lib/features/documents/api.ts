@@ -104,6 +104,17 @@ export async function uploadDocument(args: UploadArgs): Promise<Document> {
 	);
 }
 
+/** Rename the stored document (and optionally fix its expiry) — the file in
+ *  Storage is untouched, only the friendly metadata changes. */
+export async function updateDocument(
+	id: string,
+	patch: { file_name?: string; expiry_date?: string | null }
+): Promise<Document> {
+	return unwrap<Document>(
+		await supabase.from('documents').update(patch).eq('id', id).select().single()
+	);
+}
+
 /** Short-lived signed URL for viewing/downloading a private file. */
 export async function signedUrl(path: string): Promise<string> {
 	const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);

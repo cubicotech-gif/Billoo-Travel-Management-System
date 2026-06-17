@@ -18,8 +18,14 @@ export interface WhatsAppData {
 	label?: string | null;
 	hotels: WhatsAppHotel[];
 	visaType: string | null;
+	/** Visa total in PKR — visas vary per person, so they're quoted as a total. */
+	visaTotalPkr?: number | null;
 	transferRoutes: string[];
 	ticketsIncluded: boolean;
+	airlineName?: string | null;
+	airlineRoute?: string | null;
+	/** Extra add-ons shown as their own lines, e.g. "Polio certificate". */
+	otherServices?: string[];
 }
 
 function pkr(amount: number): string {
@@ -50,10 +56,18 @@ export function renderStructured(d: WhatsAppData): string {
 	for (const h of d.hotels) lines.push(...hotelBlock(h), '');
 
 	lines.push('✅ Package Includes:');
-	if (d.visaType) lines.push(`🛂 ${d.visaType} Visa`);
+	if (d.visaType) {
+		// Visa is a total (it varies per person), so show the amount when we have it.
+		lines.push(d.visaTotalPkr ? `🛂 ${d.visaType} Visa: PKR ${pkr(d.visaTotalPkr)}/-` : `🛂 ${d.visaType} Visa`);
+	}
 	// Transfers collapse to a single line — clients don't need each leg spelled out.
 	if (d.transferRoutes.length) lines.push('🚐 Private Transfers');
-	if (d.ticketsIncluded) lines.push('✈️ Air Tickets');
+	if (d.ticketsIncluded) {
+		// Show the airline + route when we have them, e.g. "✈️ Saudia · KHI → JED → KHI".
+		const detail = [d.airlineName, d.airlineRoute].filter(Boolean).join(' · ');
+		lines.push(detail ? `✈️ ${detail}` : '✈️ Air Tickets');
+	}
+	for (const s of d.otherServices ?? []) lines.push(`➕ ${s}`);
 
 	lines.push('');
 	lines.push('📞 Contact us for booking and further details.');

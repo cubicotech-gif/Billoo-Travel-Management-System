@@ -3,6 +3,7 @@ import {
 	deleteDocument,
 	listAllDocuments,
 	listDocuments,
+	updateDocument,
 	uploadDocument,
 	type Document,
 	type DocumentEntity,
@@ -31,6 +32,18 @@ export function useUploadDocument(entityType: DocumentEntity, entityId: string) 
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (args: UploadArgs) => uploadDocument(args),
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: key(entityType, entityId) });
+			client.invalidateQueries({ queryKey: ALL_KEY });
+		}
+	});
+}
+
+export function useUpdateDocument(entityType: DocumentEntity, entityId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ id, patch }: { id: string; patch: { file_name?: string; expiry_date?: string | null } }) =>
+			updateDocument(id, patch),
 		onSuccess: () => {
 			client.invalidateQueries({ queryKey: key(entityType, entityId) });
 			client.invalidateQueries({ queryKey: ALL_KEY });
