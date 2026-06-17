@@ -102,7 +102,7 @@
 					{/each}
 				</ul>
 				<div class="mt-3 text-right">
-					<Button variant="secondary" size="sm" href="/operations">Open Operations</Button>
+					<Button variant="secondary" size="sm" href="/queries">Open board</Button>
 				</div>
 			</Card>
 		</div>

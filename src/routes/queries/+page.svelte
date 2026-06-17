@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { Button } from '$ui';
-	import { Plus, RotateCcw, Archive, XCircle, ClipboardCheck } from 'lucide-svelte';
+	import { Plus, RotateCcw, Archive, XCircle, ChevronDown } from 'lucide-svelte';
 	import {
 		useQueries,
 		useSetQueryStatus,
+		useUpdateQuery,
 		useDeletedQueries,
 		useSoftDeleteQuery,
 		useRestoreQuery
@@ -12,13 +13,13 @@
 	import QueryCard from '$features/queries/QueryCard.svelte';
 	import { useAllQuotations } from '$features/quotations/queries';
 	import { latestQuotationByQuery } from '$features/quotations/api';
-	import { MAIN_STAGES } from '$features/queries/workflow';
-	import { isBooked } from '$features/operations/lanes';
-	import type { QueryStatus } from '$lib/database.types';
+	import { isBooked, groupIntoLanes } from '$features/operations/lanes';
+	import type { BookingStatus, QueryStatus } from '$lib/database.types';
 	import type { Query } from '$features/queries/types';
 
 	const queries = useQueries();
 	const setStatus = useSetQueryStatus();
+	const update = useUpdateQuery();
 	const deleted = useDeletedQueries();
 	const softDelete = useSoftDeleteQuery();
 	const restore = useRestoreQuery();
@@ -53,34 +54,67 @@
 			$softDelete.mutate(q.id);
 	}
 
-	// Group queries into the four pipeline columns. Cancelled is a side-exit, not
-	// a column — it lives in its own collapsible section below. Booked deals (a
-	// booking_status is set) leave the board entirely for the Operations page, so
-	// the sales pipeline stays buffer-free.
-	const columns = $derived.by(() => {
-		const map = new Map<QueryStatus, Query[]>();
-		for (const s of MAIN_STAGES) map.set(s.status, []);
-		for (const q of $queries.data ?? []) {
-			if (q.status === 'Cancelled') continue;
-			if (isBooked(q)) continue;
-			// Unknown/legacy statuses fall into New Query so nothing disappears.
-			(map.get(q.status) ?? map.get('New Query'))?.push(q);
-		}
-		return MAIN_STAGES.map((stage) => ({ stage, items: map.get(stage.status) ?? [] }));
+	// What a drop applies: the target stage and (for booked follow-up lanes) the
+	// booking status it represents.
+	interface BoardColumn {
+		id: string;
+		label: string;
+		tone: string;
+		status: QueryStatus;
+		bookingStatus: BookingStatus | null;
+		items: Query[];
+	}
+
+	const active = $derived(($queries.data ?? []).filter((q) => q.status !== 'Cancelled'));
+	const lanes = $derived(groupIntoLanes($queries.data ?? []));
+
+	// New Query + Working stay open; everything after is a collapsible dropdown.
+	const openColumns = $derived.by((): BoardColumn[] => {
+		const notBooked = active.filter((q) => !isBooked(q));
+		const working = notBooked.filter((q) => q.status === 'Working');
+		// Unknown/legacy statuses fall into New Query so nothing disappears.
+		const known: QueryStatus[] = ['Working', 'Quoted', 'Booking'];
+		const fresh = notBooked.filter((q) => q.status === 'New Query' || !known.includes(q.status));
+		return [
+			{ id: 'New Query', label: 'New Query', tone: 'warning', status: 'New Query', bookingStatus: null, items: fresh },
+			{ id: 'Working', label: 'Working', tone: 'info', status: 'Working', bookingStatus: null, items: working }
+		];
 	});
+
+	const dropdownColumns = $derived.by((): BoardColumn[] => [
+		{ id: 'Quoted', label: 'Quoted', tone: 'info', status: 'Quoted', bookingStatus: null, items: active.filter((q) => q.status === 'Quoted' && !isBooked(q)) },
+		{ id: 'Booking', label: 'Booking', tone: 'success', status: 'Booking', bookingStatus: null, items: active.filter((q) => q.status === 'Booking' && !q.booking_status) },
+		{ id: 'payments', label: 'Payments Due', tone: 'warning', status: 'Booking', bookingStatus: 'Pending Payment', items: lanes.payments.map((c) => c.query) },
+		{ id: 'checkins', label: 'Check-ins', tone: 'info', status: 'Booking', bookingStatus: 'Payment Done - Check-in Pending', items: lanes.checkins.map((c) => c.query) },
+		{ id: 'completed', label: 'Completed', tone: 'success', status: 'Booking', bookingStatus: 'Completed', items: lanes.completed.map((c) => c.query) }
+	]);
+
 	const cancelledItems = $derived(($queries.data ?? []).filter((q) => q.status === 'Cancelled'));
-	const bookedCount = $derived(($queries.data ?? []).filter(isBooked).length);
+
+	// Collapsed by default so the board stays tidy; auto-open ones that have cards.
+	let openState = $state<Record<string, boolean>>({});
+	const isOpen = (col: BoardColumn) => openState[col.id] ?? col.items.length > 0;
 
 	let draggingId = $state<string | null>(null);
-	let dragOverStatus = $state<QueryStatus | null>(null);
+	let dragOverId = $state<string | null>(null);
 
-	function onDrop(status: QueryStatus) {
+	function onDrop(col: BoardColumn) {
 		const id = draggingId;
 		draggingId = null;
-		dragOverStatus = null;
+		dragOverId = null;
 		if (!id) return;
-		const q = ($queries.data ?? []).find((x) => x.id === id);
-		if (q && q.status !== status) $setStatus.mutate({ id, status });
+		const q = active.find((x) => x.id === id);
+		if (!q) return;
+		const sameStage = q.status === col.status;
+		const sameBooking = (q.booking_status ?? null) === col.bookingStatus;
+		if (sameStage && sameBooking) return;
+		const patch: Partial<Query> = {
+			status: col.status,
+			booking_status: col.bookingStatus,
+			stage_changed_at: new Date().toISOString()
+		};
+		if (col.bookingStatus === 'Completed') patch.completed_date = q.completed_date ?? new Date().toISOString();
+		$update.mutate({ id, patch });
 	}
 </script>
 
@@ -90,11 +124,6 @@
 		<p class="text-sm text-slate-500">Drag across the pipeline, or click a card to expand, advance, and act.</p>
 	</div>
 	<div class="flex items-center gap-2">
-		{#if bookedCount}
-			<Button variant="secondary" href="/operations">
-				<ClipboardCheck class="h-4 w-4" /> Operations · {bookedCount}
-			</Button>
-		{/if}
 		<Button variant="secondary" onclick={() => (showDeleted = !showDeleted)}>
 			<Archive class="h-4 w-4" /> Deleted{($deleted.data ?? []).length ? ` · ${($deleted.data ?? []).length}` : ''}
 		</Button>
@@ -112,37 +141,38 @@
 {:else if $queries.isError}
 	<p class="text-red-600">Failed to load: {$queries.error.message}</p>
 {:else}
-	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-		{#each columns as { stage, items } (stage.status)}
+	<!-- New Query + Working: always-open columns. -->
+	<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+		{#each openColumns as col (col.id)}
 			<div
 				role="list"
-				class="flex min-h-32 flex-col rounded-xl border bg-slate-100/60 transition-colors {dragOverStatus ===
-				stage.status
+				class="flex min-h-48 flex-col rounded-xl border bg-slate-100/60 transition-colors {dragOverId ===
+				col.id
 					? 'border-brand-400 bg-brand-50'
 					: 'border-transparent'}"
 				ondragover={(e) => {
 					e.preventDefault();
-					dragOverStatus = stage.status;
+					dragOverId = col.id;
 				}}
 				ondragleave={() => {
-					if (dragOverStatus === stage.status) dragOverStatus = null;
+					if (dragOverId === col.id) dragOverId = null;
 				}}
-				ondrop={() => onDrop(stage.status)}
+				ondrop={() => onDrop(col)}
 			>
 				<div class="flex items-center justify-between border-b border-slate-200/70 px-3 py-2.5">
-					<span class="flex items-center gap-2 text-sm font-semibold {headerTone[stage.tone] ?? 'text-slate-700'}">
-						<span class="h-2 w-2 rounded-full {dotTone[stage.tone] ?? 'bg-slate-300'}"></span>
-						{stage.label}
+					<span class="flex items-center gap-2 text-sm font-semibold {headerTone[col.tone] ?? 'text-slate-700'}">
+						<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
+						{col.label}
 					</span>
 					<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
-						{items.length}
+						{col.items.length}
 					</span>
 				</div>
-				<div class="flex flex-1 flex-col gap-2 px-2 pb-3">
-					{#each items as q (q.id)}
+				<div class="grid flex-1 grid-cols-1 gap-2 px-2 pb-3 lg:grid-cols-2">
+					{#each col.items as q (q.id)}
 						<QueryCard
 							query={q}
-							tone={stage.tone}
+							tone={col.tone}
 							latest={latestByQuery.get(q.id) ?? null}
 							dragging={draggingId === q.id}
 							busy={$setStatus.isPending}
@@ -153,12 +183,70 @@
 							onMove={(status) => $setStatus.mutate({ id: q.id, status })}
 						/>
 					{/each}
-					{#if items.length === 0}
-						<div class="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
+					{#if col.items.length === 0}
+						<div class="col-span-full rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
 							Drop here
 						</div>
 					{/if}
 				</div>
+			</div>
+		{/each}
+	</div>
+
+	<!-- Quoted, Booking + follow-up lanes: collapsible dropdowns, also drop targets. -->
+	<div class="mt-4 space-y-2">
+		{#each dropdownColumns as col (col.id)}
+			<div
+				class="rounded-xl border bg-white transition-colors {dragOverId === col.id
+					? 'border-brand-400 bg-brand-50'
+					: 'border-slate-200'}"
+				role="list"
+				ondragover={(e) => {
+					e.preventDefault();
+					dragOverId = col.id;
+				}}
+				ondragleave={() => {
+					if (dragOverId === col.id) dragOverId = null;
+				}}
+				ondrop={() => onDrop(col)}
+			>
+				<button
+					type="button"
+					class="flex w-full items-center justify-between px-4 py-3"
+					onclick={() => (openState[col.id] = !isOpen(col))}
+				>
+					<span class="flex items-center gap-2 text-sm font-semibold {headerTone[col.tone] ?? 'text-slate-700'}">
+						<ChevronDown class="h-4 w-4 text-slate-400 transition-transform {isOpen(col) ? '' : '-rotate-90'}" />
+						<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
+						{col.label}
+					</span>
+					<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+						{col.items.length}
+					</span>
+				</button>
+				{#if isOpen(col)}
+					<div class="grid grid-cols-1 gap-2 border-t border-slate-100 p-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+						{#each col.items as q (q.id)}
+							<QueryCard
+								query={q}
+								tone={col.tone}
+								latest={latestByQuery.get(q.id) ?? null}
+								dragging={draggingId === q.id}
+								busy={$setStatus.isPending}
+								onDragStart={() => (draggingId = q.id)}
+								onDragEnd={() => (draggingId = null)}
+								onEdit={() => openEdit(q)}
+								onDelete={() => remove(q)}
+								onMove={(status) => $setStatus.mutate({ id: q.id, status })}
+							/>
+						{/each}
+						{#if col.items.length === 0}
+							<div class="col-span-full rounded-lg border border-dashed border-slate-200 py-5 text-center text-xs text-slate-300">
+								Drop here
+							</div>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		{/each}
 	</div>
