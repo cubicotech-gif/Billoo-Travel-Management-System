@@ -17,8 +17,8 @@ import {
 // then everything sums in PKR. All math goes through the money layer.
 // ---------------------------------------------------------------------------
 
-/** Currency a foreign (non-PKR) line can be priced in. */
-export type LineCurrency = 'SAR' | 'USD';
+/** Currency a line can be priced in. PKR is used as-is (no conversion). */
+export type LineCurrency = 'SAR' | 'USD' | 'PKR';
 
 export interface PaxCounts {
 	adults: number;
@@ -85,6 +85,18 @@ export interface VisaInput {
 	vendorId?: string | null;
 	costSar: number; // in `currency`
 	sellSar: number; // per person (infant = adult rate), in `currency`
+	/** How many people this visa line covers. 0/undefined = all passengers. */
+	persons?: number;
+}
+
+/** A free-form add-on (Polio cert, insurance, …). Priced like any line. */
+export interface OtherServiceInput {
+	label: string;
+	currency?: LineCurrency;
+	vendorId?: string | null;
+	costSar: number; // in `currency`
+	sellSar: number; // in `currency`, per unit
+	qty: number;
 }
 
 export interface TicketsInput {
@@ -111,11 +123,12 @@ export interface QuotationInput {
 	/** Visa(s). `visas` (multiple) is preferred; `visa` kept for back-compat. */
 	visa?: VisaInput | null;
 	visas?: VisaInput[];
+	otherServices?: OtherServiceInput[];
 	tickets: TicketsInput | null;
 }
 
 export interface QuotationLineResult {
-	line_type: 'hotel' | 'transfer' | 'visa' | 'ticket';
+	line_type: 'hotel' | 'transfer' | 'visa' | 'ticket' | 'other';
 	label: string;
 	rateCardId: string | null;
 	vendorId: string | null;
@@ -136,6 +149,12 @@ export interface QuotationResult {
 	usdSell: number;
 	ticketsCostPkr: number;
 	ticketsSellPkr: number;
+	/** Visa total in PKR — shown as its own line (visas vary per person). */
+	visaCostPkr: number;
+	visaSellPkr: number;
+	/** Other add-on services, total in PKR. */
+	otherCostPkr: number;
+	otherSellPkr: number;
 	totalCostPkr: number;
 	totalSellPkr: number;
 	profitPkr: number;
@@ -211,10 +230,6 @@ export function perPersonAdvanced(
 
 	const hotelsPkr = sumSellPkr((l) => l.line_type === 'hotel');
 	const transfersPkr = sumSellPkr((l) => l.line_type === 'transfer');
-	// Visa is per-person (quantity = persons); sum each visa's per-person rate.
-	const visaPerPersonPkr = result.lines
-		.filter((l) => l.line_type === 'visa')
-		.reduce((a, l) => a + l.unitSell * rateOf(l.currency), 0);
 	const ticketUnit = (paxType: string) =>
 		result.lines.find((l) => l.line_type === 'ticket' && l.meta?.pax_type === paxType)?.unitSell ?? 0;
 	const adultTicketPkr = ticketUnit('adult');
@@ -223,17 +238,17 @@ export function perPersonAdvanced(
 	const hotelsDiv = adults + (share.hotels ? children : 0);
 	const transfersDiv = adults + (share.transfers ? children : 0);
 
+	// Visa is no longer a per-person component — visas vary per person, so they're
+	// quoted as their own total (result.visaSellPkr). Same for other services.
 	const adultBreakdown = [
 		{ label: 'Accommodation', amount: roundPkr(hotelsPkr / hotelsDiv) },
 		{ label: 'Transfers', amount: roundPkr(transfersPkr / transfersDiv) },
-		{ label: 'Visa', amount: roundPkr(visaPerPersonPkr) },
 		{ label: 'Air ticket', amount: roundPkr(adultTicketPkr) }
 	].filter((b) => b.amount > 0);
 
 	const childBreakdown = [
 		{ label: 'Accommodation', amount: share.hotels ? roundPkr(hotelsPkr / hotelsDiv) : 0 },
 		{ label: 'Transfers', amount: share.transfers ? roundPkr(transfersPkr / transfersDiv) : 0 },
-		{ label: 'Visa', amount: share.visa ? roundPkr(visaPerPersonPkr) : 0 },
 		{ label: 'Air ticket', amount: share.tickets ? roundPkr(childTicketPkr) : 0 }
 	].filter((b) => b.amount > 0);
 
@@ -251,11 +266,16 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 	const sarSells: Money[] = [];
 	const usdCosts: Money[] = [];
 	const usdSells: Money[] = [];
-	// Route a foreign line's money into the right currency bucket.
+	const pkrCosts: Money[] = [];
+	const pkrSells: Money[] = [];
+	// Route a line's money into its currency bucket. PKR is not converted.
 	const push = (cur: LineCurrency, cost: Money, sell: Money) => {
 		if (cur === 'USD') {
 			usdCosts.push(cost);
 			usdSells.push(sell);
+		} else if (cur === 'PKR') {
+			pkrCosts.push(cost);
+			pkrSells.push(sell);
 		} else {
 			sarCosts.push(cost);
 			sarSells.push(sell);
@@ -365,12 +385,23 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 
 	const visaList = input.visas ?? (input.visa ? [input.visa] : []);
 	const persons = totalPersons(input.pax);
+	const usdRate = input.usd ?? 0;
+	// Convert any line Money to PKR by its currency (PKR is used as-is).
+	const toPkr = (m: Money, cur: LineCurrency): Money =>
+		cur === 'PKR' ? m : convertToPkr(m, cur === 'USD' ? usdRate : input.roe);
+
+	let visaCostPkrM = money(0, 'PKR');
+	let visaSellPkrM = money(0, 'PKR');
 	visaList.forEach((v, vi) => {
 		if (!v) return;
 		const vcur: LineCurrency = v.currency ?? 'SAR';
-		const lineCost = multiply(money(v.costSar, vcur), persons);
-		const lineSell = multiply(money(v.sellSar, vcur), persons);
+		// Each visa line covers its own headcount; 0 = all passengers.
+		const vpersons = v.persons && v.persons > 0 ? v.persons : persons;
+		const lineCost = multiply(money(v.costSar, vcur), vpersons);
+		const lineSell = multiply(money(v.sellSar, vcur), vpersons);
 		push(vcur, lineCost, lineSell);
+		visaCostPkrM = add(visaCostPkrM, toPkr(lineCost, vcur));
+		visaSellPkrM = add(visaSellPkrM, toPkr(lineSell, vcur));
 		lines.push({
 			line_type: 'visa',
 			label: `${v.visaType} visa`,
@@ -379,10 +410,37 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			currency: vcur,
 			unitCost: v.costSar,
 			unitSell: v.sellSar,
-			quantity: persons,
+			quantity: vpersons,
 			lineCost: toNumber(lineCost),
 			lineSell: toNumber(lineSell),
-			meta: { visa_type: v.visaType, visa_index: vi }
+			meta: { visa_type: v.visaType, visa_index: vi, persons: vpersons }
+		});
+	});
+
+	// Other add-on services (Polio cert, insurance, …).
+	let otherCostPkrM = money(0, 'PKR');
+	let otherSellPkrM = money(0, 'PKR');
+	(input.otherServices ?? []).forEach((s, si) => {
+		if (!s || !s.label.trim()) return;
+		const scur: LineCurrency = s.currency ?? 'PKR';
+		const qty = s.qty > 0 ? s.qty : 1;
+		const lineCost = multiply(money(s.costSar, scur), qty);
+		const lineSell = multiply(money(s.sellSar, scur), qty);
+		push(scur, lineCost, lineSell);
+		otherCostPkrM = add(otherCostPkrM, toPkr(lineCost, scur));
+		otherSellPkrM = add(otherSellPkrM, toPkr(lineSell, scur));
+		lines.push({
+			line_type: 'other',
+			label: s.label.trim(),
+			rateCardId: null,
+			vendorId: s.vendorId ?? null,
+			currency: scur,
+			unitCost: s.costSar,
+			unitSell: s.sellSar,
+			quantity: qty,
+			lineCost: toNumber(lineCost),
+			lineSell: toNumber(lineSell),
+			meta: { other_index: si }
 		});
 	});
 
@@ -426,17 +484,19 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 	const sarSell = sum(sarSells, 'SAR');
 	const usdCost = sum(usdCosts, 'USD');
 	const usdSell = sum(usdSells, 'USD');
+	// PKR lines plus PKR tickets — neither needs conversion.
+	const pkrCost = sum([...pkrCosts, ...ticketsCost], 'PKR');
+	const pkrSell = sum([...pkrSells, ...ticketsSell], 'PKR');
 	const ticketsCostPkr = sum(ticketsCost, 'PKR');
 	const ticketsSellPkr = sum(ticketsSell, 'PKR');
 
-	const usd = input.usd ?? 0;
 	const totalCostPkr = add(
-		add(convertToPkr(sarCost, input.roe), convertToPkr(usdCost, usd)),
-		ticketsCostPkr
+		add(convertToPkr(sarCost, input.roe), convertToPkr(usdCost, usdRate)),
+		pkrCost
 	);
 	const totalSellPkr = add(
-		add(convertToPkr(sarSell, input.roe), convertToPkr(usdSell, usd)),
-		ticketsSellPkr
+		add(convertToPkr(sarSell, input.roe), convertToPkr(usdSell, usdRate)),
+		pkrSell
 	);
 	const profitPkr = subtract(totalSellPkr, totalCostPkr);
 
@@ -448,6 +508,10 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 		usdSell: toNumber(usdSell),
 		ticketsCostPkr: toNumber(ticketsCostPkr),
 		ticketsSellPkr: toNumber(ticketsSellPkr),
+		visaCostPkr: toNumber(visaCostPkrM),
+		visaSellPkr: toNumber(visaSellPkrM),
+		otherCostPkr: toNumber(otherCostPkrM),
+		otherSellPkr: toNumber(otherSellPkrM),
 		totalCostPkr: toNumber(totalCostPkr),
 		totalSellPkr: toNumber(totalSellPkr),
 		profitPkr: toNumber(profitPkr)

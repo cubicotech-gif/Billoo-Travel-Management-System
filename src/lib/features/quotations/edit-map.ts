@@ -90,8 +90,9 @@ export interface RoomRow {
 // A "stay" = city + hotel + dates + nights + rooms. The itinerary is a sequence
 // of stays (split-stay and return visits are just more stays), dates auto-chain.
 export type BreakfastMode = 'none' | 'included' | 'separate';
-/** Foreign currency a line is priced in (final selling price is always PKR). */
-export type LineCurrency = 'SAR' | 'USD';
+/** Currency a line is priced in. PKR is used as-is; SAR/USD convert. The final
+ *  selling price is always PKR. */
+export type LineCurrency = 'SAR' | 'USD' | 'PKR';
 
 export interface HotelForm {
 	id: string;
@@ -131,6 +132,15 @@ export interface VisaForm {
 	vendorId: string;
 	cost: number;
 	sell: number;
+	persons: number; // how many people this visa covers (0 = all passengers)
+}
+export interface OtherServiceForm {
+	label: string;
+	currency: LineCurrency;
+	vendorId: string;
+	cost: number;
+	sell: number;
+	qty: number;
 }
 export interface AirlineForm {
 	sel: string;
@@ -159,6 +169,7 @@ export interface BuilderForm {
 	hotels: HotelForm[];
 	transfers: TransferForm[];
 	visas: VisaForm[];
+	otherServices: OtherServiceForm[];
 	airline: AirlineForm;
 	airlineInclude: boolean;
 }
@@ -166,7 +177,8 @@ export interface BuilderForm {
 export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 });
 export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, currency: 'SAR', sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0 });
 export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Jeddah Airport → Makkah', customRoute: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
-export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0 });
+export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, persons: 0 });
+export const blankOtherService = (): OtherServiceForm => ({ label: '', currency: 'PKR', vendorId: '', cost: 0, sell: 0, qty: 1 });
 export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 });
 
 export function blankForm(): BuilderForm {
@@ -184,6 +196,7 @@ export function blankForm(): BuilderForm {
 		hotels: [blankHotel('')],
 		transfers: [newTransfer()],
 		visas: [blankVisa()],
+		otherServices: [],
 		airline: blankAirline(),
 		airlineInclude: false
 	};
@@ -222,8 +235,10 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 	const stayOrder: string[] = [];
 	const transfers: TransferForm[] = [];
 	const visas: VisaForm[] = [];
+	const otherServices: OtherServiceForm[] = [];
 	let airlineSet = false;
-	const cur = (c: string | null | undefined): LineCurrency => (c === 'USD' ? 'USD' : 'SAR');
+	const cur = (c: string | null | undefined): LineCurrency =>
+		c === 'USD' ? 'USD' : c === 'PKR' ? 'PKR' : 'SAR';
 
 	for (const l of lines) {
 		const meta = l.meta ?? {};
@@ -287,7 +302,17 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				currency: cur(l.currency),
 				vendorId: l.vendor_id ?? '',
 				cost: Number(l.unit_cost),
-				sell: Number(l.unit_sell)
+				sell: Number(l.unit_sell),
+				persons: n(meta, 'persons') || l.quantity || 0
+			});
+		} else if (l.line_type === 'other') {
+			otherServices.push({
+				label: l.label,
+				currency: cur(l.currency),
+				vendorId: l.vendor_id ?? '',
+				cost: Number(l.unit_cost),
+				sell: Number(l.unit_sell),
+				qty: l.quantity || 1
 			});
 		} else if (l.line_type === 'ticket') {
 			form.airlineInclude = true;
@@ -316,6 +341,7 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 	if (staySlots.size) form.hotels = stayOrder.map((k) => staySlots.get(k)!);
 	form.transfers = transfers.length ? transfers : [newTransfer()];
 	form.visas = visas; // empty = no visa on this quote
+	form.otherServices = otherServices;
 
 	return form;
 }

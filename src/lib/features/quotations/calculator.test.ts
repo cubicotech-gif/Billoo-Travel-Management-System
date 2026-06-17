@@ -191,10 +191,39 @@ describe('quotation calculator', () => {
 			}
 		});
 		const adv = perPersonAdvanced(r, base.roe, { adults: 2, children: 1, infants: 0 });
-		// Adult shares accommodation+transfer over 2 adults, pays own visa + adult ticket.
-		// Child (default share) pays only visa + child ticket.
-		expect(adv.perChild).toBe(220 * 75 + 120000); // visa 220 SAR*75 + child ticket
+		// Visa is now its own total (excluded from per-person). Child pays only the
+		// child ticket; adult shares accommodation+transfer and pays the adult ticket.
+		expect(adv.perChild).toBe(120000); // child ticket only
 		expect(adv.perAdult).toBeGreaterThan(adv.perChild);
+		// Visa surfaces as a separate PKR total: 220 SAR × 3 persons × 75.
+		expect(r.visaSellPkr).toBe(220 * 3 * 75);
+	});
+
+	it('charges each visa line only for its own headcount and totals them', () => {
+		const r = calculateQuotation({
+			...base,
+			pax: { adults: 4, children: 0, infants: 0 },
+			visas: [
+				{ visaType: 'Masar', costSar: 200, sellSar: 300, persons: 2 },
+				{ visaType: 'Non-Masar', costSar: 150, sellSar: 220, persons: 2 }
+			]
+		});
+		// 2×300 + 2×220 = 1040 SAR → ×75 PKR.
+		expect(r.visaSellPkr).toBe((300 * 2 + 220 * 2) * 75);
+		const visaLines = r.lines.filter((l) => l.line_type === 'visa');
+		expect(visaLines.map((l) => l.quantity)).toEqual([2, 2]);
+	});
+
+	it('adds other services as their own PKR total, honouring the line currency', () => {
+		const r = calculateQuotation({
+			...base,
+			pax: { adults: 2, children: 0, infants: 0 },
+			otherServices: [
+				{ label: 'Polio certificate', currency: 'PKR', costSar: 1000, sellSar: 1500, qty: 2 }
+			]
+		});
+		expect(r.otherSellPkr).toBe(3000); // 1500 × 2, no conversion
+		expect(r.lines.find((l) => l.line_type === 'other')?.label).toBe('Polio certificate');
 	});
 
 	it('converts USD lines via the USD rate and keeps the SAR subtotal separate', () => {

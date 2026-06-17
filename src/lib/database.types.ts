@@ -64,7 +64,7 @@ export type RateObservationSource =
 
 export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'archived';
 
-export type QuotationLineType = 'hotel' | 'transfer' | 'visa' | 'ticket';
+export type QuotationLineType = 'hotel' | 'transfer' | 'visa' | 'ticket' | 'other';
 
 export type ServiceStatus = 'pending' | 'confirmed' | 'cancelled';
 
