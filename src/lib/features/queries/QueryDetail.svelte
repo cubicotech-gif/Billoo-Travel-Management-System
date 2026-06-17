@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, ArrowRight, Ban, Map, Pencil, Trash2, RotateCcw } from 'lucide-svelte';
+	import { ArrowLeft, ArrowRight, Ban, Pencil, Trash2, RotateCcw } from 'lucide-svelte';
 	import { Badge, Button, Card, WhatsAppLink } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import {
@@ -23,14 +23,9 @@
 	} from './workflow';
 	import Stepper from './Stepper.svelte';
 	import StageActions from './StageActions.svelte';
-	import ConfirmationPanel from './ConfirmationPanel.svelte';
-	import PaymentSchedule from '$features/payments/PaymentSchedule.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
-	import BookingPanel from '$features/bookings/BookingPanel.svelte';
-	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
-	import BookingDocChecklist from '$features/documents/BookingDocChecklist.svelte';
+	import BookingWorkspace from './BookingWorkspace.svelte';
 	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
-	import { QUERY_DOCUMENT_TYPES, PASSENGER_DOCUMENT_TYPES } from '$features/documents/api';
 
 	// `id` is stable for this component instance: the route keys on it, so a
 	// different query remounts us.
@@ -210,44 +205,7 @@
 	</div>
 
 	{#if q.status === 'Booking'}
-		<div class="mb-8">
-			<BookingPanel queryId={id} />
-		</div>
-
-		<div class="mb-8">
-			<PaymentSchedule queryId={id} sellingPkr={Number(q.selling_price)} />
-		</div>
-
-		<div class="mb-8">
-			<ConfirmationPanel query={q} queryId={id} />
-		</div>
-
-		<div class="mb-8">
-			<BookingDocChecklist queryId={id} passengerId={q.passenger_id} />
-		</div>
-
-		<div class="mb-4">
-			<Button variant="secondary" size="sm" href="/queries/{id}/itinerary">
-				<Map class="h-4 w-4" /> Itinerary
-			</Button>
-		</div>
-
-		<div class="mb-8">
-			<DocumentsPanel entityType="query" entityId={id} types={QUERY_DOCUMENT_TYPES} />
-		</div>
-
-		<!-- Passenger's identity vault, attached to the profile (passport/visa/photo)
-		     so it's visible and uploadable right here in the booking workspace. -->
-		{#if q.passenger_id}
-			<div class="mb-8">
-				<DocumentsPanel
-					entityType="passenger"
-					entityId={q.passenger_id}
-					title="Passenger Documents (profile)"
-					types={PASSENGER_DOCUMENT_TYPES}
-				/>
-			</div>
-		{/if}
+		<BookingWorkspace query={q} queryId={id} {reference} />
 	{/if}
 
 	<QueryEditModal query={q} open={editing} onClose={() => (editing = false)} />
