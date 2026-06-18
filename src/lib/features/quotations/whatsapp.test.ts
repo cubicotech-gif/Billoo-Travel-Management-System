@@ -35,22 +35,23 @@ describe('renderStructured (WhatsApp)', () => {
 		expect(out.match(/Private Transfers/g)).toHaveLength(1);
 	});
 
-	it('shows a combined multi-visa label and a per-child line when present', () => {
-		const out = renderStructured({ ...base, visaType: 'Umrah + Azerbaijan', perChildPkr: 120000 });
+	it('shows a combined multi-visa label without any price', () => {
+		const out = renderStructured({ ...base, visaType: 'Umrah + Azerbaijan' });
 		expect(out).toContain('🛂 Umrah + Azerbaijan Visa');
-		expect(out).toContain('🧒 PKR 120,000/- Per Child');
 	});
 
-	it('shows the visa total and any other services as their own lines', () => {
+	it('never prints an individual service price — only the per-person figure', () => {
 		const out = renderStructured({
 			...base,
 			visaType: 'Masar + Non-Masar',
-			visaTotalPkr: 78000,
 			otherServices: ['Polio certificate', 'Travel insurance']
 		});
-		expect(out).toContain('🛂 Masar + Non-Masar Visa: PKR 78,000/-');
+		expect(out).toContain('🛂 Masar + Non-Masar Visa');
+		expect(out).not.toMatch(/Visa: PKR/);
 		expect(out).toContain('➕ Polio certificate');
 		expect(out).toContain('➕ Travel insurance');
+		// The only money on the message is the per-person headline.
+		expect(out.match(/PKR/g)?.length).toBe(1);
 	});
 
 	it('shows the airline name and route on the tickets line', () => {
