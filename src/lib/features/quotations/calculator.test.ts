@@ -47,11 +47,14 @@ describe('quotation calculator', () => {
 		expect(totalPersons({ adults: 2, children: 1, infants: 1 })).toBe(4);
 	});
 
-	it('sums the SAR side (sell) across hotels, transfer and visa', () => {
-		// Makkah 250*1*5 + Madinah 190*1*4 + transfer 380 + visa 220*2 = 1250+760+380+440 = 2830
-		expect(calculateQuotation(base).sarSell).toBe(2830);
-		// cost: 200*5 + 150*4 + 300 + 180*2 = 1000+600+300+360 = 2260
-		expect(calculateQuotation(base).sarCost).toBe(2260);
+	it('sums the SAR land side (sell) across hotels and transfers, visa kept separate', () => {
+		// Land only: Makkah 250*1*5 + Madinah 190*1*4 + transfer 380 = 1250+760+380 = 2390.
+		// Visa (220*2) is its own total, NOT in the SAR subtotal.
+		expect(calculateQuotation(base).sarSell).toBe(2390);
+		// land cost: 200*5 + 150*4 + 300 = 1000+600+300 = 1900
+		expect(calculateQuotation(base).sarCost).toBe(1900);
+		// Visa surfaces separately (converted at the ROE).
+		expect(calculateQuotation(base).visaSellPkr).toBe(220 * 2 * 75);
 	});
 
 	it('mixes room types within one hotel', () => {
@@ -93,7 +96,9 @@ describe('quotation calculator', () => {
 			transfers: [],
 			tickets: null
 		});
-		expect(r.sarSell).toBe(440); // 220 * 2 persons
+		// Visa covers all persons incl. the infant: 220 * 2 → PKR at the ROE.
+		expect(r.visaSellPkr).toBe(220 * 2 * 75);
+		expect(r.sarSell).toBe(0); // no land lines; visa isn't in the SAR subtotal
 	});
 
 	it('per-person divisor counts adults+children, infants optional', () => {
@@ -247,7 +252,7 @@ describe('quotation calculator', () => {
 		expect(r.totalSellPkr).toBe(177750);
 	});
 
-	it('prices multiple visas (mixed currency) per person', () => {
+	it('prices multiple visas (mixed currency) as their own total, not in the land subtotals', () => {
 		const r = calculateQuotation({
 			roe: 75,
 			usd: 280,
@@ -262,9 +267,40 @@ describe('quotation calculator', () => {
 		});
 		const visaLines = r.lines.filter((l) => l.line_type === 'visa');
 		expect(visaLines).toHaveLength(2);
-		expect(r.sarSell).toBe(440); // 220 * 2
-		expect(r.usdSell).toBe(100); // 50 * 2
+		// Visa stays OUT of the SAR/USD land subtotals — it's a separate PKR total.
+		expect(r.sarSell).toBe(0);
+		expect(r.usdSell).toBe(0);
+		expect(r.visaSellPkr).toBe(220 * 2 * 75 + 50 * 2 * 280);
+		// Grand total is unchanged by where visa is bucketed.
 		expect(r.totalSellPkr).toBe(440 * 75 + 100 * 280);
+	});
+
+	it('staff breakdown reconciles: land + tickets + visa + other == total', () => {
+		const r = calculateQuotation({
+			roe: 78,
+			usd: 280,
+			pax: { adults: 6, children: 0, infants: 0 },
+			hotels: [
+				{ city: 'Makkah', name: 'A', nights: 4, rooms: [{ label: 'Quad', occupancy: 4, qty: 1, costSar: 400, sellSar: 490 }] },
+				{ city: 'Baku', name: 'B', currency: 'USD', nights: 2, rooms: [{ label: 'Double', occupancy: 2, qty: 1, costSar: 80, sellSar: 100 }] }
+			],
+			transfers: [{ vehicleType: '7-seater', route: 'A → B', currency: 'PKR', costSar: 5000, sellSar: 7000, vehicles: 1 }],
+			visas: [{ visaType: 'Umrah', costSar: 450, sellSar: 550 }],
+			otherServices: [{ label: 'Polio', currency: 'PKR', costSar: 0, sellSar: 1500, qty: 6 }],
+			tickets: { airlineName: 'X', adultCost: 120000, adultSell: 145000, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 }
+		});
+		// Every line the staff breakdown lists, summed, must equal the grand total.
+		const reconciled =
+			r.sarSell * 78 +
+			r.usdSell * 280 +
+			r.pkrLandSell +
+			r.ticketsSellPkr +
+			r.visaSellPkr +
+			r.otherSellPkr;
+		expect(reconciled).toBeCloseTo(r.totalSellPkr, 2);
+		// Visa is its own total, not folded into the SAR subtotal.
+		expect(r.sarSell).toBe(490 * 4); // hotel only, no visa
+		expect(r.visaSellPkr).toBe(550 * 6 * 78);
 	});
 
 	it('handles an empty quotation as zero', () => {
