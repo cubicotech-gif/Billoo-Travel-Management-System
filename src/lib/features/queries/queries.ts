@@ -14,6 +14,7 @@ import {
 	updateQuery as apiUpdateQuery,
 	updateService
 } from './api';
+import { addReply, deleteReply, listReplies, type NewQueryReply } from './replies';
 import type { NewQuery, NewQueryService, QueryServiceUpdate, QueryUpdate } from './types';
 
 // TanStack Query hooks for the queries feature. Components consume these and
@@ -97,6 +98,45 @@ export function useUpdateQuery() {
 			client.invalidateQueries({ queryKey: QUERIES_KEY });
 			client.invalidateQueries({ queryKey: queryKey(q.id) });
 		}
+	});
+}
+
+// --- Client replies ------------------------------------------------------
+
+const repliesKey = (queryId: string) => ['queries', queryId, 'replies'] as const;
+
+export function useReplies(queryId: string) {
+	return createQuery({
+		queryKey: repliesKey(queryId),
+		queryFn: () => listReplies(queryId)
+	});
+}
+
+/**
+ * Log a client reply. Saving one always reopens the query into Working (a reply
+ * means the ball is back in our court), so we bump the status alongside.
+ */
+export function useAddReply(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: async (input: NewQueryReply) => {
+			const reply = await addReply(input);
+			await setQueryStatus(queryId, 'Working');
+			return reply;
+		},
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: repliesKey(queryId) });
+			client.invalidateQueries({ queryKey: QUERIES_KEY });
+			client.invalidateQueries({ queryKey: queryKey(queryId) });
+		}
+	});
+}
+
+export function useDeleteReply(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (id: string) => deleteReply(id),
+		onSuccess: () => client.invalidateQueries({ queryKey: repliesKey(queryId) })
 	});
 }
 

@@ -354,6 +354,24 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['query_payments']['Insert']>;
 				Relationships: [];
 			};
+			query_replies: {
+				Row: {
+					id: string;
+					query_id: string;
+					body: string;
+					author: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					body: string;
+					author?: string | null;
+					created_at?: string;
+				};
+				Update: Partial<Database['public']['Tables']['query_replies']['Insert']>;
+				Relationships: [];
+			};
 			query_services: {
 				Row: {
 					id: string;
