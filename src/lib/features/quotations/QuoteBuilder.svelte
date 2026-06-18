@@ -545,7 +545,7 @@
 			alert('Set an exchange rate (ROE) first — see Rates.');
 			return;
 		}
-		if ((result.usdCost > 0 || result.usdSell > 0) && num(form.usdValue) <= 0) {
+		if (result.lines.some((l) => l.currency === 'USD') && num(form.usdValue) <= 0) {
 			alert('Some components are in USD — set the USD → PKR rate first.');
 			return;
 		}
@@ -888,6 +888,9 @@
 				<div class="flex justify-between"><span class="text-slate-500">SAR subtotal{num(form.roeValue) > 0 ? ` → ${formatAmount(result.sarSell * num(form.roeValue), 'PKR')}` : ''}</span><span>{formatAmount(result.sarSell, 'SAR')}</span></div>
 				{#if result.usdSell > 0}
 					<div class="flex justify-between"><span class="text-slate-500">USD subtotal{num(form.usdValue) > 0 ? ` → ${formatAmount(result.usdSell * num(form.usdValue), 'PKR')}` : ''}</span><span>{formatAmount(result.usdSell, 'USD')}</span></div>
+				{/if}
+				{#if result.pkrLandSell > 0}
+					<div class="flex justify-between"><span class="text-slate-500">PKR subtotal (direct)</span><span>{formatAmount(result.pkrLandSell, 'PKR')}</span></div>
 				{/if}
 				<div class="flex justify-between"><span class="text-slate-500">Tickets (PKR)</span><span>{formatAmount(result.ticketsSellPkr, 'PKR')}</span></div>
 				{#if result.visaSellPkr > 0}

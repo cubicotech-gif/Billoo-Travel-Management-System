@@ -149,6 +149,9 @@ export interface QuotationResult {
 	usdSell: number;
 	ticketsCostPkr: number;
 	ticketsSellPkr: number;
+	/** Land lines priced directly in PKR (excludes tickets). */
+	pkrLandCost: number;
+	pkrLandSell: number;
 	/** Visa total in PKR — shown as its own line (visas vary per person). */
 	visaCostPkr: number;
 	visaSellPkr: number;
@@ -399,7 +402,8 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 		const vpersons = v.persons && v.persons > 0 ? v.persons : persons;
 		const lineCost = multiply(money(v.costSar, vcur), vpersons);
 		const lineSell = multiply(money(v.sellSar, vcur), vpersons);
-		push(vcur, lineCost, lineSell);
+		// Visa is tracked as its own PKR total (below) — kept OUT of the land
+		// SAR/USD/PKR subtotals so the staff breakdown reconciles to the grand total.
 		visaCostPkrM = add(visaCostPkrM, toPkr(lineCost, vcur));
 		visaSellPkrM = add(visaSellPkrM, toPkr(lineSell, vcur));
 		lines.push({
@@ -426,7 +430,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 		const qty = s.qty > 0 ? s.qty : 1;
 		const lineCost = multiply(money(s.costSar, scur), qty);
 		const lineSell = multiply(money(s.sellSar, scur), qty);
-		push(scur, lineCost, lineSell);
+		// Like visa: its own PKR total, excluded from the land subtotals.
 		otherCostPkrM = add(otherCostPkrM, toPkr(lineCost, scur));
 		otherSellPkrM = add(otherSellPkrM, toPkr(lineSell, scur));
 		lines.push({
@@ -484,20 +488,28 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 	const sarSell = sum(sarSells, 'SAR');
 	const usdCost = sum(usdCosts, 'USD');
 	const usdSell = sum(usdSells, 'USD');
-	// PKR lines plus PKR tickets — neither needs conversion.
+	// PKR-priced land lines (hotels/transfers set to PKR) — used as-is.
+	const pkrLandCost = sum(pkrCosts, 'PKR');
+	const pkrLandSell = sum(pkrSells, 'PKR');
+	// Land PKR + PKR tickets — neither needs conversion.
 	const pkrCost = sum([...pkrCosts, ...ticketsCost], 'PKR');
 	const pkrSell = sum([...pkrSells, ...ticketsSell], 'PKR');
 	const ticketsCostPkr = sum(ticketsCost, 'PKR');
 	const ticketsSellPkr = sum(ticketsSell, 'PKR');
 
-	const totalCostPkr = add(
+	// Grand total = land (SAR+USD+PKR converted) + tickets (in pkr*) + visa + other.
+	// Visa & other are their own PKR totals, added here once so the breakdown that
+	// lists them separately reconciles exactly.
+	const landCostPkr = add(
 		add(convertToPkr(sarCost, input.roe), convertToPkr(usdCost, usdRate)),
 		pkrCost
 	);
-	const totalSellPkr = add(
+	const landSellPkr = add(
 		add(convertToPkr(sarSell, input.roe), convertToPkr(usdSell, usdRate)),
 		pkrSell
 	);
+	const totalCostPkr = add(add(landCostPkr, visaCostPkrM), otherCostPkrM);
+	const totalSellPkr = add(add(landSellPkr, visaSellPkrM), otherSellPkrM);
 	const profitPkr = subtract(totalSellPkr, totalCostPkr);
 
 	return {
@@ -508,6 +520,8 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 		usdSell: toNumber(usdSell),
 		ticketsCostPkr: toNumber(ticketsCostPkr),
 		ticketsSellPkr: toNumber(ticketsSellPkr),
+		pkrLandCost: toNumber(pkrLandCost),
+		pkrLandSell: toNumber(pkrLandSell),
 		visaCostPkr: toNumber(visaCostPkrM),
 		visaSellPkr: toNumber(visaSellPkrM),
 		otherCostPkr: toNumber(otherCostPkrM),
