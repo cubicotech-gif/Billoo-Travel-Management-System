@@ -11,6 +11,7 @@
 	} from '$features/queries/queries';
 	import QueryEditModal from '$features/queries/QueryEditModal.svelte';
 	import QueryCard from '$features/queries/QueryCard.svelte';
+	import QuotedCard from '$features/queries/QuotedCard.svelte';
 	import { useAllQuotations } from '$features/quotations/queries';
 	import { latestQuotationByQuery } from '$features/quotations/api';
 	import { isBooked, groupIntoLanes } from '$features/operations/lanes';
@@ -174,18 +175,33 @@
 					</div>
 					<div class="grid flex-1 grid-cols-1 gap-2 overflow-y-auto px-2 py-3 {col.alwaysOpen ? '2xl:grid-cols-2' : ''}">
 						{#each col.items as q (q.id)}
-							<QueryCard
-								query={q}
-								tone={col.tone}
-								latest={latestByQuery.get(q.id) ?? null}
-								dragging={draggingId === q.id}
-								busy={$setStatus.isPending}
-								onDragStart={() => (draggingId = q.id)}
-								onDragEnd={() => (draggingId = null)}
-								onEdit={() => openEdit(q)}
-								onDelete={() => remove(q)}
-								onMove={(status) => $setStatus.mutate({ id: q.id, status })}
-							/>
+							{#if col.id === 'Quoted'}
+								<QuotedCard
+									query={q}
+									tone={col.tone}
+									latest={latestByQuery.get(q.id) ?? null}
+									dragging={draggingId === q.id}
+									busy={$setStatus.isPending}
+									onDragStart={() => (draggingId = q.id)}
+									onDragEnd={() => (draggingId = null)}
+									onEdit={() => openEdit(q)}
+									onDelete={() => remove(q)}
+									onMove={(status) => $setStatus.mutate({ id: q.id, status })}
+								/>
+							{:else}
+								<QueryCard
+									query={q}
+									tone={col.tone}
+									latest={latestByQuery.get(q.id) ?? null}
+									dragging={draggingId === q.id}
+									busy={$setStatus.isPending}
+									onDragStart={() => (draggingId = q.id)}
+									onDragEnd={() => (draggingId = null)}
+									onEdit={() => openEdit(q)}
+									onDelete={() => remove(q)}
+									onMove={(status) => $setStatus.mutate({ id: q.id, status })}
+								/>
+							{/if}
 						{/each}
 						{#if col.items.length === 0}
 							<div class="col-span-full rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
