@@ -14,12 +14,9 @@ export interface WhatsAppData {
 	totalNights: number;
 	packageType: string;
 	perPersonPkr: number;
-	perChildPkr?: number | null;
 	label?: string | null;
 	hotels: WhatsAppHotel[];
 	visaType: string | null;
-	/** Visa total in PKR — visas vary per person, so they're quoted as a total. */
-	visaTotalPkr?: number | null;
 	transferRoutes: string[];
 	ticketsIncluded: boolean;
 	airlineName?: string | null;
@@ -48,18 +45,16 @@ export function renderStructured(d: WhatsAppData): string {
 	const lines: string[] = [
 		`🌙 ${d.totalNights} Nights ${d.packageType} Package${tier} 🌙`,
 		'',
+		// The per-person price is the only figure shown — it already bundles every
+		// service (visa included). We never print an individual service's price.
 		`💰 PKR ${pkr(d.perPersonPkr)}/- Per Person`,
-		...(d.perChildPkr ? [`🧒 PKR ${pkr(d.perChildPkr)}/- Per Child`] : []),
 		''
 	];
 
 	for (const h of d.hotels) lines.push(...hotelBlock(h), '');
 
 	lines.push('✅ Package Includes:');
-	if (d.visaType) {
-		// Visa is a total (it varies per person), so show the amount when we have it.
-		lines.push(d.visaTotalPkr ? `🛂 ${d.visaType} Visa: PKR ${pkr(d.visaTotalPkr)}/-` : `🛂 ${d.visaType} Visa`);
-	}
+	if (d.visaType) lines.push(`🛂 ${d.visaType} Visa`);
 	// Transfers collapse to a single line — clients don't need each leg spelled out.
 	if (d.transferRoutes.length) lines.push('🚐 Private Transfers');
 	if (d.ticketsIncluded) {

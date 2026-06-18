@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	calculateQuotation,
 	perPerson,
-	perPersonAdvanced,
 	perPersonDivisor,
 	personsInRooms,
 	roomsFor,
@@ -181,27 +180,14 @@ describe('quotation calculator', () => {
 		expect(bk?.meta?.included).toBe(true);
 	});
 
-	it('advanced per-person shares hotels across adults, children pay only their items', () => {
-		const r = calculateQuotation({
-			...base,
-			pax: { adults: 2, children: 1, infants: 0 },
-			tickets: {
-				airlineName: 'Saudia',
-				adultCost: 150000,
-				adultSell: 180000,
-				childCost: 100000,
-				childSell: 120000,
-				infantCost: 0,
-				infantSell: 0
-			}
-		});
-		const adv = perPersonAdvanced(r, base.roe, { adults: 2, children: 1, infants: 0 });
-		// Visa is now its own total (excluded from per-person). Child pays only the
-		// child ticket; adult shares accommodation+transfer and pays the adult ticket.
-		expect(adv.perChild).toBe(120000); // child ticket only
-		expect(adv.perAdult).toBeGreaterThan(adv.perChild);
-		// Visa surfaces as a separate PKR total: 220 SAR × 3 persons × 75.
-		expect(r.visaSellPkr).toBe(220 * 3 * 75);
+	it('per person is the whole package (visa included) divided across all passengers', () => {
+		const r = calculateQuotation({ ...base, pax: { adults: 2, children: 1, infants: 0 } });
+		// One all-in rate for everyone: total ÷ (adults + children).
+		expect(perPerson(r.totalSellPkr, perPersonDivisor({ adults: 2, children: 1, infants: 0 }, false))).toBe(
+			r.totalSellPkr / 3
+		);
+		// The total includes the visa, so the per-person figure does too.
+		expect(r.visaSellPkr).toBeGreaterThan(0);
 	});
 
 	it('charges each visa line only for its own headcount and totals them', () => {

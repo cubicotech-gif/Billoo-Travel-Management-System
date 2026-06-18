@@ -30,9 +30,7 @@
 		calculateQuotation,
 		perPerson,
 		perPersonDivisor,
-		perPersonAdvanced,
 		personsInRooms,
-		DEFAULT_CHILD_SHARE,
 		type QuotationInput
 	} from './calculator';
 	import { renderStructured, type WhatsAppData, type WhatsAppHotel } from './whatsapp';
@@ -393,18 +391,9 @@
 
 	const result = $derived(calculateQuotation(input));
 	const divisor = $derived(perPersonDivisor({ adults: form.adults, children: form.children, infants: form.infants }, form.ppIncludeInfants));
-	// Visa & other services are quoted as their own totals (they don't apply to
-	// everyone equally), so the per-person headline is land + tickets only.
-	const perPersonBasePkr = $derived(result.totalSellPkr - result.visaSellPkr - result.otherSellPkr);
-	const pp = $derived(perPerson(perPersonBasePkr, divisor));
-
-	// Advanced per-person: shared costs ÷ adults; children pay only used items.
-	let ppMode = $state<'simple' | 'advanced'>('simple');
-	let childShare = $state({ ...DEFAULT_CHILD_SHARE });
-	const advanced = $derived(
-		perPersonAdvanced(result, num(form.roeValue), { adults: form.adults, children: form.children, infants: form.infants }, childShare, num(form.usdValue))
-	);
-	const headlinePp = $derived(ppMode === 'advanced' ? advanced.perAdult : pp);
+	// Per person = the WHOLE package (every service, visa included) ÷ all
+	// passengers. One all-in rate for everyone — no adult/child split.
+	const pp = $derived(perPerson(result.totalSellPkr, divisor));
 
 	function hotelWa(h: HotelForm): WhatsAppHotel | null {
 		if (!h.name || num(h.nights) <= 0) return null;
@@ -422,14 +411,12 @@
 		return {
 			totalNights: itineraryNights,
 			packageType: q?.package_type ?? 'Umrah',
-			perPersonPkr: headlinePp,
-			perChildPkr: ppMode === 'advanced' && form.children > 0 ? advanced.perChild : null,
+			perPersonPkr: pp,
 			label: form.label || null,
 			hotels: form.hotels.map(hotelWa).filter((h): h is WhatsAppHotel => h !== null),
 			visaType: form.visas.length
 				? form.visas.map((v) => (v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah')).join(' + ')
 				: null,
-			visaTotalPkr: result.visaSellPkr || null,
 			transferRoutes: form.transfers.map(routeLabel),
 			ticketsIncluded: form.airlineInclude,
 			airlineName: form.airlineInclude ? form.airline.name || null : null,
@@ -557,7 +544,7 @@
 			result,
 			whatsappText,
 			label: form.label || null,
-			perPersonPkr: headlinePp,
+			perPersonPkr: pp,
 			ppIncludeInfants: form.ppIncludeInfants,
 			validUntil: form.validUntil || null,
 			inclusions: splitLines(form.inclusions),
@@ -900,40 +887,15 @@
 					<div class="flex justify-between"><span class="text-slate-500">Other services (PKR)</span><span>{formatAmount(result.otherSellPkr, 'PKR')}</span></div>
 				{/if}
 				<div class="flex justify-between font-semibold text-slate-800"><span>Total (PKR)</span><span>{formatAmount(result.totalSellPkr, 'PKR')}</span></div>
-				<div class="flex justify-between font-medium text-brand-700"><span>{ppMode === 'advanced' ? 'Per adult' : 'Per person'} <span class="text-xs font-normal text-slate-400">(land+ticket)</span></span><span>{formatAmount(headlinePp, 'PKR')}</span></div>
+				<div class="flex justify-between font-medium text-brand-700"><span>Per person <span class="text-xs font-normal text-slate-400">(all-in ÷ {divisor})</span></span><span>{formatAmount(pp, 'PKR')}</span></div>
 				<div class="flex justify-between text-green-600"><span>Profit</span><span>{formatAmount(result.profitPkr, 'PKR')}</span></div>
 			</div>
 
 			<div class="mt-3 border-t border-slate-100 pt-3">
-				<div class="mb-2 flex gap-1 rounded-lg bg-slate-100 p-0.5 text-xs">
-					<button class="flex-1 rounded-md px-2 py-1 font-medium {ppMode === 'simple' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}" onclick={() => (ppMode = 'simple')}>Simple split</button>
-					<button class="flex-1 rounded-md px-2 py-1 font-medium {ppMode === 'advanced' ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-500'}" onclick={() => (ppMode = 'advanced')}>Advanced</button>
-				</div>
-				{#if ppMode === 'simple'}
-					<label class="flex items-center gap-2 text-xs text-slate-500">
-						<input type="checkbox" bind:checked={form.ppIncludeInfants} class="rounded border-slate-300" />
-						Count infants in per-person (÷ {divisor})
-					</label>
-				{:else}
-					<p class="mb-2 text-xs text-slate-400">Shared costs split across {form.adults} adult{form.adults === 1 ? '' : 's'}; children charged only for ticked items.</p>
-					<div class="grid grid-cols-2 gap-1 text-xs text-slate-600">
-						<label class="flex items-center gap-1"><input type="checkbox" bind:checked={childShare.hotels} class="rounded border-slate-300" /> Hotels</label>
-						<label class="flex items-center gap-1"><input type="checkbox" bind:checked={childShare.transfers} class="rounded border-slate-300" /> Transfers</label>
-						<label class="flex items-center gap-1"><input type="checkbox" bind:checked={childShare.tickets} class="rounded border-slate-300" /> Tickets</label>
-					</div>
-					<div class="mt-2 space-y-1 text-sm">
-						<div class="flex justify-between font-medium text-brand-700"><span>Per adult</span><span>{formatAmount(advanced.perAdult, 'PKR')}</span></div>
-						{#each advanced.adultBreakdown as b (b.label)}
-							<div class="flex justify-between text-xs text-slate-400"><span>{b.label}</span><span>{formatAmount(b.amount, 'PKR')}</span></div>
-						{/each}
-						{#if form.children > 0}
-							<div class="flex justify-between font-medium text-brand-700"><span>Per child</span><span>{formatAmount(advanced.perChild, 'PKR')}</span></div>
-							{#each advanced.childBreakdown as b (b.label)}
-								<div class="flex justify-between text-xs text-slate-400"><span>{b.label}</span><span>{formatAmount(b.amount, 'PKR')}</span></div>
-							{/each}
-						{/if}
-					</div>
-				{/if}
+				<label class="flex items-center gap-2 text-xs text-slate-500">
+					<input type="checkbox" bind:checked={form.ppIncludeInfants} class="rounded border-slate-300" />
+					Count infants in per-person (÷ {divisor})
+				</label>
 			</div>
 		</Card>
 
