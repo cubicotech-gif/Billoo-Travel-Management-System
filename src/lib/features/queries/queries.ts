@@ -113,22 +113,15 @@ export function useReplies(queryId: string) {
 }
 
 /**
- * Log a client reply. Saving one always reopens the query into Working (a reply
- * means the ball is back in our court), so we bump the status alongside.
+ * Log a message in the query's conversation thread (client replies, our notes,
+ * suggestions). This is the Quoted-stage chat — staying in Quoted is fine; use
+ * the stage controls to move back to Working when the client wants changes.
  */
 export function useAddReply(queryId: string) {
 	const client = useQueryClient();
 	return createMutation({
-		mutationFn: async (input: NewQueryReply) => {
-			const reply = await addReply(input);
-			await setQueryStatus(queryId, 'Working');
-			return reply;
-		},
-		onSuccess: () => {
-			client.invalidateQueries({ queryKey: repliesKey(queryId) });
-			client.invalidateQueries({ queryKey: QUERIES_KEY });
-			client.invalidateQueries({ queryKey: queryKey(queryId) });
-		}
+		mutationFn: (input: NewQueryReply) => addReply(input),
+		onSuccess: () => client.invalidateQueries({ queryKey: repliesKey(queryId) })
 	});
 }
 

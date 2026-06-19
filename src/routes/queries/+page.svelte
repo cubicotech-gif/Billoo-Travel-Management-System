@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$ui';
-	import { Plus, RotateCcw, Archive, XCircle, ChevronDown } from 'lucide-svelte';
+	import { Plus, RotateCcw, Archive, XCircle } from 'lucide-svelte';
 	import {
 		useQueries,
 		useSetQueryStatus,
@@ -11,7 +11,6 @@
 	} from '$features/queries/queries';
 	import QueryEditModal from '$features/queries/QueryEditModal.svelte';
 	import QueryCard from '$features/queries/QueryCard.svelte';
-	import QuotedCard from '$features/queries/QuotedCard.svelte';
 	import { useAllQuotations } from '$features/quotations/queries';
 	import { latestQuotationByQuery } from '$features/quotations/api';
 	import { isBooked, groupIntoLanes } from '$features/operations/lanes';
@@ -64,34 +63,29 @@
 		status: QueryStatus;
 		bookingStatus: BookingStatus | null;
 		items: Query[];
-		alwaysOpen: boolean;
 	}
 
 	const active = $derived(($queries.data ?? []).filter((q) => q.status !== 'Cancelled'));
 	const lanes = $derived(groupIntoLanes($queries.data ?? []));
 
-	// All stages live in one row. New Query + Working stay open; the rest collapse
-	// to a thin bar you click to expand.
+	// A proper Kanban: every stage is its own column, side by side, scrolling
+	// horizontally. Cards are one line; columns scroll vertically when long.
 	const columns = $derived.by((): BoardColumn[] => {
 		const notBooked = active.filter((q) => !isBooked(q));
 		const known: QueryStatus[] = ['Working', 'Quoted', 'Booking'];
 		const fresh = notBooked.filter((q) => q.status === 'New Query' || !known.includes(q.status));
 		return [
-			{ id: 'New Query', label: 'New Query', tone: 'warning', status: 'New Query', bookingStatus: null, alwaysOpen: true, items: fresh },
-			{ id: 'Working', label: 'Working', tone: 'info', status: 'Working', bookingStatus: null, alwaysOpen: true, items: notBooked.filter((q) => q.status === 'Working') },
-			{ id: 'Quoted', label: 'Quoted', tone: 'info', status: 'Quoted', bookingStatus: null, alwaysOpen: false, items: active.filter((q) => q.status === 'Quoted' && !isBooked(q)) },
-			{ id: 'Booking', label: 'Booking', tone: 'success', status: 'Booking', bookingStatus: null, alwaysOpen: false, items: active.filter((q) => q.status === 'Booking' && !q.booking_status) },
-			{ id: 'payments', label: 'Payments Due', tone: 'warning', status: 'Booking', bookingStatus: 'Pending Payment', alwaysOpen: false, items: lanes.payments.map((c) => c.query) },
-			{ id: 'checkins', label: 'Check-ins', tone: 'info', status: 'Booking', bookingStatus: 'Payment Done - Check-in Pending', alwaysOpen: false, items: lanes.checkins.map((c) => c.query) },
-			{ id: 'completed', label: 'Completed', tone: 'success', status: 'Booking', bookingStatus: 'Completed', alwaysOpen: false, items: lanes.completed.map((c) => c.query) }
+			{ id: 'New Query', label: 'New Query', tone: 'warning', status: 'New Query', bookingStatus: null, items: fresh },
+			{ id: 'Working', label: 'Working', tone: 'info', status: 'Working', bookingStatus: null, items: notBooked.filter((q) => q.status === 'Working') },
+			{ id: 'Quoted', label: 'Quoted', tone: 'info', status: 'Quoted', bookingStatus: null, items: active.filter((q) => q.status === 'Quoted' && !isBooked(q)) },
+			{ id: 'Booking', label: 'Booking', tone: 'success', status: 'Booking', bookingStatus: null, items: active.filter((q) => q.status === 'Booking' && !q.booking_status) },
+			{ id: 'payments', label: 'Payments Due', tone: 'warning', status: 'Booking', bookingStatus: 'Pending Payment', items: lanes.payments.map((c) => c.query) },
+			{ id: 'checkins', label: 'Check-ins', tone: 'info', status: 'Booking', bookingStatus: 'Payment Done - Check-in Pending', items: lanes.checkins.map((c) => c.query) },
+			{ id: 'completed', label: 'Completed', tone: 'success', status: 'Booking', bookingStatus: 'Completed', items: lanes.completed.map((c) => c.query) }
 		];
 	});
 
 	const cancelledItems = $derived(($queries.data ?? []).filter((q) => q.status === 'Cancelled'));
-
-	// Collapsible columns start collapsed; only the two open columns are always shown.
-	let openState = $state<Record<string, boolean>>({});
-	const isOpen = (col: BoardColumn) => col.alwaysOpen || (openState[col.id] ?? false);
 
 	let draggingId = $state<string | null>(null);
 	let dragOverId = $state<string | null>(null);
@@ -139,104 +133,55 @@
 {:else if $queries.isError}
 	<p class="text-red-600">Failed to load: {$queries.error.message}</p>
 {:else}
-	<!-- New Query + Working: always-open columns. -->
-	<!-- One row, full width. New Query + Working stay open; the rest collapse to a
-	     thin bar you click to expand. All are drag-and-drop targets. -->
+	<!-- Proper Kanban: one column per stage, side by side, one-line cards. -->
 	<div class="flex gap-3 overflow-x-auto pb-4">
 		{#each columns as col (col.id)}
-			{#if isOpen(col)}
-				<div
-					role="list"
-					class="flex max-h-[calc(100vh-12rem)] flex-col rounded-xl border bg-slate-100/60 transition-colors {col.alwaysOpen
-						? 'min-w-[320px] flex-1'
-						: 'w-80 shrink-0'} {dragOverId === col.id ? 'border-brand-400 bg-brand-50' : 'border-transparent'}"
-					ondragover={(e) => {
-						e.preventDefault();
-						dragOverId = col.id;
-					}}
-					ondragleave={() => {
-						if (dragOverId === col.id) dragOverId = null;
-					}}
-					ondrop={() => onDrop(col)}
-				>
-					<div class="flex items-center justify-between border-b border-slate-200/70 px-3 py-2.5">
-						<span class="flex items-center gap-2 text-sm font-semibold {headerTone[col.tone] ?? 'text-slate-700'}">
-							{#if !col.alwaysOpen}
-								<button type="button" onclick={() => (openState[col.id] = false)} aria-label="Collapse {col.label}">
-									<ChevronDown class="h-4 w-4 text-slate-400" />
-								</button>
-							{/if}
-							<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
-							{col.label}
-						</span>
-						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
-							{col.items.length}
-						</span>
-					</div>
-					<div class="grid flex-1 grid-cols-1 gap-2 overflow-y-auto px-2 py-3 {col.alwaysOpen ? '2xl:grid-cols-2' : ''}">
-						{#each col.items as q (q.id)}
-							{#if col.id === 'Quoted'}
-								<QuotedCard
-									query={q}
-									tone={col.tone}
-									latest={latestByQuery.get(q.id) ?? null}
-									dragging={draggingId === q.id}
-									busy={$setStatus.isPending}
-									onDragStart={() => (draggingId = q.id)}
-									onDragEnd={() => (draggingId = null)}
-									onEdit={() => openEdit(q)}
-									onDelete={() => remove(q)}
-									onMove={(status) => $setStatus.mutate({ id: q.id, status })}
-								/>
-							{:else}
-								<QueryCard
-									query={q}
-									tone={col.tone}
-									latest={latestByQuery.get(q.id) ?? null}
-									dragging={draggingId === q.id}
-									busy={$setStatus.isPending}
-									onDragStart={() => (draggingId = q.id)}
-									onDragEnd={() => (draggingId = null)}
-									onEdit={() => openEdit(q)}
-									onDelete={() => remove(q)}
-									onMove={(status) => $setStatus.mutate({ id: q.id, status })}
-								/>
-							{/if}
-						{/each}
-						{#if col.items.length === 0}
-							<div class="col-span-full rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
-								Drop here
-							</div>
-						{/if}
-					</div>
-				</div>
-			{:else}
-				<!-- Collapsed: a thin clickable bar, still a drop target. -->
-				<button
-					type="button"
-					onclick={() => (openState[col.id] = true)}
-					ondragover={(e) => {
-						e.preventDefault();
-						dragOverId = col.id;
-					}}
-					ondragleave={() => {
-						if (dragOverId === col.id) dragOverId = null;
-					}}
-					ondrop={() => onDrop(col)}
-					class="flex w-12 shrink-0 flex-col items-center gap-3 rounded-xl border py-3 transition-colors {dragOverId ===
-					col.id
-						? 'border-brand-400 bg-brand-50'
-						: 'border-slate-200 bg-white hover:bg-slate-50'}"
-				>
-					<span class="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
-						{col.items.length}
-					</span>
-					<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
-					<span class="text-xs font-semibold {headerTone[col.tone] ?? 'text-slate-600'} [writing-mode:vertical-rl]">
+			<div
+				role="list"
+				class="flex max-h-[calc(100vh-12rem)] w-72 shrink-0 flex-col rounded-xl border bg-slate-100/60 transition-colors {dragOverId ===
+				col.id
+					? 'border-brand-400 bg-brand-50'
+					: 'border-transparent'}"
+				ondragover={(e) => {
+					e.preventDefault();
+					dragOverId = col.id;
+				}}
+				ondragleave={() => {
+					if (dragOverId === col.id) dragOverId = null;
+				}}
+				ondrop={() => onDrop(col)}
+			>
+				<div class="flex items-center justify-between border-b border-slate-200/70 px-3 py-2.5">
+					<span class="flex items-center gap-2 text-sm font-semibold {headerTone[col.tone] ?? 'text-slate-700'}">
+						<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
 						{col.label}
 					</span>
-				</button>
-			{/if}
+					<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
+						{col.items.length}
+					</span>
+				</div>
+				<div class="flex flex-1 flex-col gap-1.5 overflow-y-auto px-2 py-2">
+					{#each col.items as q (q.id)}
+						<QueryCard
+							query={q}
+							tone={col.tone}
+							latest={latestByQuery.get(q.id) ?? null}
+							dragging={draggingId === q.id}
+							busy={$setStatus.isPending}
+							onDragStart={() => (draggingId = q.id)}
+							onDragEnd={() => (draggingId = null)}
+							onEdit={() => openEdit(q)}
+							onDelete={() => remove(q)}
+							onMove={(status) => $setStatus.mutate({ id: q.id, status })}
+						/>
+					{/each}
+					{#if col.items.length === 0}
+						<div class="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
+							Drop here
+						</div>
+					{/if}
+				</div>
+			</div>
 		{/each}
 	</div>
 

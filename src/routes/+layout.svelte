@@ -61,8 +61,9 @@
 			</div>
 		</aside>
 		<main class="flex-1 overflow-y-auto">
-			<!-- The Queries board wants the full width; other pages stay readable-narrow. -->
-			<div class="{$page.url.pathname === '/queries' ? 'max-w-none' : 'mx-auto max-w-6xl'} px-8 py-8">
+			<!-- The Queries board + per-query workspace want full width; other pages
+			     stay readable-narrow. -->
+			<div class="{/^\/queries(\/[^/]+)?$/.test($page.url.pathname) ? 'max-w-none' : 'mx-auto max-w-6xl'} px-8 py-8">
 				{@render children()}
 			</div>
 		</main>
