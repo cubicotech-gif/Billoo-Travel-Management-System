@@ -89,9 +89,12 @@
 
 	const cancelledItems = $derived(($queries.data ?? []).filter((q) => q.status === 'Cancelled'));
 
-	// Collapsible columns start collapsed; only the two open columns are always shown.
+	// New Query + Working stay open as narrow single-column lists; the rest live in
+	// a vertical accordion stack that uses the freed horizontal space.
+	const openColumns = $derived(columns.filter((c) => c.alwaysOpen));
+	const collapsibleColumns = $derived(columns.filter((c) => !c.alwaysOpen));
+
 	let openState = $state<Record<string, boolean>>({});
-	const isOpen = (col: BoardColumn) => col.alwaysOpen || (openState[col.id] ?? false);
 
 	let draggingId = $state<string | null>(null);
 	let dragOverId = $state<string | null>(null);
@@ -139,17 +142,87 @@
 {:else if $queries.isError}
 	<p class="text-red-600">Failed to load: {$queries.error.message}</p>
 {:else}
-	<!-- New Query + Working: always-open columns. -->
-	<!-- One row, full width. New Query + Working stay open; the rest collapse to a
-	     thin bar you click to expand. All are drag-and-drop targets. -->
-	<div class="flex gap-3 overflow-x-auto pb-4">
-		{#each columns as col (col.id)}
-			{#if isOpen(col)}
+	<!-- Reusable card so both regions render items identically. -->
+	{#snippet cardItem(col: BoardColumn, q: Query)}
+		{#if col.id === 'Quoted'}
+			<QuotedCard
+				query={q}
+				tone={col.tone}
+				latest={latestByQuery.get(q.id) ?? null}
+				dragging={draggingId === q.id}
+				busy={$setStatus.isPending}
+				onDragStart={() => (draggingId = q.id)}
+				onDragEnd={() => (draggingId = null)}
+				onEdit={() => openEdit(q)}
+				onDelete={() => remove(q)}
+				onMove={(status) => $setStatus.mutate({ id: q.id, status })}
+			/>
+		{:else}
+			<QueryCard
+				query={q}
+				tone={col.tone}
+				latest={latestByQuery.get(q.id) ?? null}
+				dragging={draggingId === q.id}
+				busy={$setStatus.isPending}
+				onDragStart={() => (draggingId = q.id)}
+				onDragEnd={() => (draggingId = null)}
+				onEdit={() => openEdit(q)}
+				onDelete={() => remove(q)}
+				onMove={(status) => $setStatus.mutate({ id: q.id, status })}
+			/>
+		{/if}
+	{/snippet}
+
+	<div class="flex items-start gap-4">
+		<!-- Always open: narrow single-column lists that scroll vertically. -->
+		{#each openColumns as col (col.id)}
+			<div
+				role="list"
+				class="flex max-h-[calc(100vh-11rem)] w-80 shrink-0 flex-col rounded-xl border bg-slate-100/60 transition-colors {dragOverId ===
+				col.id
+					? 'border-brand-400 bg-brand-50'
+					: 'border-transparent'}"
+				ondragover={(e) => {
+					e.preventDefault();
+					dragOverId = col.id;
+				}}
+				ondragleave={() => {
+					if (dragOverId === col.id) dragOverId = null;
+				}}
+				ondrop={() => onDrop(col)}
+			>
+				<div class="flex items-center justify-between border-b border-slate-200/70 px-3 py-2.5">
+					<span class="flex items-center gap-2 text-sm font-semibold {headerTone[col.tone] ?? 'text-slate-700'}">
+						<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
+						{col.label}
+					</span>
+					<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
+						{col.items.length}
+					</span>
+				</div>
+				<div class="flex flex-1 flex-col gap-2 overflow-y-auto px-2 py-3">
+					{#each col.items as q (q.id)}
+						{@render cardItem(col, q)}
+					{/each}
+					{#if col.items.length === 0}
+						<div class="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
+							Drop here
+						</div>
+					{/if}
+				</div>
+			</div>
+		{/each}
+
+		<!-- Collapsible: a vertical accordion stack filling the freed space. Each
+		     bar reads horizontally and expands DOWN to reveal its cards. -->
+		<div class="min-w-0 flex-1 space-y-2">
+			{#each collapsibleColumns as col (col.id)}
+				{@const open = openState[col.id] ?? false}
 				<div
-					role="list"
-					class="flex max-h-[calc(100vh-12rem)] flex-col rounded-xl border bg-slate-100/60 transition-colors {col.alwaysOpen
-						? 'min-w-[320px] flex-1'
-						: 'w-80 shrink-0'} {dragOverId === col.id ? 'border-brand-400 bg-brand-50' : 'border-transparent'}"
+					role="group"
+					class="overflow-hidden rounded-xl border bg-slate-100/60 transition-colors {dragOverId === col.id
+						? 'border-brand-400 bg-brand-50'
+						: 'border-slate-200'}"
 					ondragover={(e) => {
 						e.preventDefault();
 						dragOverId = col.id;
@@ -159,85 +232,38 @@
 					}}
 					ondrop={() => onDrop(col)}
 				>
-					<div class="flex items-center justify-between border-b border-slate-200/70 px-3 py-2.5">
+					<button
+						type="button"
+						onclick={() => (openState[col.id] = !open)}
+						class="flex w-full items-center justify-between px-3 py-2.5 hover:bg-slate-100/70"
+					>
 						<span class="flex items-center gap-2 text-sm font-semibold {headerTone[col.tone] ?? 'text-slate-700'}">
-							{#if !col.alwaysOpen}
-								<button type="button" onclick={() => (openState[col.id] = false)} aria-label="Collapse {col.label}">
-									<ChevronDown class="h-4 w-4 text-slate-400" />
-								</button>
-							{/if}
+							<ChevronDown class="h-4 w-4 text-slate-400 transition-transform {open ? '' : '-rotate-90'}" />
 							<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
 							{col.label}
 						</span>
 						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
 							{col.items.length}
 						</span>
-					</div>
-					<div class="grid flex-1 grid-cols-1 gap-2 overflow-y-auto px-2 py-3 {col.alwaysOpen ? '2xl:grid-cols-2' : ''}">
-						{#each col.items as q (q.id)}
-							{#if col.id === 'Quoted'}
-								<QuotedCard
-									query={q}
-									tone={col.tone}
-									latest={latestByQuery.get(q.id) ?? null}
-									dragging={draggingId === q.id}
-									busy={$setStatus.isPending}
-									onDragStart={() => (draggingId = q.id)}
-									onDragEnd={() => (draggingId = null)}
-									onEdit={() => openEdit(q)}
-									onDelete={() => remove(q)}
-									onMove={(status) => $setStatus.mutate({ id: q.id, status })}
-								/>
+					</button>
+					{#if open}
+						<div class="border-t border-slate-200/70 px-2 py-2">
+							{#if col.items.length === 0}
+								<div class="rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
+									Drop here
+								</div>
 							{:else}
-								<QueryCard
-									query={q}
-									tone={col.tone}
-									latest={latestByQuery.get(q.id) ?? null}
-									dragging={draggingId === q.id}
-									busy={$setStatus.isPending}
-									onDragStart={() => (draggingId = q.id)}
-									onDragEnd={() => (draggingId = null)}
-									onEdit={() => openEdit(q)}
-									onDelete={() => remove(q)}
-									onMove={(status) => $setStatus.mutate({ id: q.id, status })}
-								/>
+								<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+									{#each col.items as q (q.id)}
+										{@render cardItem(col, q)}
+									{/each}
+								</div>
 							{/if}
-						{/each}
-						{#if col.items.length === 0}
-							<div class="col-span-full rounded-lg border border-dashed border-slate-200 py-6 text-center text-xs text-slate-300">
-								Drop here
-							</div>
-						{/if}
-					</div>
+						</div>
+					{/if}
 				</div>
-			{:else}
-				<!-- Collapsed: a thin clickable bar, still a drop target. -->
-				<button
-					type="button"
-					onclick={() => (openState[col.id] = true)}
-					ondragover={(e) => {
-						e.preventDefault();
-						dragOverId = col.id;
-					}}
-					ondragleave={() => {
-						if (dragOverId === col.id) dragOverId = null;
-					}}
-					ondrop={() => onDrop(col)}
-					class="flex w-12 shrink-0 flex-col items-center gap-3 rounded-xl border py-3 transition-colors {dragOverId ===
-					col.id
-						? 'border-brand-400 bg-brand-50'
-						: 'border-slate-200 bg-white hover:bg-slate-50'}"
-				>
-					<span class="rounded-full bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-500">
-						{col.items.length}
-					</span>
-					<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
-					<span class="text-xs font-semibold {headerTone[col.tone] ?? 'text-slate-600'} [writing-mode:vertical-rl]">
-						{col.label}
-					</span>
-				</button>
-			{/if}
-		{/each}
+			{/each}
+		</div>
 	</div>
 
 	{#if showCancelled && cancelledItems.length}
