@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, ArrowRight, Ban, Pencil, Trash2, RotateCcw } from 'lucide-svelte';
+	import { ArrowLeft, ArrowRight, Ban, Pencil, Trash2, RotateCcw, FolderOpen } from 'lucide-svelte';
 	import { Badge, Button, Card, WhatsAppLink } from '$ui';
 	import {
 		useQueryDetail,
@@ -30,6 +30,7 @@
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingWorkspace from './BookingWorkspace.svelte';
 	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
+	import DocumentsDialog from '$features/documents/DocumentsDialog.svelte';
 
 	// `id` is stable for this component instance: the route keys on it, so a
 	// different query remounts us.
@@ -42,6 +43,7 @@
 	const restore = useRestoreQuery();
 
 	let editing = $state(false);
+	let docsOpen = $state(false);
 
 	// Latest quotation = highest version.
 	const latest = $derived(
@@ -123,6 +125,7 @@
 					<Ban class="h-4 w-4" /> Cancel
 				</Button>
 			{/if}
+			<Button variant="secondary" onclick={() => (docsOpen = true)}><FolderOpen class="h-4 w-4" /> Documents</Button>
 			<Button variant="ghost" onclick={() => (editing = true)}><Pencil class="h-4 w-4" /> Edit</Button>
 			<Button variant="ghost" disabled={$softDelete.isPending} onclick={deleteQuery}>
 				<Trash2 class="h-4 w-4" /> Delete
@@ -168,4 +171,5 @@
 	</div>
 
 	<QueryEditModal query={q} open={editing} onClose={() => (editing = false)} />
+	<DocumentsDialog entityType="query" entityId={id} title="Trip documents" open={docsOpen} onClose={() => (docsOpen = false)} />
 {/if}
