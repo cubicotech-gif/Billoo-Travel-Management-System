@@ -1,14 +1,19 @@
 <script lang="ts">
 	import '../app.css';
+	import { onMount } from 'svelte';
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { page } from '$app/stores';
 	import type { Snippet } from 'svelte';
 	import { LayoutDashboard, ClipboardList, Users, Building2, Wallet, Tags } from 'lucide-svelte';
 	import { createQueryClient } from '$lib/query-client';
+	import { subscribeQueriesRealtime } from '$features/queries/realtime';
 
 	let { children }: { children: Snippet } = $props();
 
 	const queryClient = createQueryClient();
+
+	// Keep every open console live as queries move and conversations grow.
+	onMount(() => subscribeQueriesRealtime(queryClient));
 
 	// NOTE: Auth is intentionally disabled during the build-out phase so the
 	// whole system can be exercised without logging in. Re-enable later by
