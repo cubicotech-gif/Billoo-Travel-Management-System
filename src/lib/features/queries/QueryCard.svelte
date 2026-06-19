@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { ArrowRight, ChevronDown, ExternalLink, Pencil, Trash2, GitBranch } from 'lucide-svelte';
-	import { Badge } from '$ui';
+	import { ArrowRight, Pencil, Trash2 } from 'lucide-svelte';
 	import { formatAmount } from '$lib/money';
-	import { MAIN_STAGES, STAGE_BY_STATUS, daysSince, isStuck, nextStatus } from './workflow';
-	import { QUOTATION_STATUS_TONE } from '$features/quotations/types';
+	import { STAGE_BY_STATUS, daysSince, isStuck, nextStatus } from './workflow';
 	import type { Quotation } from '$features/quotations/types';
 	import type { QueryStatus } from '$lib/database.types';
 	import type { Query } from './types';
@@ -23,9 +21,6 @@
 	let { query: q, tone, latest, dragging, busy, onDragStart, onDragEnd, onEdit, onDelete, onMove }: Props =
 		$props();
 
-	let expanded = $state(false);
-	let menuOpen = $state(false);
-
 	const borderTone: Record<string, string> = {
 		neutral: 'border-l-slate-300',
 		info: 'border-l-brand-400',
@@ -37,130 +32,53 @@
 	const days = $derived(daysSince(q.stage_changed_at));
 	const stuck = $derived(isStuck(q.status, days));
 	const next = $derived(nextStatus(q.status));
-	const pax = $derived(
-		`${q.adults}A${q.children ? `·${q.children}C` : ''}${q.infants ? `·${q.infants}I` : ''}`
-	);
-	const otherStages = $derived(MAIN_STAGES.filter((s) => s.status !== q.status));
-
-	function move(status: QueryStatus) {
-		menuOpen = false;
-		onMove(status);
-	}
 </script>
 
+<!-- One-line Kanban card: the whole row opens the workspace; a → advances the
+     stage; pencil/trash sit in the corner on hover. -->
 <div
 	role="listitem"
 	draggable="true"
 	ondragstart={onDragStart}
 	ondragend={onDragEnd}
-	class="group relative rounded-lg border border-l-4 border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md {borderTone[
+	class="group relative flex items-center gap-2 rounded-md border border-l-4 border-slate-200 bg-white px-2 py-1.5 shadow-sm transition-shadow hover:shadow-md {borderTone[
 		tone
 	]} {dragging ? 'opacity-50' : ''}"
 >
-	<!-- hover quick actions (desktop) -->
-	<div class="absolute right-1.5 top-1.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-		<button type="button" onclick={onEdit} class="rounded bg-white/90 p-1 text-slate-400 shadow-sm hover:bg-slate-100 hover:text-slate-600" aria-label="Edit">
+	<a href="/queries/{q.id}" class="flex min-w-0 flex-1 items-center gap-2">
+		<span class="truncate text-sm font-medium text-slate-800">{q.client_name}</span>
+		<span class="truncate text-xs text-slate-400">{q.destination}</span>
+		<span class="ml-auto flex shrink-0 items-center gap-1.5">
+			{#if latest}
+				<span class="text-[11px] font-medium text-slate-500">{formatAmount(Number(latest.total_sell_pkr))}</span>
+			{/if}
+			{#if stuck}
+				<span class="rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-600">{days}d</span>
+			{:else}
+				<span class="text-[10px] text-slate-400">{days}d</span>
+			{/if}
+		</span>
+	</a>
+
+	<!-- hover actions: edit, delete, and advance to the next stage -->
+	<div class="flex shrink-0 items-center gap-0.5">
+		<button type="button" onclick={onEdit} class="rounded p-1 text-slate-300 opacity-0 transition-opacity hover:bg-slate-100 hover:text-slate-600 group-hover:opacity-100" aria-label="Edit">
 			<Pencil class="h-3.5 w-3.5" />
 		</button>
-		<button type="button" onclick={onDelete} class="rounded bg-white/90 p-1 text-slate-400 shadow-sm hover:bg-red-50 hover:text-red-600" aria-label="Delete">
+		<button type="button" onclick={onDelete} class="rounded p-1 text-slate-300 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-600 group-hover:opacity-100" aria-label="Delete">
 			<Trash2 class="h-3.5 w-3.5" />
 		</button>
+		{#if next}
+			<button
+				type="button"
+				disabled={busy}
+				onclick={() => onMove(next)}
+				title="Move to {STAGE_BY_STATUS[next].label}"
+				aria-label="Move to {STAGE_BY_STATUS[next].label}"
+				class="rounded p-1 text-slate-400 hover:bg-brand-50 hover:text-brand-600 disabled:opacity-50"
+			>
+				<ArrowRight class="h-4 w-4" />
+			</button>
+		{/if}
 	</div>
-
-	<!-- header: click toggles inline detail -->
-	<button type="button" onclick={() => (expanded = !expanded)} class="block w-full p-3 text-left">
-		<div class="pr-12 font-medium text-slate-800">{q.client_name}</div>
-		<div class="mt-0.5 text-xs text-slate-500">{q.destination}</div>
-		<div class="mt-2 flex items-center justify-between gap-2">
-			<span class="font-mono text-[10px] text-slate-400">{q.query_number}</span>
-			<div class="flex items-center gap-1.5">
-				{#if stuck}
-					<span class="rounded-full bg-red-100 px-1.5 text-[10px] font-semibold text-red-600">{days}d</span>
-				{:else}
-					<span class="text-[10px] text-slate-400">{days}d</span>
-				{/if}
-				{#if latest}
-					<Badge tone={QUOTATION_STATUS_TONE[latest.status]}>
-						{formatAmount(Number(latest.total_sell_pkr))} · {latest.status}
-					</Badge>
-				{/if}
-			</div>
-		</div>
-	</button>
-
-	{#if expanded}
-		<div class="border-t border-slate-100 px-3 py-2.5 text-xs">
-			<div class="text-slate-500">
-				{q.package_type ?? q.destination} · {pax}{q.duration_days ? ` · ${q.duration_days}N` : ''}
-			</div>
-			{#if (q.itinerary_cities ?? []).length}
-				<div class="mt-0.5 text-slate-400">
-					{(q.itinerary_cities ?? []).map((c) => `${c.city} ${c.nights}N`).join(' · ')}
-				</div>
-			{/if}
-
-			<div class="mt-2 rounded-md bg-slate-50 px-2 py-1.5">
-				{#if latest}
-					<div class="flex items-center justify-between">
-						<span class="font-medium text-slate-600">Quote v{latest.version}</span>
-						<Badge tone={QUOTATION_STATUS_TONE[latest.status]}>{latest.status}</Badge>
-					</div>
-					<div class="mt-0.5 flex items-center justify-between text-slate-500">
-						<span>{formatAmount(Number(latest.total_sell_pkr))}</span>
-						<span class="text-green-600">+{formatAmount(Number(latest.profit_pkr))}</span>
-					</div>
-				{:else}
-					<span class="text-slate-400">No quotation yet.</span>
-				{/if}
-			</div>
-
-			<!-- stage controls -->
-			<div class="mt-2.5 flex flex-wrap items-center gap-1.5">
-				{#if next}
-					<button
-						type="button"
-						disabled={busy}
-						onclick={() => move(next)}
-						class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-					>
-						{STAGE_BY_STATUS[next].label} <ArrowRight class="h-3.5 w-3.5" />
-					</button>
-				{/if}
-				<div class="relative">
-					<button
-						type="button"
-						disabled={busy}
-						onclick={() => (menuOpen = !menuOpen)}
-						class="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-					>
-						<GitBranch class="h-3.5 w-3.5" /> Move <ChevronDown class="h-3 w-3" />
-					</button>
-					{#if menuOpen}
-						<button type="button" class="fixed inset-0 z-30 cursor-default" aria-label="Close menu" onclick={() => (menuOpen = false)}></button>
-						<div class="absolute left-0 top-full z-40 mt-1 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-							{#each otherStages as s (s.status)}
-								<button type="button" onclick={() => move(s.status)} class="block w-full px-3 py-1.5 text-left text-slate-600 hover:bg-slate-50">
-									{s.label}
-								</button>
-							{/each}
-							{#if q.status !== 'Cancelled'}
-								<button type="button" onclick={() => move('Cancelled')} class="block w-full border-t border-slate-100 px-3 py-1.5 text-left text-red-600 hover:bg-red-50">
-									Cancel
-								</button>
-							{/if}
-						</div>
-					{/if}
-				</div>
-				<button type="button" onclick={onEdit} class="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50">
-					<Pencil class="h-3.5 w-3.5" /> Edit
-				</button>
-				<a href="/queries/{q.id}" class="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50">
-					Open <ExternalLink class="h-3.5 w-3.5" />
-				</a>
-				<button type="button" onclick={onDelete} class="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-slate-400 hover:bg-red-50 hover:text-red-600">
-					<Trash2 class="h-3.5 w-3.5" />
-				</button>
-			</div>
-		</div>
-	{/if}
 </div>
