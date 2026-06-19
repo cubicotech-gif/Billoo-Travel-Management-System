@@ -1,4 +1,5 @@
 import { supabase } from '$lib/supabase';
+import { formatAmount } from '$lib/money';
 import { updateQuery } from '$features/queries/api';
 import { logActivity } from '$features/queries/activity';
 import type { PaxCounts, QuotationResult } from './calculator';
@@ -133,7 +134,7 @@ export async function createQuotation(args: SaveQuotationArgs): Promise<Quotatio
 	logActivity({
 		query_id: args.queryId,
 		kind: 'quote',
-		summary: `Quote v${version} created (${Math.round(args.result.totalSellPkr).toLocaleString('en-US')} PKR)`
+		summary: `Quote v${version} created (${formatAmount(args.result.totalSellPkr)})`
 	});
 
 	return quotation;

@@ -63,11 +63,14 @@ export async function updateQuery(id: string, patch: QueryUpdate): Promise<Query
 	);
 	// Log the salient changes to the activity timeline (best-effort). This is the
 	// single choke point for query field changes — board drag, card arrows and the
-	// detail controls all flow through here (setQueryStatus included).
-	if (patch.status) {
-		logActivity({ query_id: id, kind: 'stage', summary: `Moved to ${patch.status}` });
-	} else if (patch.booking_status) {
+	// detail controls all flow through here (setQueryStatus included). A drag into
+	// a booking follow-up lane sets both `status` (= Booking) and `booking_status`,
+	// so prefer the booking sub-status: it's the meaningful move and avoids a
+	// redundant "Moved to Booking" entry.
+	if (patch.booking_status) {
 		logActivity({ query_id: id, kind: 'booking', summary: `Booking: ${patch.booking_status}` });
+	} else if (patch.status) {
+		logActivity({ query_id: id, kind: 'stage', summary: `Moved to ${patch.status}` });
 	}
 	if (patch.advance_payment_amount !== undefined && patch.advance_payment_amount !== null) {
 		logActivity({ query_id: id, kind: 'payment', summary: 'Advance payment recorded' });
