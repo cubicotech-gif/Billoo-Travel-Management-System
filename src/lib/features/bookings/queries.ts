@@ -27,7 +27,11 @@ export function useCreateBooking(queryId: string) {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (quotation: Quotation) => createBookingFromQuotation(quotation),
-		onSuccess: () => client.invalidateQueries({ queryKey: bookingKey(queryId) })
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: bookingKey(queryId) });
+			// Refresh the query detail + its activity timeline.
+			client.invalidateQueries({ queryKey: ['queries', queryId] });
+		}
 	});
 }
 

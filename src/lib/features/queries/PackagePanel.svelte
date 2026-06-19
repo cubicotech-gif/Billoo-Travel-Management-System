@@ -3,7 +3,7 @@
 	import { Package, History, MessageSquare } from 'lucide-svelte';
 	import { formatAmount } from '$lib/money';
 	import { daysSince } from './workflow';
-	import { useReplies } from './queries';
+	import { useReplies, useActivity } from './queries';
 	import type { Quotation } from '$features/quotations/types';
 	import type { Query } from './types';
 
@@ -14,6 +14,7 @@
 		$props();
 
 	const replies = untrack(() => useReplies(q.id));
+	const activity = untrack(() => useActivity(q.id));
 
 	const pax = $derived(
 		`${q.adults}A${q.children ? ` · ${q.children}C` : ''}${q.infants ? ` · ${q.infants}I` : ''}`
@@ -25,8 +26,16 @@
 		when: string;
 	}
 
-	// No activity table yet — synthesise a timeline from the timestamps we do have.
+	const limit = $derived(compact ? 3 : 5);
+
+	// Prefer the real activity log; fall back to a timeline synthesised from the
+	// timestamps we have (covers queries created before logging, or when the
+	// activity migration hasn't been applied yet).
 	const updates = $derived.by((): Update[] => {
+		const logged = $activity.data ?? [];
+		if (logged.length) {
+			return logged.slice(0, limit).map((a) => ({ label: a.summary, when: a.created_at }));
+		}
 		const list: Update[] = [];
 		if (q.completed_date) list.push({ label: 'Trip completed', when: q.completed_date });
 		if (q.advance_payment_date)
@@ -40,7 +49,7 @@
 		return list
 			.filter((u) => u.when)
 			.sort((a, b) => +new Date(b.when) - +new Date(a.when))
-			.slice(0, compact ? 3 : 5);
+			.slice(0, limit);
 	});
 
 	const recentReplies = $derived(

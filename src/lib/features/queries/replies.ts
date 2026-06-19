@@ -1,4 +1,5 @@
 import { supabase } from '$lib/supabase';
+import { logActivity } from './activity';
 import type { Database } from '$lib/database.types';
 
 // Client reply thread on a query (api + types). One row per response from the
@@ -25,7 +26,15 @@ export async function listReplies(queryId: string): Promise<QueryReply[]> {
 }
 
 export async function addReply(input: NewQueryReply): Promise<QueryReply> {
-	return unwrap(await supabase.from('query_replies').insert(input).select().single());
+	const reply = unwrap<QueryReply>(
+		await supabase.from('query_replies').insert(input).select().single()
+	);
+	logActivity({
+		query_id: input.query_id,
+		kind: 'message',
+		summary: input.sender === 'us' ? 'Sent a note to the client' : 'Client replied'
+	});
+	return reply;
 }
 
 export async function deleteReply(id: string): Promise<void> {

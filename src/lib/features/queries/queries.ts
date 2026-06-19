@@ -15,6 +15,7 @@ import {
 	updateService
 } from './api';
 import { addReply, deleteReply, listReplies, type NewQueryReply } from './replies';
+import { listActivity } from './activity';
 import type { NewQuery, NewQueryService, QueryServiceUpdate, QueryUpdate } from './types';
 
 // TanStack Query hooks for the queries feature. Components consume these and
@@ -101,6 +102,15 @@ export function useUpdateQuery() {
 	});
 }
 
+// --- Activity timeline ---------------------------------------------------
+
+export function useActivity(queryId: string) {
+	return createQuery({
+		queryKey: ['queries', queryId, 'activity'],
+		queryFn: () => listActivity(queryId)
+	});
+}
+
 // --- Client replies ------------------------------------------------------
 
 const repliesKey = (queryId: string) => ['queries', queryId, 'replies'] as const;
@@ -121,7 +131,11 @@ export function useAddReply(queryId: string) {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (input: NewQueryReply) => addReply(input),
-		onSuccess: () => client.invalidateQueries({ queryKey: repliesKey(queryId) })
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: repliesKey(queryId) });
+			// Prefix-invalidate so the activity timeline refreshes too.
+			client.invalidateQueries({ queryKey: ['queries', queryId, 'activity'] });
+		}
 	});
 }
 

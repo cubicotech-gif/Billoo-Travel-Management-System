@@ -1,6 +1,7 @@
 import { supabase } from '$lib/supabase';
 import type { QueryStatus } from '$lib/database.types';
 import { rollupNumbers } from './totals';
+import { logActivity } from './activity';
 import type {
 	NewQuery,
 	NewQueryService,
@@ -57,7 +58,21 @@ export async function createQuery(input: NewQuery): Promise<Query> {
 }
 
 export async function updateQuery(id: string, patch: QueryUpdate): Promise<Query> {
-	return unwrap(await supabase.from('queries').update(patch).eq('id', id).select().single());
+	const row = unwrap<Query>(
+		await supabase.from('queries').update(patch).eq('id', id).select().single()
+	);
+	// Log the salient changes to the activity timeline (best-effort). This is the
+	// single choke point for query field changes — board drag, card arrows and the
+	// detail controls all flow through here (setQueryStatus included).
+	if (patch.status) {
+		logActivity({ query_id: id, kind: 'stage', summary: `Moved to ${patch.status}` });
+	} else if (patch.booking_status) {
+		logActivity({ query_id: id, kind: 'booking', summary: `Booking: ${patch.booking_status}` });
+	}
+	if (patch.advance_payment_amount !== undefined && patch.advance_payment_amount !== null) {
+		logActivity({ query_id: id, kind: 'payment', summary: 'Advance payment recorded' });
+	}
+	return row;
 }
 
 export async function setQueryStatus(id: string, status: QueryStatus): Promise<Query> {
