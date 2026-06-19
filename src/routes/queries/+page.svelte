@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button } from '$ui';
-	import { Plus, RotateCcw, Archive, XCircle, ChevronDown } from 'lucide-svelte';
+	import { Plus, RotateCcw, Archive, XCircle, ChevronDown, Search } from 'lucide-svelte';
 	import {
 		useQueries,
 		useSetQueryStatus,
@@ -15,7 +15,8 @@
 	import { useAllQuotations } from '$features/quotations/queries';
 	import { latestQuotationByQuery } from '$features/quotations/api';
 	import { isBooked, groupIntoLanes } from '$features/operations/lanes';
-	import type { BookingStatus, QueryStatus } from '$lib/database.types';
+	import { daysSince, isStuck } from '$features/queries/workflow';
+	import type { BookingStatus, PackageType, QueryStatus } from '$lib/database.types';
 	import type { Query } from '$features/queries/types';
 
 	const queries = useQueries();
@@ -67,8 +68,39 @@
 		alwaysOpen: boolean;
 	}
 
-	const active = $derived(($queries.data ?? []).filter((q) => q.status !== 'Cancelled'));
-	const lanes = $derived(groupIntoLanes($queries.data ?? []));
+	// --- Search + filter chips ------------------------------------------------
+	let search = $state('');
+	let activeTypes = $state<PackageType[]>([]);
+	let stuckOnly = $state(false);
+
+	const all = $derived($queries.data ?? []);
+	const packageTypes = $derived(
+		[...new Set(all.map((q) => q.package_type).filter((t): t is PackageType => !!t))].sort()
+	);
+	const filtersOn = $derived(!!search.trim() || activeTypes.length > 0 || stuckOnly);
+
+	function matches(q: Query): boolean {
+		if (search.trim()) {
+			const s = search.trim().toLowerCase();
+			const hay = `${q.client_name} ${q.destination ?? ''} ${q.query_number} ${q.package_type ?? ''}`.toLowerCase();
+			if (!hay.includes(s)) return false;
+		}
+		if (activeTypes.length && (!q.package_type || !activeTypes.includes(q.package_type))) return false;
+		if (stuckOnly && !isStuck(q.status, daysSince(q.stage_changed_at))) return false;
+		return true;
+	}
+	function toggleType(t: PackageType) {
+		activeTypes = activeTypes.includes(t) ? activeTypes.filter((x) => x !== t) : [...activeTypes, t];
+	}
+	function clearFilters() {
+		search = '';
+		activeTypes = [];
+		stuckOnly = false;
+	}
+
+	const filtered = $derived(all.filter(matches));
+	const active = $derived(filtered.filter((q) => q.status !== 'Cancelled'));
+	const lanes = $derived(groupIntoLanes(filtered));
 
 	// All stages live in one row. New Query + Working stay open; the rest collapse
 	// to a thin bar you click to expand.
@@ -135,6 +167,47 @@
 			{/if}
 			<Button href="/queries/new"><Plus class="h-4 w-4" /> New Query</Button>
 	</div>
+</div>
+
+<!-- Search + filter chips: find a passenger by name and narrow the board. -->
+<div class="mb-5 flex flex-wrap items-center gap-2">
+	<div class="relative">
+		<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+		<input
+			type="search"
+			bind:value={search}
+			placeholder="Search by passenger name, ref or destination…"
+			class="w-80 rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+		/>
+	</div>
+
+	{#each packageTypes as t (t)}
+		<button
+			type="button"
+			onclick={() => toggleType(t)}
+			class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {activeTypes.includes(t)
+				? 'border-brand-500 bg-brand-50 text-brand-700'
+				: 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}"
+		>
+			{t}
+		</button>
+	{/each}
+
+	<button
+		type="button"
+		onclick={() => (stuckOnly = !stuckOnly)}
+		class="rounded-full border px-3 py-1 text-xs font-medium transition-colors {stuckOnly
+			? 'border-red-400 bg-red-50 text-red-600'
+			: 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'}"
+	>
+		Stuck
+	</button>
+
+	{#if filtersOn}
+		<button type="button" onclick={clearFilters} class="ml-1 text-xs text-slate-400 hover:text-slate-600">
+			Clear
+		</button>
+	{/if}
 </div>
 
 {#if $queries.isLoading}
