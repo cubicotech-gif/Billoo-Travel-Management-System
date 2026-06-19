@@ -354,10 +354,31 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['query_payments']['Insert']>;
 				Relationships: [];
 			};
+			query_activity: {
+				Row: {
+					id: string;
+					query_id: string;
+					kind: string;
+					summary: string;
+					actor: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					kind?: string;
+					summary: string;
+					actor?: string | null;
+					created_at?: string;
+				};
+				Update: Partial<Database['public']['Tables']['query_activity']['Insert']>;
+				Relationships: [];
+			};
 			query_replies: {
 				Row: {
 					id: string;
 					query_id: string;
+					sender: 'client' | 'us';
 					body: string;
 					author: string | null;
 					created_at: string;
@@ -365,6 +386,7 @@ export interface Database {
 				Insert: {
 					id?: string;
 					query_id: string;
+					sender?: 'client' | 'us';
 					body: string;
 					author?: string | null;
 					created_at?: string;

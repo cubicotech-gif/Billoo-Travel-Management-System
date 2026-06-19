@@ -14,12 +14,21 @@
 	const deleteReply = untrack(() => useDeleteReply(queryId));
 
 	let draft = $state('');
+	let sender = $state<'client' | 'us'>('client');
+
+	// Keep the thread pinned to the newest message as it grows.
+	let thread = $state<HTMLElement | null>(null);
+	const count = $derived(($replies.data ?? []).length);
+	$effect(() => {
+		void count;
+		if (thread) thread.scrollTop = thread.scrollHeight;
+	});
 
 	function send() {
 		const body = draft.trim();
 		if (!body) return;
 		$addReply.mutate(
-			{ query_id: queryId, body, author: auth.user?.email ?? null },
+			{ query_id: queryId, body, sender, author: sender === 'us' ? (auth.user?.email ?? null) : null },
 			{ onSuccess: () => (draft = '') }
 		);
 	}
@@ -60,7 +69,7 @@
 	</div>
 
 	<!-- thread -->
-	<div class="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+	<div bind:this={thread} class="flex-1 space-y-2 overflow-y-auto px-4 py-3">
 		{#if $replies.isLoading}
 			<p class="text-sm text-slate-400">Loading…</p>
 		{:else if ($replies.data ?? []).length === 0}
@@ -71,19 +80,24 @@
 			</div>
 		{:else}
 			{#each $replies.data ?? [] as r (r.id)}
-				<div class="group flex flex-col rounded-lg bg-slate-50 px-3 py-2">
-					<div class="flex items-start justify-between gap-2">
-						<p class="whitespace-pre-wrap text-sm text-slate-700">{r.body}</p>
+				{@const us = r.sender === 'us'}
+				<div class="group flex flex-col {us ? 'items-end' : 'items-start'}">
+					<div class="flex max-w-[85%] items-start gap-1.5 {us ? 'flex-row-reverse' : ''}">
+						<div class="rounded-2xl px-3 py-2 {us ? 'rounded-br-sm bg-brand-600 text-white' : 'rounded-bl-sm bg-slate-100 text-slate-700'}">
+							<p class="whitespace-pre-wrap text-sm">{r.body}</p>
+						</div>
 						<button
 							type="button"
 							onclick={() => $deleteReply.mutate(r.id)}
-							class="shrink-0 text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+							class="mt-1 shrink-0 text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
 							aria-label="Delete message"
 						>
 							<Trash2 class="h-3.5 w-3.5" />
 						</button>
 					</div>
-					<span class="mt-1 text-[10px] text-slate-400">{fmt(r.created_at)}{r.author ? ` · ${r.author}` : ''}</span>
+					<span class="mt-0.5 px-1 text-[10px] text-slate-400">
+						{us ? 'Us' : 'Client'} · {fmt(r.created_at)}{r.author ? ` · ${r.author}` : ''}
+					</span>
 				</div>
 			{/each}
 		{/if}
@@ -91,6 +105,22 @@
 
 	<!-- composer -->
 	<div class="border-t border-slate-100 p-3">
+		<div class="mb-2 inline-flex rounded-lg border border-slate-200 p-0.5 text-xs">
+			<button
+				type="button"
+				onclick={() => (sender = 'client')}
+				class="rounded-md px-2.5 py-1 font-medium transition-colors {sender === 'client' ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:text-slate-600'}"
+			>
+				From client
+			</button>
+			<button
+				type="button"
+				onclick={() => (sender = 'us')}
+				class="rounded-md px-2.5 py-1 font-medium transition-colors {sender === 'us' ? 'bg-brand-50 text-brand-700' : 'text-slate-400 hover:text-slate-600'}"
+			>
+				Our note
+			</button>
+		</div>
 		<div class="flex items-end gap-2">
 			<textarea
 				bind:value={draft}

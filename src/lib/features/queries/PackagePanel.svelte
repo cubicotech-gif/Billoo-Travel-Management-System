@@ -1,17 +1,30 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Package, History, MessageSquare } from 'lucide-svelte';
+	import {
+		Package,
+		History,
+		MessageSquare,
+		ArrowRight,
+		FileText,
+		PackageCheck,
+		Wallet,
+		Dot
+	} from 'lucide-svelte';
 	import { formatAmount } from '$lib/money';
 	import { daysSince } from './workflow';
-	import { useReplies } from './queries';
+	import { useReplies, useActivity } from './queries';
+	import type { ActivityKind } from './activity';
 	import type { Quotation } from '$features/quotations/types';
 	import type { Query } from './types';
 
-	// The context rail shown on every stage: what the package is, what's happened
-	// recently, and the latest word from the client.
-	let { query: q, latest }: { query: Query; latest: Quotation | null } = $props();
+	// The context shown on every stage: what the package is, what's happened
+	// recently, and the latest word from the client. `compact` lays the three
+	// sections out as a horizontal strip (used above the full-width builder).
+	let { query: q, latest, compact = false }: { query: Query; latest: Quotation | null; compact?: boolean } =
+		$props();
 
 	const replies = untrack(() => useReplies(q.id));
+	const activity = untrack(() => useActivity(q.id));
 
 	const pax = $derived(
 		`${q.adults}A${q.children ? ` · ${q.children}C` : ''}${q.infants ? ` · ${q.infants}I` : ''}`
@@ -21,10 +34,32 @@
 	interface Update {
 		label: string;
 		when: string;
+		kind?: ActivityKind;
 	}
 
-	// No activity table yet — synthesise a timeline from the timestamps we do have.
+	// Icon + accent per activity kind, so the timeline reads at a glance.
+	const kindStyle: Record<ActivityKind, { icon: typeof Dot; tone: string }> = {
+		stage: { icon: ArrowRight, tone: 'text-brand-500' },
+		quote: { icon: FileText, tone: 'text-indigo-500' },
+		message: { icon: MessageSquare, tone: 'text-slate-400' },
+		booking: { icon: PackageCheck, tone: 'text-green-500' },
+		payment: { icon: Wallet, tone: 'text-amber-500' },
+		note: { icon: Dot, tone: 'text-slate-400' }
+	};
+	const styleFor = (k?: ActivityKind) => kindStyle[k ?? 'note'];
+
+	const limit = $derived(compact ? 3 : 5);
+
+	// Prefer the real activity log; fall back to a timeline synthesised from the
+	// timestamps we have (covers queries created before logging, or when the
+	// activity migration hasn't been applied yet).
 	const updates = $derived.by((): Update[] => {
+		const logged = $activity.data ?? [];
+		if (logged.length) {
+			return logged
+				.slice(0, limit)
+				.map((a) => ({ label: a.summary, when: a.created_at, kind: a.kind as ActivityKind }));
+		}
 		const list: Update[] = [];
 		if (q.completed_date) list.push({ label: 'Trip completed', when: q.completed_date });
 		if (q.advance_payment_date)
@@ -38,10 +73,15 @@
 		return list
 			.filter((u) => u.when)
 			.sort((a, b) => +new Date(b.when) - +new Date(a.when))
-			.slice(0, 5);
+			.slice(0, limit);
 	});
 
-	const recentReplies = $derived(($replies.data ?? []).slice(-3).reverse());
+	const recentReplies = $derived(
+		($replies.data ?? [])
+			.filter((r) => r.sender === 'client')
+			.slice(compact ? -1 : -3)
+			.reverse()
+	);
 
 	function fmt(iso: string): string {
 		return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -52,7 +92,7 @@
 	}
 </script>
 
-<div class="space-y-4">
+<div class={compact ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'space-y-4'}>
 	<!-- Complete details -->
 	<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 		<div class="mb-3 flex items-center gap-2">
@@ -118,8 +158,9 @@
 		</div>
 		<ul class="space-y-2">
 			{#each updates as u (u.label + u.when)}
+				{@const s = styleFor(u.kind)}
 				<li class="flex items-start gap-2 text-sm">
-					<span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300"></span>
+					<s.icon class="mt-0.5 h-3.5 w-3.5 shrink-0 {s.tone}" />
 					<span class="flex-1 text-slate-600">{u.label}</span>
 					<span class="shrink-0 text-xs text-slate-400">{fmtRel(u.when)}</span>
 				</li>

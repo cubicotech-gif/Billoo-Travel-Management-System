@@ -1,5 +1,6 @@
 import { supabase } from '$lib/supabase';
 import { getQuotationLines } from '$features/quotations/api';
+import { logActivity } from '$features/queries/activity';
 import type { Quotation } from '$features/quotations/types';
 import { bookingTotals } from './totals';
 import type { Booking, BookingItem, BookingItemUpdate } from './types';
@@ -89,6 +90,7 @@ export async function createBookingFromQuotation(quotation: Quotation): Promise<
 	}
 
 	await syncBookingTotals(booking.id, Number(quotation.roe));
+	logActivity({ query_id: quotation.query_id, kind: 'booking', summary: 'Booking created from quotation' });
 	return booking;
 }
 

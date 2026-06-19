@@ -1,5 +1,7 @@
 import { supabase } from '$lib/supabase';
+import { formatAmount } from '$lib/money';
 import { updateQuery } from '$features/queries/api';
+import { logActivity } from '$features/queries/activity';
 import type { PaxCounts, QuotationResult } from './calculator';
 import type { Quotation, QuotationLine } from './types';
 
@@ -128,6 +130,12 @@ export async function createQuotation(args: SaveQuotationArgs): Promise<Quotatio
 		const { error } = await supabase.from('quotation_lines').insert(rows);
 		if (error) throw new Error(error.message);
 	}
+
+	logActivity({
+		query_id: args.queryId,
+		kind: 'quote',
+		summary: `Quote v${version} created (${formatAmount(args.result.totalSellPkr)})`
+	});
 
 	return quotation;
 }

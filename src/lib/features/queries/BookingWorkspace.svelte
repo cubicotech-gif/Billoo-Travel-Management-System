@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Map, CheckCircle2, Wallet, Building2, FileText, IdCard } from 'lucide-svelte';
+	import { Map, CheckCircle2, Wallet, Building2, IdCard } from 'lucide-svelte';
 	import { Badge, Button } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { BOOKING_STATUS_TONE } from './workflow';
@@ -8,7 +8,7 @@
 	import ConfirmationPanel from './ConfirmationPanel.svelte';
 	import BookingDocChecklist from '$features/documents/BookingDocChecklist.svelte';
 	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
-	import { QUERY_DOCUMENT_TYPES, PASSENGER_DOCUMENT_TYPES } from '$features/documents/api';
+	import { PASSENGER_DOCUMENT_TYPES } from '$features/documents/api';
 	import type { Query } from './types';
 
 	let { query, queryId, reference }: { query: Query; queryId: string; reference: string } = $props();
@@ -89,10 +89,8 @@
 	<BookingPanel {queryId} />
 </section>
 
-<section class="mb-8">
-	{@render sectionHead(FileText, 'Trip documents')}
-	<DocumentsPanel entityType="query" entityId={queryId} title="Trip documents" types={QUERY_DOCUMENT_TYPES} />
-</section>
+<!-- Trip documents are managed from the header's Documents button (always
+     available, with drag-drop upload + share). Passenger profile docs stay here. -->
 
 {#if query.passenger_id}
 	<section class="mb-8">
