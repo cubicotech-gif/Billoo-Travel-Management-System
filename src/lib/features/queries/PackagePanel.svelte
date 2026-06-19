@@ -8,11 +8,13 @@
 		FileText,
 		PackageCheck,
 		Wallet,
-		Dot
+		Dot,
+		Pencil,
+		NotebookPen
 	} from 'lucide-svelte';
 	import { formatAmount } from '$lib/money';
 	import { daysSince } from './workflow';
-	import { useReplies, useActivity } from './queries';
+	import { useReplies, useActivity, useUpdateQuery } from './queries';
 	import type { ActivityKind } from './activity';
 	import type { Quotation } from '$features/quotations/types';
 	import type { Query } from './types';
@@ -25,6 +27,22 @@
 
 	const replies = untrack(() => useReplies(q.id));
 	const activity = untrack(() => useActivity(q.id));
+	const update = untrack(() => useUpdateQuery());
+
+	// The response/notes are the running working basis — editable right here so we
+	// never have to reopen the intake form to see or update them.
+	let editingNotes = $state(false);
+	let notesDraft = $state('');
+	function startNotes() {
+		notesDraft = q.response_text ?? '';
+		editingNotes = true;
+	}
+	function saveNotes() {
+		$update.mutate(
+			{ id: q.id, patch: { response_text: notesDraft.trim() || null } },
+			{ onSuccess: () => (editingNotes = false) }
+		);
+	}
 
 	const pax = $derived(
 		`${q.adults}A${q.children ? ` · ${q.children}C` : ''}${q.infants ? ` · ${q.infants}I` : ''}`
@@ -92,7 +110,8 @@
 	}
 </script>
 
-<div class={compact ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'space-y-4'}>
+<div class="space-y-3">
+	<div class={compact ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'space-y-3'}>
 	<!-- Complete details -->
 	<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 		<div class="mb-3 flex items-center gap-2">
@@ -120,6 +139,18 @@
 					<dd class="text-right font-medium text-slate-700">
 						{(q.itinerary_cities ?? []).map((c) => `${c.city} ${c.nights}N`).join(' · ')}
 					</dd>
+				</div>
+			{/if}
+			{#if q.hotel_preference}
+				<div class="flex justify-between gap-2">
+					<dt class="shrink-0 text-slate-400">Hotels</dt>
+					<dd class="text-right font-medium text-slate-700">{q.hotel_preference}</dd>
+				</div>
+			{/if}
+			{#if q.customer_plan}
+				<div class="flex justify-between gap-2">
+					<dt class="shrink-0 text-slate-400">Plan</dt>
+					<dd class="text-right font-medium text-slate-700">{q.customer_plan}</dd>
 				</div>
 			{/if}
 			<div class="flex justify-between gap-2">
@@ -185,6 +216,44 @@
 					</li>
 				{/each}
 			</ul>
+		{/if}
+	</section>
+	</div>
+
+	<!-- Response & notes: the live working basis, editable in place on any stage. -->
+	<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+		<div class="mb-2 flex items-center justify-between">
+			<div class="flex items-center gap-2">
+				<NotebookPen class="h-4 w-4 text-slate-400" />
+				<h2 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Response &amp; notes</h2>
+			</div>
+			{#if !editingNotes}
+				<button type="button" onclick={startNotes} class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700">
+					<Pencil class="h-3 w-3" /> Edit
+				</button>
+			{/if}
+		</div>
+		{#if editingNotes}
+			<textarea
+				bind:value={notesDraft}
+				rows="3"
+				placeholder="What we told the client, hotels offered, running conversation notes…"
+				class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+			></textarea>
+			<div class="mt-2 flex justify-end gap-2">
+				<button type="button" onclick={() => (editingNotes = false)} class="rounded-lg px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100">
+					Cancel
+				</button>
+				<button type="button" onclick={saveNotes} disabled={$update.isPending} class="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+					{$update.isPending ? 'Saving…' : 'Save'}
+				</button>
+			</div>
+		{:else if q.response_text}
+			<p class="whitespace-pre-wrap text-sm text-slate-700">{q.response_text}</p>
+		{:else}
+			<button type="button" onclick={startNotes} class="text-sm italic text-slate-400 hover:text-slate-600">
+				Add the response / notes…
+			</button>
 		{/if}
 	</section>
 </div>
