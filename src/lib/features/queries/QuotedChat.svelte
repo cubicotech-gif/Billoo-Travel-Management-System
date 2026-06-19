@@ -16,6 +16,14 @@
 	let draft = $state('');
 	let sender = $state<'client' | 'us'>('client');
 
+	// Keep the thread pinned to the newest message as it grows.
+	let thread = $state<HTMLElement | null>(null);
+	const count = $derived(($replies.data ?? []).length);
+	$effect(() => {
+		void count;
+		if (thread) thread.scrollTop = thread.scrollHeight;
+	});
+
 	function send() {
 		const body = draft.trim();
 		if (!body) return;
@@ -61,7 +69,7 @@
 	</div>
 
 	<!-- thread -->
-	<div class="flex-1 space-y-2 overflow-y-auto px-4 py-3">
+	<div bind:this={thread} class="flex-1 space-y-2 overflow-y-auto px-4 py-3">
 		{#if $replies.isLoading}
 			<p class="text-sm text-slate-400">Loading…</p>
 		{:else if ($replies.data ?? []).length === 0}
