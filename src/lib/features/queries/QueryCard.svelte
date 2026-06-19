@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { ArrowRight, ChevronDown, ExternalLink, Pencil, Trash2, GitBranch } from 'lucide-svelte';
+	import { ArrowRight, ExternalLink, Pencil, Trash2 } from 'lucide-svelte';
 	import { Badge } from '$ui';
 	import { formatAmount } from '$lib/money';
-	import { MAIN_STAGES, STAGE_BY_STATUS, daysSince, isStuck, nextStatus } from './workflow';
+	import { STAGE_BY_STATUS, daysSince, isStuck, nextStatus } from './workflow';
 	import { QUOTATION_STATUS_TONE } from '$features/quotations/types';
 	import type { Quotation } from '$features/quotations/types';
 	import type { QueryStatus } from '$lib/database.types';
@@ -24,7 +24,6 @@
 		$props();
 
 	let expanded = $state(false);
-	let menuOpen = $state(false);
 
 	const borderTone: Record<string, string> = {
 		neutral: 'border-l-slate-300',
@@ -40,12 +39,6 @@
 	const pax = $derived(
 		`${q.adults}A${q.children ? `·${q.children}C` : ''}${q.infants ? `·${q.infants}I` : ''}`
 	);
-	const otherStages = $derived(MAIN_STAGES.filter((s) => s.status !== q.status));
-
-	function move(status: QueryStatus) {
-		menuOpen = false;
-		onMove(status);
-	}
 </script>
 
 <div
@@ -120,40 +113,12 @@
 					<button
 						type="button"
 						disabled={busy}
-						onclick={() => move(next)}
+						onclick={() => onMove(next)}
 						class="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 font-medium text-white hover:bg-brand-700 disabled:opacity-50"
 					>
 						{STAGE_BY_STATUS[next].label} <ArrowRight class="h-3.5 w-3.5" />
 					</button>
 				{/if}
-				<div class="relative">
-					<button
-						type="button"
-						disabled={busy}
-						onclick={() => (menuOpen = !menuOpen)}
-						class="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
-					>
-						<GitBranch class="h-3.5 w-3.5" /> Move <ChevronDown class="h-3 w-3" />
-					</button>
-					{#if menuOpen}
-						<button type="button" class="fixed inset-0 z-30 cursor-default" aria-label="Close menu" onclick={() => (menuOpen = false)}></button>
-						<div class="absolute left-0 top-full z-40 mt-1 w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
-							{#each otherStages as s (s.status)}
-								<button type="button" onclick={() => move(s.status)} class="block w-full px-3 py-1.5 text-left text-slate-600 hover:bg-slate-50">
-									{s.label}
-								</button>
-							{/each}
-							{#if q.status !== 'Cancelled'}
-								<button type="button" onclick={() => move('Cancelled')} class="block w-full border-t border-slate-100 px-3 py-1.5 text-left text-red-600 hover:bg-red-50">
-									Cancel
-								</button>
-							{/if}
-						</div>
-					{/if}
-				</div>
-				<button type="button" onclick={onEdit} class="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50">
-					<Pencil class="h-3.5 w-3.5" /> Edit
-				</button>
 				<a href="/queries/{q.id}" class="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-slate-600 hover:bg-slate-50">
 					Open <ExternalLink class="h-3.5 w-3.5" />
 				</a>
