@@ -3,80 +3,58 @@
 	import {
 		Package,
 		History,
-		MessageSquare,
+		MessagesSquare,
 		ArrowRight,
 		FileText,
 		PackageCheck,
 		Wallet,
 		Dot,
-		Pencil,
-		NotebookPen
+		Plus,
+		Send
 	} from 'lucide-svelte';
 	import { formatAmount } from '$lib/money';
+	import { auth } from '$lib/stores/auth.svelte';
 	import { daysSince } from './workflow';
-	import { useReplies, useActivity, useUpdateQuery } from './queries';
+	import { useReplies, useActivity, useAddReply } from './queries';
 	import type { ActivityKind } from './activity';
 	import type { Quotation } from '$features/quotations/types';
 	import type { Query } from './types';
 
-	// The context shown on every stage: what the package is, what's happened
-	// recently, and the latest word from the client. `compact` lays the three
-	// sections out as a horizontal strip (used above the full-width builder).
+	// The live working basis shown on every stage: the captured package, the system
+	// timeline, and the dated conversation/notes record. `compact` lays the three
+	// boxes out as a horizontal strip (the workspace cover).
 	let { query: q, latest, compact = false }: { query: Query; latest: Quotation | null; compact?: boolean } =
 		$props();
 
 	const replies = untrack(() => useReplies(q.id));
 	const activity = untrack(() => useActivity(q.id));
-	const update = untrack(() => useUpdateQuery());
-
-	// The response/notes are the running working basis — editable right here so we
-	// never have to reopen the intake form to see or update them.
-	let editingNotes = $state(false);
-	let notesDraft = $state('');
-	function startNotes() {
-		notesDraft = q.response_text ?? '';
-		editingNotes = true;
-	}
-	function saveNotes() {
-		$update.mutate(
-			{ id: q.id, patch: { response_text: notesDraft.trim() || null } },
-			{ onSuccess: () => (editingNotes = false) }
-		);
-	}
+	const addReply = untrack(() => useAddReply(q.id));
 
 	const pax = $derived(
 		`${q.adults}A${q.children ? ` · ${q.children}C` : ''}${q.infants ? ` · ${q.infants}I` : ''}`
 	);
 	const priced = $derived(Number(q.selling_price) > 0);
 
+	// --- Recent updates (activity log) ---------------------------------------
 	interface Update {
 		label: string;
 		when: string;
 		kind?: ActivityKind;
 	}
-
-	// Icon + accent per activity kind, so the timeline reads at a glance.
 	const kindStyle: Record<ActivityKind, { icon: typeof Dot; tone: string }> = {
 		stage: { icon: ArrowRight, tone: 'text-brand-500' },
 		quote: { icon: FileText, tone: 'text-indigo-500' },
-		message: { icon: MessageSquare, tone: 'text-slate-400' },
+		message: { icon: MessagesSquare, tone: 'text-slate-400' },
 		booking: { icon: PackageCheck, tone: 'text-green-500' },
 		payment: { icon: Wallet, tone: 'text-amber-500' },
 		note: { icon: Dot, tone: 'text-slate-400' }
 	};
 	const styleFor = (k?: ActivityKind) => kindStyle[k ?? 'note'];
 
-	const limit = $derived(compact ? 3 : 5);
-
-	// Prefer the real activity log; fall back to a timeline synthesised from the
-	// timestamps we have (covers queries created before logging, or when the
-	// activity migration hasn't been applied yet).
 	const updates = $derived.by((): Update[] => {
 		const logged = $activity.data ?? [];
 		if (logged.length) {
-			return logged
-				.slice(0, limit)
-				.map((a) => ({ label: a.summary, when: a.created_at, kind: a.kind as ActivityKind }));
+			return logged.map((a) => ({ label: a.summary, when: a.created_at, kind: a.kind as ActivityKind }));
 		}
 		const list: Update[] = [];
 		if (q.completed_date) list.push({ label: 'Trip completed', when: q.completed_date });
@@ -88,21 +66,60 @@
 		if (latest) list.push({ label: `Quote v${latest.version} (${latest.status})`, when: latest.created_at });
 		list.push({ label: `Entered ${q.status}`, when: q.stage_changed_at ?? q.created_at });
 		list.push({ label: 'Query created', when: q.created_at });
-		return list
-			.filter((u) => u.when)
-			.sort((a, b) => +new Date(b.when) - +new Date(a.when))
-			.slice(0, limit);
+		return list.filter((u) => u.when).sort((a, b) => +new Date(b.when) - +new Date(a.when));
 	});
 
-	const recentReplies = $derived(
-		($replies.data ?? [])
-			.filter((r) => r.sender === 'client')
-			.slice(compact ? -1 : -3)
-			.reverse()
-	);
+	// --- Conversation & notes (dated record) ---------------------------------
+	// One thread: our notes/responses + the client's messages, each dated. The
+	// intake "Response given" seeds it as the first entry; new notes append here
+	// (and show up in the Quoted chat too — same query_replies).
+	type Who = 'us' | 'client' | 'intake';
+	interface Entry {
+		id: string;
+		who: Who;
+		body: string;
+		when: string;
+	}
+	const record = $derived.by((): Entry[] => {
+		const entries: Entry[] = ($replies.data ?? []).map((r) => ({
+			id: r.id,
+			who: r.sender as Who,
+			body: r.body,
+			when: r.created_at
+		}));
+		if (q.response_text) entries.push({ id: 'intake', who: 'intake', body: q.response_text, when: q.created_at });
+		return entries.sort((a, b) => +new Date(b.when) - +new Date(a.when));
+	});
+	const whoLabel: Record<Who, string> = { us: 'Us', client: 'Client', intake: 'Intake' };
+	const whoTone: Record<Who, string> = {
+		us: 'text-brand-600',
+		client: 'text-green-600',
+		intake: 'text-slate-400'
+	};
 
-	function fmt(iso: string): string {
-		return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+	let adding = $state(false);
+	let draft = $state('');
+	function addNote() {
+		const body = draft.trim();
+		if (!body) return;
+		$addReply.mutate(
+			{ query_id: q.id, body, sender: 'us', author: auth.user?.email ?? null },
+			{
+				onSuccess: () => {
+					draft = '';
+					adding = false;
+				}
+			}
+		);
+	}
+
+	function fmtDateTime(iso: string): string {
+		return new Date(iso).toLocaleString(undefined, {
+			day: 'numeric',
+			month: 'short',
+			hour: '2-digit',
+			minute: '2-digit'
+		});
 	}
 	function fmtRel(iso: string): string {
 		const d = daysSince(iso);
@@ -110,15 +127,14 @@
 	}
 </script>
 
-<div class="space-y-3">
-	<div class={compact ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'space-y-3'}>
-	<!-- Complete details -->
-	<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-		<div class="mb-3 flex items-center gap-2">
-			<Package class="h-4 w-4 text-slate-400" />
-			<h2 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Package details</h2>
+<div class={compact ? 'grid grid-cols-1 gap-3 md:grid-cols-3' : 'space-y-3'}>
+	<!-- Package details -->
+	<section class="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+		<div class="mb-2 flex items-center gap-2">
+			<Package class="h-3.5 w-3.5 text-slate-400" />
+			<h2 class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Package details</h2>
 		</div>
-		<dl class="space-y-2 text-sm">
+		<dl class="space-y-1 text-xs">
 			<div class="flex justify-between gap-2">
 				<dt class="text-slate-400">Package</dt>
 				<dd class="text-right font-medium text-slate-700">{q.package_type ?? q.destination}</dd>
@@ -130,7 +146,7 @@
 			{#if q.travel_date}
 				<div class="flex justify-between gap-2">
 					<dt class="text-slate-400">Travel</dt>
-					<dd class="text-right font-medium text-slate-700">{fmt(q.travel_date)}</dd>
+					<dd class="text-right font-medium text-slate-700">{fmtRel(q.travel_date)}</dd>
 				</div>
 			{/if}
 			{#if (q.itinerary_cities ?? []).length}
@@ -147,12 +163,6 @@
 					<dd class="text-right font-medium text-slate-700">{q.hotel_preference}</dd>
 				</div>
 			{/if}
-			{#if q.customer_plan}
-				<div class="flex justify-between gap-2">
-					<dt class="shrink-0 text-slate-400">Plan</dt>
-					<dd class="text-right font-medium text-slate-700">{q.customer_plan}</dd>
-				</div>
-			{/if}
 			<div class="flex justify-between gap-2">
 				<dt class="text-slate-400">Owner</dt>
 				<dd class="text-right font-medium text-slate-700">{q.created_by_staff ?? '—'}</dd>
@@ -160,100 +170,78 @@
 		</dl>
 
 		{#if priced}
-			<div class="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-sm">
-				<div>
-					<div class="text-[10px] uppercase tracking-wide text-slate-400">Selling</div>
-					<div class="font-bold text-slate-800">{formatAmount(Number(q.selling_price))}</div>
-				</div>
-				<div>
-					<div class="text-[10px] uppercase tracking-wide text-slate-400">Cost</div>
-					<div class="font-bold text-slate-800">{formatAmount(Number(q.cost_price))}</div>
-				</div>
-				<div>
-					<div class="text-[10px] uppercase tracking-wide text-slate-400">Profit</div>
-					<div class="font-bold text-green-600">{formatAmount(Number(q.profit))}</div>
-				</div>
-				<div>
-					<div class="text-[10px] uppercase tracking-wide text-slate-400">Margin</div>
-					<div class="font-bold text-slate-800">{Number(q.profit_margin).toFixed(1)}%</div>
-				</div>
+			<div class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-slate-100 pt-2 text-xs">
+				<div class="flex justify-between"><span class="text-slate-400">Sell</span><span class="font-semibold text-slate-700">{formatAmount(Number(q.selling_price))}</span></div>
+				<div class="flex justify-between"><span class="text-slate-400">Cost</span><span class="font-semibold text-slate-700">{formatAmount(Number(q.cost_price))}</span></div>
+				<div class="flex justify-between"><span class="text-slate-400">Profit</span><span class="font-semibold text-green-600">{formatAmount(Number(q.profit))}</span></div>
+				<div class="flex justify-between"><span class="text-slate-400">Margin</span><span class="font-semibold text-slate-700">{Number(q.profit_margin).toFixed(1)}%</span></div>
 			</div>
 		{/if}
 	</section>
 
-	<!-- Recent updates -->
-	<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-		<div class="mb-3 flex items-center gap-2">
-			<History class="h-4 w-4 text-slate-400" />
-			<h2 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Recent updates</h2>
+	<!-- Recent updates (activity log) -->
+	<section class="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+		<div class="mb-2 flex items-center gap-2">
+			<History class="h-3.5 w-3.5 text-slate-400" />
+			<h2 class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Recent updates</h2>
 		</div>
-		<ul class="space-y-2">
+		<ul class="max-h-40 space-y-1.5 overflow-y-auto pr-1">
 			{#each updates as u (u.label + u.when)}
 				{@const s = styleFor(u.kind)}
-				<li class="flex items-start gap-2 text-sm">
+				<li class="flex items-start gap-2 text-xs">
 					<s.icon class="mt-0.5 h-3.5 w-3.5 shrink-0 {s.tone}" />
 					<span class="flex-1 text-slate-600">{u.label}</span>
-					<span class="shrink-0 text-xs text-slate-400">{fmtRel(u.when)}</span>
+					<span class="shrink-0 text-[10px] text-slate-400">{fmtRel(u.when)}</span>
 				</li>
 			{/each}
 		</ul>
 	</section>
 
-	<!-- Latest client suggestions -->
-	<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-		<div class="mb-3 flex items-center gap-2">
-			<MessageSquare class="h-4 w-4 text-slate-400" />
-			<h2 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Latest from client</h2>
-		</div>
-		{#if recentReplies.length === 0}
-			<p class="text-sm text-slate-400">No messages yet.</p>
-		{:else}
-			<ul class="space-y-2">
-				{#each recentReplies as r (r.id)}
-					<li class="rounded-lg bg-slate-50 px-3 py-2 text-sm">
-						<p class="whitespace-pre-wrap text-slate-700">{r.body}</p>
-						<span class="mt-1 block text-[10px] text-slate-400">{fmt(r.created_at)}</span>
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	</section>
-	</div>
-
-	<!-- Response & notes: the live working basis, editable in place on any stage. -->
-	<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+	<!-- Conversation & notes (dated record) -->
+	<section class="flex flex-col rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
 		<div class="mb-2 flex items-center justify-between">
 			<div class="flex items-center gap-2">
-				<NotebookPen class="h-4 w-4 text-slate-400" />
-				<h2 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Response &amp; notes</h2>
+				<MessagesSquare class="h-3.5 w-3.5 text-slate-400" />
+				<h2 class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Conversation &amp; notes</h2>
 			</div>
-			{#if !editingNotes}
-				<button type="button" onclick={startNotes} class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700">
-					<Pencil class="h-3 w-3" /> Edit
+			{#if !adding}
+				<button type="button" onclick={() => (adding = true)} class="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-600 hover:text-brand-700">
+					<Plus class="h-3 w-3" /> Add
 				</button>
 			{/if}
 		</div>
-		{#if editingNotes}
-			<textarea
-				bind:value={notesDraft}
-				rows="3"
-				placeholder="What we told the client, hotels offered, running conversation notes…"
-				class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-			></textarea>
-			<div class="mt-2 flex justify-end gap-2">
-				<button type="button" onclick={() => (editingNotes = false)} class="rounded-lg px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100">
-					Cancel
-				</button>
-				<button type="button" onclick={saveNotes} disabled={$update.isPending} class="rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50">
-					{$update.isPending ? 'Saving…' : 'Save'}
-				</button>
+
+		{#if adding}
+			<div class="mb-2">
+				<textarea
+					bind:value={draft}
+					rows="2"
+					placeholder="Log a response or note…"
+					class="w-full rounded-lg border border-slate-200 px-2 py-1.5 text-xs text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+				></textarea>
+				<div class="mt-1 flex justify-end gap-1.5">
+					<button type="button" onclick={() => { adding = false; draft = ''; }} class="rounded px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100">Cancel</button>
+					<button type="button" onclick={addNote} disabled={!draft.trim() || $addReply.isPending} class="inline-flex items-center gap-1 rounded bg-brand-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-brand-700 disabled:opacity-50">
+						<Send class="h-3 w-3" /> Save
+					</button>
+				</div>
 			</div>
-		{:else if q.response_text}
-			<p class="whitespace-pre-wrap text-sm text-slate-700">{q.response_text}</p>
+		{/if}
+
+		{#if record.length === 0}
+			<p class="text-xs text-slate-400">No notes yet — add the client's requirements or what you told them.</p>
 		{:else}
-			<button type="button" onclick={startNotes} class="text-sm italic text-slate-400 hover:text-slate-600">
-				Add the response / notes…
-			</button>
+			<ul class="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+				{#each record as e (e.id)}
+					<li class="rounded-lg bg-slate-50 px-2 py-1.5 text-xs">
+						<div class="mb-0.5 flex items-center justify-between gap-2">
+							<span class="font-semibold {whoTone[e.who]}">{whoLabel[e.who]}</span>
+							<span class="text-[10px] text-slate-400">{fmtDateTime(e.when)}</span>
+						</div>
+						<p class="whitespace-pre-wrap text-slate-700">{e.body}</p>
+					</li>
+				{/each}
+			</ul>
 		{/if}
 	</section>
 </div>
