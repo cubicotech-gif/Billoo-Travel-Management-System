@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Calculator, Copy, Check, Send, ThumbsUp, Trash2, Eye, FileText } from 'lucide-svelte';
+	import { Copy, Check, Send, ThumbsUp, Trash2, Eye, FileText, ChevronDown } from 'lucide-svelte';
 	import { Badge, Button } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import {
@@ -11,6 +11,7 @@
 	} from './queries';
 	import { QUOTATION_STATUS_TONE, type Quotation } from './types';
 	import QuotationViewModal from './QuotationViewModal.svelte';
+	import QuotationBreakdown from './QuotationBreakdown.svelte';
 
 	let { queryId }: { queryId: string } = $props();
 
@@ -20,6 +21,7 @@
 	const remove = untrack(() => useRemoveQuotation(queryId));
 
 	let viewing = $state<Quotation | null>(null);
+	let expanded = $state<Record<string, boolean>>({});
 
 	let copiedId = $state<string | null>(null);
 	async function copy(q: Quotation) {
@@ -36,12 +38,9 @@
 
 <div class="mb-3 flex items-center justify-between">
 	<h2 class="text-lg font-semibold text-slate-800">Quotations</h2>
-	<div class="flex gap-2">
-		{#if ($quotations.data ?? []).some((q) => q.status !== 'archived')}
-			<Button size="sm" variant="secondary" href="/queries/{queryId}/proposal"><FileText class="h-4 w-4" /> Open proposal</Button>
-		{/if}
-		<Button size="sm" href="/queries/{queryId}/quote"><Calculator class="h-4 w-4" /> Build quotation</Button>
-	</div>
+	{#if ($quotations.data ?? []).some((q) => q.status !== 'archived')}
+		<Button size="sm" variant="secondary" href="/queries/{queryId}/proposal"><FileText class="h-4 w-4" /> Open proposal</Button>
+	{/if}
 </div>
 
 {#if $quotations.isLoading}
@@ -70,7 +69,10 @@
 					</div>
 				</div>
 				<div class="mt-3 flex flex-wrap gap-2">
-					<Button variant="secondary" size="sm" onclick={() => (viewing = q)}><Eye class="h-4 w-4" /> View</Button>
+					<Button variant="secondary" size="sm" onclick={() => (expanded[q.id] = !expanded[q.id])}>
+							<ChevronDown class="h-4 w-4 transition-transform {expanded[q.id] ? '' : '-rotate-90'}" /> Breakdown
+						</Button>
+						<Button variant="secondary" size="sm" onclick={() => (viewing = q)}><Eye class="h-4 w-4" /> View</Button>
 						<Button variant="secondary" size="sm" onclick={() => copy(q)}>
 						{#if copiedId === q.id}<Check class="h-4 w-4" /> Copied{:else}<Copy class="h-4 w-4" /> Copy{/if}
 					</Button>
@@ -92,6 +94,12 @@
 						<Trash2 class="h-4 w-4" />
 					</button>
 				</div>
+
+				{#if expanded[q.id]}
+					<div class="mt-3 border-t border-slate-100 pt-3">
+						<QuotationBreakdown quotationId={q.id} />
+					</div>
+				{/if}
 			</div>
 		{/each}
 	</div>

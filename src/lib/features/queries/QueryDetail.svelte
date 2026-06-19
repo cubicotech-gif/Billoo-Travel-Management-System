@@ -150,7 +150,6 @@
 			</Card>
 		{:else if q.status === 'Working'}
 			<QuoteBuilder queryId={id} embedded />
-			<QuotationList queryId={id} />
 		{:else if q.status === 'Quoted'}
 			<QuotedChat queryId={id} {latest} />
 			<QuotationList queryId={id} />
