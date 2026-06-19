@@ -139,43 +139,33 @@
 		<PassengerDocAlert passengerId={q.passenger_id} />
 	{/if}
 
-	<!-- Workhub: the stage's tool + permanent context. Working needs the full
-	     width for the builder, so its context sits as a strip on top; every other
-	     stage keeps the context as a right rail. -->
-	{#if q.status === 'Working'}
-		<div class="mt-4 space-y-6">
-			<PackagePanel query={q} {latest} compact />
+	<!-- Workhub: a permanent context cover on top (details · recent updates ·
+	     latest from client), then the stage's own tool full-width below it. -->
+	<div class="mt-4 space-y-6">
+		<PackagePanel query={q} {latest} compact />
+
+		{#if q.status === 'New Query'}
+			<Card title="New Query — add & edit details">
+				<QueryEditForm query={q} onSaved={() => $setStatus.mutate({ id, status: 'Working' })} />
+			</Card>
+		{:else if q.status === 'Working'}
 			<QuoteBuilder queryId={id} embedded />
 			<QuotationList queryId={id} />
-		</div>
-	{:else}
-		<div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3">
-			<div class="space-y-6 lg:col-span-2">
-				{#if q.status === 'New Query'}
-					<Card title="New Query — add & edit details">
-						<QueryEditForm query={q} onSaved={() => $setStatus.mutate({ id, status: 'Working' })} />
-					</Card>
-				{:else if q.status === 'Quoted'}
-					<QuotedChat queryId={id} {latest} />
-					<QuotationList queryId={id} />
-				{:else if q.status === 'Booking'}
-					<StageActions query={q} />
-					<BookingWorkspace query={q} queryId={id} {reference} />
-				{:else}
-					<Card title="Cancelled — edit & restore">
-						<p class="mb-4 text-sm text-slate-500">
-							This query is cancelled. Edit its details below, or use <span class="font-medium">Restore to New Query</span> above to bring it back into the pipeline.
-						</p>
-						<QueryEditForm query={q} />
-					</Card>
-				{/if}
-			</div>
-
-			<aside class="lg:col-span-1">
-				<PackagePanel query={q} {latest} />
-			</aside>
-		</div>
-	{/if}
+		{:else if q.status === 'Quoted'}
+			<QuotedChat queryId={id} {latest} />
+			<QuotationList queryId={id} />
+		{:else if q.status === 'Booking'}
+			<StageActions query={q} />
+			<BookingWorkspace query={q} queryId={id} {reference} />
+		{:else}
+			<Card title="Cancelled — edit & restore">
+				<p class="mb-4 text-sm text-slate-500">
+					This query is cancelled. Edit its details below, or use <span class="font-medium">Restore to New Query</span> above to bring it back into the pipeline.
+				</p>
+				<QueryEditForm query={q} />
+			</Card>
+		{/if}
+	</div>
 
 	<QueryEditModal query={q} open={editing} onClose={() => (editing = false)} />
 	<DocumentsDialog entityType="query" entityId={id} title="Trip documents" open={docsOpen} onClose={() => (docsOpen = false)} />
