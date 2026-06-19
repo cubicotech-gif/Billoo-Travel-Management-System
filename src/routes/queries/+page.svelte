@@ -11,6 +11,7 @@
 	} from '$features/queries/queries';
 	import QueryEditModal from '$features/queries/QueryEditModal.svelte';
 	import QueryCard from '$features/queries/QueryCard.svelte';
+	import { money, subtract, toNumber, formatMoney } from '$lib/money';
 	import { useAllQuotations } from '$features/quotations/queries';
 	import { latestQuotationByQuery } from '$features/quotations/api';
 	import { isBooked, groupIntoLanes } from '$features/operations/lanes';
@@ -52,6 +53,24 @@
 	function remove(q: Query) {
 		if (confirm(`Delete the query for ${q.client_name}? You can restore it later from “Deleted”.`))
 			$softDelete.mutate(q.id);
+	}
+
+	// The booking follow-up lanes care about money/dates, not the quote total:
+	// Payments shows the outstanding balance, Check-ins the travel date.
+	function laneMetric(colId: string, q: Query): { value: string; tone?: 'amber' | 'green' | 'slate' } | null {
+		if (colId === 'payments') {
+			const balance = subtract(money(Number(q.selling_price) || 0), money(Number(q.advance_payment_amount ?? 0) || 0));
+			return toNumber(balance) > 0
+				? { value: `${formatMoney(balance)} due`, tone: 'amber' }
+				: { value: 'Paid', tone: 'green' };
+		}
+		if (colId === 'checkins' && q.travel_date) {
+			return {
+				value: new Date(q.travel_date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }),
+				tone: 'slate'
+			};
+		}
+		return null;
 	}
 
 	// What a drop applies: the target stage and (for booked follow-up lanes) the
@@ -166,6 +185,7 @@
 							query={q}
 							tone={col.tone}
 							latest={latestByQuery.get(q.id) ?? null}
+							secondary={laneMetric(col.id, q)}
 							dragging={draggingId === q.id}
 							busy={$setStatus.isPending}
 							onDragStart={() => (draggingId = q.id)}

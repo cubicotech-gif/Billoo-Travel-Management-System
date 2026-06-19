@@ -6,10 +6,18 @@
 	import type { QueryStatus } from '$lib/database.types';
 	import type { Query } from './types';
 
+	// A lane-specific figure to surface instead of the quote total (e.g. balance
+	// due in Payments, travel date in Check-ins).
+	interface Metric {
+		value: string;
+		tone?: 'amber' | 'green' | 'slate';
+	}
+
 	interface Props {
 		query: Query;
 		tone: string;
 		latest: Quotation | null;
+		secondary?: Metric | null;
 		dragging: boolean;
 		busy: boolean;
 		onDragStart: () => void;
@@ -18,8 +26,25 @@
 		onDelete: () => void;
 		onMove: (status: QueryStatus) => void;
 	}
-	let { query: q, tone, latest, dragging, busy, onDragStart, onDragEnd, onEdit, onDelete, onMove }: Props =
-		$props();
+	let {
+		query: q,
+		tone,
+		latest,
+		secondary = null,
+		dragging,
+		busy,
+		onDragStart,
+		onDragEnd,
+		onEdit,
+		onDelete,
+		onMove
+	}: Props = $props();
+
+	const metricTone: Record<string, string> = {
+		amber: 'text-amber-600',
+		green: 'text-green-600',
+		slate: 'text-slate-500'
+	};
 
 	const borderTone: Record<string, string> = {
 		neutral: 'border-l-slate-300',
@@ -49,7 +74,9 @@
 		<span class="truncate text-sm font-medium text-slate-800">{q.client_name}</span>
 		<span class="truncate text-xs text-slate-400">{q.destination}</span>
 		<span class="ml-auto flex shrink-0 items-center gap-1.5">
-			{#if latest}
+			{#if secondary}
+				<span class="text-[11px] font-medium {metricTone[secondary.tone ?? 'slate']}">{secondary.value}</span>
+			{:else if latest}
 				<span class="text-[11px] font-medium text-slate-500">{formatAmount(Number(latest.total_sell_pkr))}</span>
 			{/if}
 			{#if stuck}

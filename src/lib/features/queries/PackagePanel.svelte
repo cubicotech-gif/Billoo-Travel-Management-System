@@ -1,9 +1,19 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Package, History, MessageSquare } from 'lucide-svelte';
+	import {
+		Package,
+		History,
+		MessageSquare,
+		ArrowRight,
+		FileText,
+		PackageCheck,
+		Wallet,
+		Dot
+	} from 'lucide-svelte';
 	import { formatAmount } from '$lib/money';
 	import { daysSince } from './workflow';
 	import { useReplies, useActivity } from './queries';
+	import type { ActivityKind } from './activity';
 	import type { Quotation } from '$features/quotations/types';
 	import type { Query } from './types';
 
@@ -24,7 +34,19 @@
 	interface Update {
 		label: string;
 		when: string;
+		kind?: ActivityKind;
 	}
+
+	// Icon + accent per activity kind, so the timeline reads at a glance.
+	const kindStyle: Record<ActivityKind, { icon: typeof Dot; tone: string }> = {
+		stage: { icon: ArrowRight, tone: 'text-brand-500' },
+		quote: { icon: FileText, tone: 'text-indigo-500' },
+		message: { icon: MessageSquare, tone: 'text-slate-400' },
+		booking: { icon: PackageCheck, tone: 'text-green-500' },
+		payment: { icon: Wallet, tone: 'text-amber-500' },
+		note: { icon: Dot, tone: 'text-slate-400' }
+	};
+	const styleFor = (k?: ActivityKind) => kindStyle[k ?? 'note'];
 
 	const limit = $derived(compact ? 3 : 5);
 
@@ -34,7 +56,9 @@
 	const updates = $derived.by((): Update[] => {
 		const logged = $activity.data ?? [];
 		if (logged.length) {
-			return logged.slice(0, limit).map((a) => ({ label: a.summary, when: a.created_at }));
+			return logged
+				.slice(0, limit)
+				.map((a) => ({ label: a.summary, when: a.created_at, kind: a.kind as ActivityKind }));
 		}
 		const list: Update[] = [];
 		if (q.completed_date) list.push({ label: 'Trip completed', when: q.completed_date });
@@ -134,8 +158,9 @@
 		</div>
 		<ul class="space-y-2">
 			{#each updates as u (u.label + u.when)}
+				{@const s = styleFor(u.kind)}
 				<li class="flex items-start gap-2 text-sm">
-					<span class="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300"></span>
+					<s.icon class="mt-0.5 h-3.5 w-3.5 shrink-0 {s.tone}" />
 					<span class="flex-1 text-slate-600">{u.label}</span>
 					<span class="shrink-0 text-xs text-slate-400">{fmtRel(u.when)}</span>
 				</li>
