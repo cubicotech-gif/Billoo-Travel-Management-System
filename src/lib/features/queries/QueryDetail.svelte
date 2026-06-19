@@ -3,14 +3,15 @@
 	import { goto } from '$app/navigation';
 	import { ArrowLeft, ArrowRight, Ban, Pencil, Trash2, RotateCcw } from 'lucide-svelte';
 	import { Badge, Button, Card, WhatsAppLink } from '$ui';
-	import { formatAmount } from '$lib/money';
 	import {
 		useQueryDetail,
 		useSetQueryStatus,
 		useSoftDeleteQuery,
 		useRestoreQuery
 	} from './queries';
+	import { useQuotations } from '$features/quotations/queries';
 	import QueryEditModal from './QueryEditModal.svelte';
+	import QueryEditForm from './QueryEditForm.svelte';
 	import {
 		STAGE_BY_STATUS,
 		BOOKING_STATUS_TONE,
@@ -23,6 +24,9 @@
 	} from './workflow';
 	import Stepper from './Stepper.svelte';
 	import StageActions from './StageActions.svelte';
+	import PackagePanel from './PackagePanel.svelte';
+	import QuotedChat from './QuotedChat.svelte';
+	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingWorkspace from './BookingWorkspace.svelte';
 	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
@@ -32,11 +36,17 @@
 	let { id }: { id: string } = $props();
 
 	const query = untrack(() => useQueryDetail(id));
+	const quotes = untrack(() => useQuotations(id));
 	const setStatus = useSetQueryStatus();
 	const softDelete = useSoftDeleteQuery();
 	const restore = useRestoreQuery();
 
 	let editing = $state(false);
+
+	// Latest quotation = highest version.
+	const latest = $derived(
+		[...($quotes.data ?? [])].sort((a, b) => b.version - a.version)[0] ?? null
+	);
 
 	function cancelQuery() {
 		if (confirm('Cancel this query? You can move it back into the pipeline later.'))
@@ -67,6 +77,7 @@
 	{@const days = daysSince(q.stage_changed_at)}
 	{@const stuck = isStuck(q.status, days)}
 	{@const reference = `BLO-${new Date(q.created_at).getFullYear()}-${q.query_number.slice(-4)}`}
+
 	{#if q.is_deleted}
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-800">
 			<span>This query is deleted — hidden from the board but recoverable.</span>
@@ -75,138 +86,86 @@
 			</Button>
 		</div>
 	{/if}
-	<!-- Rich summary header: state at a glance, not a blank form. -->
-	<div class="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-		<div class="flex flex-wrap items-start justify-between gap-4">
-			<div>
-				<div class="flex flex-wrap items-center gap-3">
-					<h1 class="text-2xl font-bold text-slate-800">{q.client_name}</h1>
-					<Badge tone={stageFor(q.status).tone}>{stageFor(q.status).label}</Badge>
-					{#if q.status === 'Booking' && q.booking_status}
-						<Badge tone={BOOKING_STATUS_TONE[q.booking_status]}>{q.booking_status}</Badge>
-					{/if}
-					{#if stuck}<Badge tone="danger">Stuck · {days}d</Badge>{/if}
-				</div>
-				<div class="mt-1 flex flex-wrap items-center gap-x-3 text-sm text-slate-500">
-					<span class="font-mono text-xs font-semibold text-slate-600">{reference}</span>
-					<WhatsAppLink number={q.client_phone} />
-				</div>
+
+	<!-- Lean header: identity + stage controls. Details live in the side panel. -->
+	<div class="mb-4 flex flex-wrap items-start justify-between gap-4">
+		<div>
+			<div class="flex flex-wrap items-center gap-3">
+				<h1 class="text-2xl font-bold text-slate-800">{q.client_name}</h1>
+				<Badge tone={stageFor(q.status).tone}>{stageFor(q.status).label}</Badge>
+				{#if q.status === 'Booking' && q.booking_status}
+					<Badge tone={BOOKING_STATUS_TONE[q.booking_status]}>{q.booking_status}</Badge>
+				{/if}
+				{#if stuck}<Badge tone="danger">Stuck · {days}d</Badge>{/if}
 			</div>
-			<!-- Guided controls: back / advance / cancel (or restore) -->
-			<div class="flex items-center gap-2">
-				{#if isCancelled(q.status)}
-					<Button variant="secondary" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: 'New Query' })}>
-						Restore to New Query
-					</Button>
-				{:else}
-					{#if prev}
-						<Button variant="ghost" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: prev })}>
-							<ArrowLeft class="h-4 w-4" /> Back
-						</Button>
-					{/if}
-					{#if next}
-						<Button disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: next })}>
-							Advance to {STAGE_BY_STATUS[next].label} <ArrowRight class="h-4 w-4" />
-						</Button>
-					{/if}
-					<Button variant="ghost" disabled={$setStatus.isPending} onclick={cancelQuery}>
-						<Ban class="h-4 w-4" /> Cancel
+			<div class="mt-1 flex flex-wrap items-center gap-x-3 text-sm text-slate-500">
+				<span class="font-mono text-xs font-semibold text-slate-600">{reference}</span>
+				<WhatsAppLink number={q.client_phone} />
+			</div>
+		</div>
+		<div class="flex items-center gap-2">
+			{#if isCancelled(q.status)}
+				<Button variant="secondary" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: 'New Query' })}>
+					Restore to New Query
+				</Button>
+			{:else}
+				{#if prev}
+					<Button variant="ghost" disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: prev })}>
+						<ArrowLeft class="h-4 w-4" /> Back
 					</Button>
 				{/if}
-				<Button variant="ghost" onclick={() => (editing = true)}><Pencil class="h-4 w-4" /> Edit</Button>
-				<Button variant="ghost" disabled={$softDelete.isPending} onclick={deleteQuery}>
-					<Trash2 class="h-4 w-4" /> Delete
+				{#if next}
+					<Button disabled={$setStatus.isPending} onclick={() => $setStatus.mutate({ id, status: next })}>
+						Advance to {STAGE_BY_STATUS[next].label} <ArrowRight class="h-4 w-4" />
+					</Button>
+				{/if}
+				<Button variant="ghost" disabled={$setStatus.isPending} onclick={cancelQuery}>
+					<Ban class="h-4 w-4" /> Cancel
 				</Button>
-			</div>
-		</div>
-
-		<!-- Facts -->
-		<div class="mt-4 grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 text-sm sm:grid-cols-3 lg:grid-cols-5">
-			<div>
-				<div class="text-xs uppercase tracking-wide text-slate-400">Package</div>
-				<div class="font-medium text-slate-700">{q.package_type ?? q.destination}</div>
-			</div>
-			<div>
-				<div class="text-xs uppercase tracking-wide text-slate-400">Pax</div>
-				<div class="font-medium text-slate-700">
-					{q.adults}A{q.children ? ` · ${q.children}C` : ''}{q.infants ? ` · ${q.infants}I` : ''}
-				</div>
-			</div>
-			<div>
-				<div class="text-xs uppercase tracking-wide text-slate-400">Est. value</div>
-				<div class="font-medium text-slate-700">
-					{Number(q.selling_price) > 0 ? formatAmount(Number(q.selling_price), 'PKR') : '—'}
-				</div>
-			</div>
-			<div>
-				<div class="text-xs uppercase tracking-wide text-slate-400">Owner</div>
-				<div class="font-medium text-slate-700">{q.created_by_staff ?? '—'}</div>
-			</div>
-			<div>
-				<div class="text-xs uppercase tracking-wide text-slate-400">In stage</div>
-				<div class="font-medium {stuck ? 'text-red-600' : 'text-slate-700'}">{days}d</div>
-			</div>
-		</div>
-
-		{#if (q.itinerary_cities ?? []).length}
-			<div class="mt-3 border-t border-slate-100 pt-3 text-sm">
-				<span class="text-xs uppercase tracking-wide text-slate-400">Itinerary</span>
-				<div class="text-slate-700">
-					{(q.itinerary_cities ?? []).map((c) => `${c.city} ${c.nights}N`).join(' · ')}
-				</div>
-			</div>
-		{/if}
-
-		<!-- Completion chips -->
-		<div class="mt-4 flex flex-wrap gap-2">
-			<Badge tone={q.responded ? 'success' : 'neutral'}>{q.responded ? 'Responded' : 'Not responded'}</Badge>
-			<Badge tone={Number(q.selling_price) > 0 ? 'success' : 'neutral'}>{Number(q.selling_price) > 0 ? 'Priced' : 'Not priced'}</Badge>
-			<Badge tone={q.advance_payment_amount ? 'success' : 'warning'}>
-				{q.advance_payment_amount ? `Advance ${formatAmount(Number(q.advance_payment_amount), 'PKR')}` : 'No advance'}
-			</Badge>
+			{/if}
+			<Button variant="ghost" onclick={() => (editing = true)}><Pencil class="h-4 w-4" /> Edit</Button>
+			<Button variant="ghost" disabled={$softDelete.isPending} onclick={deleteQuery}>
+				<Trash2 class="h-4 w-4" /> Delete
+			</Button>
 		</div>
 	</div>
+
+	<Stepper status={q.status} />
 
 	{#if q.passenger_id}
 		<PassengerDocAlert passengerId={q.passenger_id} />
 	{/if}
 
-	<Stepper status={q.status} />
-
-	<!-- Financial summary — the query's agreed figures (set when a quotation is
-	     accepted or a booking syncs). -->
-	{#if Number(q.selling_price) > 0}
-		<div class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-			<Card>
-				<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Total Cost</div>
-				<div class="mt-1 text-xl font-bold text-slate-800">{formatAmount(Number(q.cost_price), 'PKR')}</div>
-			</Card>
-			<Card>
-				<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Total Selling</div>
-				<div class="mt-1 text-xl font-bold text-slate-800">{formatAmount(Number(q.selling_price), 'PKR')}</div>
-			</Card>
-			<Card>
-				<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Profit</div>
-				<div class="mt-1 text-xl font-bold text-green-600">{formatAmount(Number(q.profit), 'PKR')}</div>
-			</Card>
-			<Card>
-				<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Margin</div>
-				<div class="mt-1 text-xl font-bold text-slate-800">{Number(q.profit_margin).toFixed(1)}%</div>
-			</Card>
+	<!-- Workhub: the stage's tool on the left, permanent context on the right. -->
+	<div class="mt-4 grid grid-cols-1 gap-6 lg:grid-cols-3">
+		<div class="space-y-6 lg:col-span-2">
+			{#if q.status === 'New Query'}
+				<Card title="New Query — add & edit details">
+					<QueryEditForm query={q} onSaved={() => $setStatus.mutate({ id, status: 'Working' })} />
+				</Card>
+			{:else if q.status === 'Working'}
+				<QuoteBuilder queryId={id} embedded />
+				<QuotationList queryId={id} />
+			{:else if q.status === 'Quoted'}
+				<QuotedChat queryId={id} {latest} />
+				<QuotationList queryId={id} />
+			{:else if q.status === 'Booking'}
+				<StageActions query={q} />
+				<BookingWorkspace query={q} queryId={id} {reference} />
+			{:else}
+				<Card title="Cancelled — edit & restore">
+					<p class="mb-4 text-sm text-slate-500">
+						This query is cancelled. Edit its details below, or use <span class="font-medium">Restore to New Query</span> above to bring it back into the pipeline.
+					</p>
+					<QueryEditForm query={q} />
+				</Card>
+			{/if}
 		</div>
-	{/if}
 
-	<div class="mb-6">
-		<StageActions query={q} />
+		<aside class="lg:col-span-1">
+			<PackagePanel query={q} {latest} />
+		</aside>
 	</div>
-
-	<div class="mb-8">
-		<QuotationList queryId={id} />
-	</div>
-
-	{#if q.status === 'Booking'}
-		<BookingWorkspace query={q} queryId={id} {reference} />
-	{/if}
 
 	<QueryEditModal query={q} open={editing} onClose={() => (editing = false)} />
 {/if}
