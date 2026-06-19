@@ -7,9 +7,11 @@
 	import type { Quotation } from '$features/quotations/types';
 	import type { Query } from './types';
 
-	// The context rail shown on every stage: what the package is, what's happened
-	// recently, and the latest word from the client.
-	let { query: q, latest }: { query: Query; latest: Quotation | null } = $props();
+	// The context shown on every stage: what the package is, what's happened
+	// recently, and the latest word from the client. `compact` lays the three
+	// sections out as a horizontal strip (used above the full-width builder).
+	let { query: q, latest, compact = false }: { query: Query; latest: Quotation | null; compact?: boolean } =
+		$props();
 
 	const replies = untrack(() => useReplies(q.id));
 
@@ -38,10 +40,15 @@
 		return list
 			.filter((u) => u.when)
 			.sort((a, b) => +new Date(b.when) - +new Date(a.when))
-			.slice(0, 5);
+			.slice(0, compact ? 3 : 5);
 	});
 
-	const recentReplies = $derived(($replies.data ?? []).slice(-3).reverse());
+	const recentReplies = $derived(
+		($replies.data ?? [])
+			.filter((r) => r.sender === 'client')
+			.slice(compact ? -1 : -3)
+			.reverse()
+	);
 
 	function fmt(iso: string): string {
 		return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -52,7 +59,7 @@
 	}
 </script>
 
-<div class="space-y-4">
+<div class={compact ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'space-y-4'}>
 	<!-- Complete details -->
 	<section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 		<div class="mb-3 flex items-center gap-2">

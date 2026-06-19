@@ -358,6 +358,7 @@ export interface Database {
 				Row: {
 					id: string;
 					query_id: string;
+					sender: 'client' | 'us';
 					body: string;
 					author: string | null;
 					created_at: string;
@@ -365,6 +366,7 @@ export interface Database {
 				Insert: {
 					id?: string;
 					query_id: string;
+					sender?: 'client' | 'us';
 					body: string;
 					author?: string | null;
 					created_at?: string;

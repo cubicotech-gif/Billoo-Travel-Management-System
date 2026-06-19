@@ -6,6 +6,8 @@
 CREATE TABLE IF NOT EXISTS public.query_replies (
 	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
 	query_id UUID NOT NULL REFERENCES public.queries(id) ON DELETE CASCADE,
+	-- who said it: the client's message, or our own note/suggestion back to them.
+	sender TEXT NOT NULL DEFAULT 'client' CHECK (sender IN ('client', 'us')),
 	body TEXT NOT NULL,
 	author TEXT,
 	created_at TIMESTAMPTZ DEFAULT NOW()
