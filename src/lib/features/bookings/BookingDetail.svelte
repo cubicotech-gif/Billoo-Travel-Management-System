@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { Plus } from 'lucide-svelte';
-	import { Button, Card, Input, Select } from '$ui';
-	import { formatAmount } from '$lib/money';
+	import { Button, Input, Select } from '$ui';
 	import type { Currency, QuotationLineType } from '$lib/database.types';
 	import { useVendors } from '$features/vendors/queries';
 	import { useUploadDocument } from '$features/documents/queries';
@@ -88,34 +87,7 @@
 		}
 		input.value = '';
 	}
-
-	const variance = $derived(
-		Number(booking.actual_sell_pkr) -
-			Number(booking.actual_cost_pkr) -
-			(Number(booking.quoted_sell_pkr) - Number(booking.quoted_cost_pkr))
-	);
 </script>
-
-<div class="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-	<Card>
-		<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Actual Cost</div>
-		<div class="mt-1 text-lg font-bold text-slate-800">{formatAmount(Number(booking.actual_cost_pkr), 'PKR')}</div>
-	</Card>
-	<Card>
-		<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Actual Selling</div>
-		<div class="mt-1 text-lg font-bold text-slate-800">{formatAmount(Number(booking.actual_sell_pkr), 'PKR')}</div>
-	</Card>
-	<Card>
-		<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Profit</div>
-		<div class="mt-1 text-lg font-bold text-green-600">{formatAmount(Number(booking.profit_pkr), 'PKR')}</div>
-	</Card>
-	<Card>
-		<div class="text-xs font-medium uppercase tracking-wide text-slate-400">vs Quote</div>
-		<div class="mt-1 text-lg font-bold {variance >= 0 ? 'text-green-600' : 'text-red-600'}">
-			{variance >= 0 ? '+' : ''}{formatAmount(variance, 'PKR')}
-		</div>
-	</Card>
-</div>
 
 <!-- Conversion rates: SAR & USD components convert to PKR through these. -->
 <div class="mb-3 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-3">

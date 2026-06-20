@@ -7,6 +7,7 @@ import {
 	deleteBookingItem,
 	getBookingForQuery,
 	listBookingItems,
+	syncBookingFromQuotation,
 	updateBookingItem,
 	updateBookingRates
 } from './api';
@@ -88,6 +89,17 @@ export function useDeleteBookingItem(queryId: string) {
 		onSuccess: (_v, vars) => {
 			client.invalidateQueries({ queryKey: itemsKey(vars.booking.id) });
 			client.invalidateQueries({ queryKey: bookingKey(queryId) });
+		}
+	});
+}
+
+export function useSyncBookingFromQuotation(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (quotation: Quotation) => syncBookingFromQuotation(quotation),
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: bookingKey(queryId) });
+			client.invalidateQueries({ queryKey: ['queries', queryId] });
 		}
 	});
 }

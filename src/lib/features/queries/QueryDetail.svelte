@@ -27,7 +27,7 @@
 	import QuotedChat from './QuotedChat.svelte';
 	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
-	import BookingWorkspace from './BookingWorkspace.svelte';
+	import BookingBuilder from '$features/bookings/BookingBuilder.svelte';
 	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
 	import DocumentsDialog from '$features/documents/DocumentsDialog.svelte';
 
@@ -153,7 +153,7 @@
 			<QuotedChat queryId={id} {latest} />
 			<QuotationList queryId={id} />
 		{:else if q.status === 'Booking'}
-			<BookingWorkspace query={q} queryId={id} />
+			<BookingBuilder queryId={id} />
 		{:else}
 			<Card title="Cancelled — edit & restore">
 				<p class="mb-4 text-sm text-slate-500">

@@ -47,6 +47,7 @@
 	import { persistRates, type RateSnapshot } from './autosave';
 	import { useCreateQuotation } from './queries';
 	import { getQuotation, getQuotationLines } from './api';
+	import type { Quotation } from './types';
 	import {
 		OTHER,
 		ROOM_TYPES,
@@ -75,8 +76,15 @@
 		queryId,
 		editId,
 		embedded = false,
+		mode = 'quote',
 		onSaved
-	}: { queryId: string; editId?: string; embedded?: boolean; onSaved?: () => void } = $props();
+	}: {
+		queryId: string;
+		editId?: string;
+		embedded?: boolean;
+		mode?: 'quote' | 'booking';
+		onSaved?: (quotation: Quotation) => void;
+	} = $props();
 
 	const client = useQueryClient();
 	const queryDetail = untrack(() => useQueryDetail(queryId));
@@ -574,12 +582,16 @@
 		} catch (e) {
 			console.warn('[quote] rate observation capture failed', e);
 		}
-		const st = $queryDetail.data?.status;
-		if (st === 'New Query' || st === 'Working') {
-			$setStatus.mutate({ id: queryId, status: 'Quoted' });
+		// In quote mode a save moves the pipeline forward to Quoted. In booking
+		// mode we stay in Booking and let the caller drive the booking from it.
+		if (mode === 'quote') {
+			const st = $queryDetail.data?.status;
+			if (st === 'New Query' || st === 'Working') {
+				$setStatus.mutate({ id: queryId, status: 'Quoted' });
+			}
 		}
 		if (addAnother) resetLines();
-		else onSaved?.();
+		else onSaved?.(quotation);
 	}
 </script>
 
@@ -918,6 +930,8 @@
 	</div>
 </div>
 
-<div class="mt-8">
-	<QuotationList {queryId} />
-</div>
+{#if mode !== 'booking'}
+	<div class="mt-8">
+		<QuotationList {queryId} />
+	</div>
+{/if}
