@@ -23,7 +23,6 @@
 		isStuck
 	} from './workflow';
 	import Stepper from './Stepper.svelte';
-	import StageActions from './StageActions.svelte';
 	import PackagePanel from './PackagePanel.svelte';
 	import QuotedChat from './QuotedChat.svelte';
 	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
@@ -154,8 +153,7 @@
 			<QuotedChat queryId={id} {latest} />
 			<QuotationList queryId={id} />
 		{:else if q.status === 'Booking'}
-			<StageActions query={q} />
-			<BookingWorkspace query={q} queryId={id} {reference} />
+			<BookingWorkspace query={q} queryId={id} />
 		{:else}
 			<Card title="Cancelled — edit & restore">
 				<p class="mb-4 text-sm text-slate-500">
