@@ -7,7 +7,8 @@ import {
 	deleteBookingItem,
 	getBookingForQuery,
 	listBookingItems,
-	updateBookingItem
+	updateBookingItem,
+	updateBookingRates
 } from './api';
 import type { Booking, BookingItemUpdate, NewBookingItem } from './types';
 
@@ -87,6 +88,18 @@ export function useDeleteBookingItem(queryId: string) {
 		onSuccess: (_v, vars) => {
 			client.invalidateQueries({ queryKey: itemsKey(vars.booking.id) });
 			client.invalidateQueries({ queryKey: bookingKey(queryId) });
+		}
+	});
+}
+
+export function useUpdateBookingRates(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ booking, roe, usdRate }: { booking: Booking; roe: number; usdRate: number }) =>
+			updateBookingRates(booking, roe, usdRate),
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: bookingKey(queryId) });
+			client.invalidateQueries({ queryKey: ['queries', queryId] });
 		}
 	});
 }

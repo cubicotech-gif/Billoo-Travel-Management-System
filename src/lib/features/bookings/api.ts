@@ -2,7 +2,7 @@ import { supabase } from '$lib/supabase';
 import { getQuotationLines } from '$features/quotations/api';
 import { logActivity } from '$features/queries/activity';
 import type { Quotation } from '$features/quotations/types';
-import { bookingTotals } from './totals';
+import { bookingTotals, ratesOf, type Rates } from './totals';
 import type { Booking, BookingItem, BookingItemUpdate, NewBookingItem } from './types';
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -36,9 +36,9 @@ export async function listBookingItems(bookingId: string): Promise<BookingItem[]
 }
 
 /** Recompute the booking's PKR roll-ups from its items and persist. */
-async function syncBookingTotals(bookingId: string, roe: number): Promise<void> {
+async function syncBookingTotals(bookingId: string, rates: Rates): Promise<void> {
 	const items = await listBookingItems(bookingId);
-	const t = bookingTotals(items, roe);
+	const t = bookingTotals(items, rates);
 	const { error } = await supabase
 		.from('bookings')
 		.update({
@@ -76,7 +76,7 @@ export async function createBookingFromQuotation(quotation: Quotation): Promise<
 	const booking = unwrap<Booking>(
 		await supabase
 			.from('bookings')
-			.insert({ query_id: quotation.query_id, quotation_id: quotation.id, roe: quotation.roe })
+			.insert({ query_id: quotation.query_id, quotation_id: quotation.id, roe: quotation.roe, usd_rate: quotation.usd_rate })
 			.select()
 			.single()
 	);
@@ -100,7 +100,7 @@ export async function createBookingFromQuotation(quotation: Quotation): Promise<
 		if (error) throw new Error(error.message);
 	}
 
-	await syncBookingTotals(booking.id, Number(quotation.roe));
+	await syncBookingTotals(booking.id, { roe: Number(quotation.roe), usdRate: Number(quotation.usd_rate ?? 0) || Number(quotation.roe) });
 	logActivity({ query_id: quotation.query_id, kind: 'booking', summary: 'Booking created from quotation' });
 	return booking;
 }
@@ -113,7 +113,7 @@ export async function updateBookingItem(
 	const item = unwrap<BookingItem>(
 		await supabase.from('booking_items').update(patch).eq('id', id).select().single()
 	);
-	await syncBookingTotals(booking.id, Number(booking.roe));
+	await syncBookingTotals(booking.id, ratesOf(booking));
 	return item;
 }
 
@@ -125,12 +125,22 @@ export async function createBookingItem(
 	const item = unwrap<BookingItem>(
 		await supabase.from('booking_items').insert({ ...input, booking_id: booking.id }).select().single()
 	);
-	await syncBookingTotals(booking.id, Number(booking.roe));
+	await syncBookingTotals(booking.id, ratesOf(booking));
 	return item;
 }
 
 export async function deleteBookingItem(id: string, booking: Booking): Promise<void> {
 	const { error } = await supabase.from('booking_items').delete().eq('id', id);
 	if (error) throw new Error(error.message);
-	await syncBookingTotals(booking.id, Number(booking.roe));
+	await syncBookingTotals(booking.id, ratesOf(booking));
+}
+
+/** Change the booking's conversion rates and re-roll the PKR totals. */
+export async function updateBookingRates(booking: Booking, roe: number, usdRate: number): Promise<void> {
+	const { error } = await supabase
+		.from('bookings')
+		.update({ roe, usd_rate: usdRate })
+		.eq('id', booking.id);
+	if (error) throw new Error(error.message);
+	await syncBookingTotals(booking.id, { roe, usdRate });
 }

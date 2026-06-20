@@ -1,7 +1,7 @@
 import { supabase } from '$lib/supabase';
 import type { Currency, Database } from '$lib/database.types';
 import { toNumber } from '$lib/money';
-import { toPkr } from '$features/bookings/totals';
+import { toPkr, ratesOf } from '$features/bookings/totals';
 import type { Vendor } from './types';
 
 export type VendorPayment = Database['public']['Tables']['vendor_payments']['Row'];
@@ -49,8 +49,8 @@ export async function listVendorCharges(vendorId: string): Promise<VendorCharge[
 	if (items.length === 0) return [];
 
 	const bookingIds = [...new Set(items.map((i) => i.booking_id))];
-	const bookings = unwrap<{ id: string; roe: number; query_id: string | null }[]>(
-		await supabase.from('bookings').select('id, roe, query_id').in('id', bookingIds)
+	const bookings = unwrap<{ id: string; roe: number; usd_rate: number | null; query_id: string | null }[]>(
+		await supabase.from('bookings').select('id, roe, usd_rate, query_id').in('id', bookingIds)
 	);
 	const bookingById = new Map(bookings.map((b) => [b.id, b]));
 
@@ -64,14 +64,14 @@ export async function listVendorCharges(vendorId: string): Promise<VendorCharge[
 
 	return items.map((i) => {
 		const b = bookingById.get(i.booking_id);
-		const roe = Number(b?.roe ?? 1);
+		const rates = ratesOf(b ?? { roe: 1 });
 		const q = b?.query_id ? queryById.get(b.query_id) : null;
 		return {
 			itemId: i.id,
 			label: i.label,
 			currency: i.currency,
 			actualCost: Number(i.actual_cost),
-			owedPkr: toNumber(toPkr(Number(i.actual_cost), i.currency, roe)),
+			owedPkr: toNumber(toPkr(Number(i.actual_cost), i.currency, rates)),
 			queryId: b?.query_id ?? null,
 			queryNumber: q?.query_number ?? null,
 			clientName: q?.client_name ?? null
@@ -136,8 +136,8 @@ export async function listVendorBalances(): Promise<VendorBalance[]> {
 	const items = unwrap<{ vendor_id: string | null; currency: Currency; actual_cost: number; booking_id: string }[]>(
 		await supabase.from('booking_items').select('vendor_id, currency, actual_cost, booking_id').not('vendor_id', 'is', null)
 	);
-	const bookings = unwrap<{ id: string; roe: number }[]>(await supabase.from('bookings').select('id, roe'));
-	const roeById = new Map(bookings.map((b) => [b.id, Number(b.roe)]));
+	const bookings = unwrap<{ id: string; roe: number; usd_rate: number | null }[]>(await supabase.from('bookings').select('id, roe, usd_rate'));
+	const ratesById = new Map(bookings.map((b) => [b.id, ratesOf(b)]));
 	const payments = unwrap<{ vendor_id: string; amount: number }[]>(
 		await supabase.from('vendor_payments').select('vendor_id, amount')
 	);
@@ -145,8 +145,8 @@ export async function listVendorBalances(): Promise<VendorBalance[]> {
 	const owedByVendor = new Map<string, number>();
 	for (const i of items) {
 		if (!i.vendor_id) continue;
-		const roe = roeById.get(i.booking_id) ?? 1;
-		const pkr = toNumber(toPkr(Number(i.actual_cost), i.currency, roe));
+		const rates = ratesById.get(i.booking_id) ?? { roe: 1, usdRate: 1 };
+		const pkr = toNumber(toPkr(Number(i.actual_cost), i.currency, rates));
 		owedByVendor.set(i.vendor_id, (owedByVendor.get(i.vendor_id) ?? 0) + pkr);
 	}
 	const paidByVendor = new Map<string, number>();

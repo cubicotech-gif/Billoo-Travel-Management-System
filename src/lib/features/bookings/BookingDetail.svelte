@@ -5,7 +5,7 @@
 	import { formatAmount } from '$lib/money';
 	import type { Currency, QuotationLineType } from '$lib/database.types';
 	import { useVendors } from '$features/vendors/queries';
-	import { useBookingItems, useCreateBookingItem } from './queries';
+	import { useBookingItems, useCreateBookingItem, useUpdateBookingRates } from './queries';
 	import BookingItemRow from './BookingItemRow.svelte';
 	import type { Booking } from './types';
 
@@ -15,6 +15,16 @@
 	const items = untrack(() => useBookingItems(booking.id));
 	const vendors = useVendors();
 	const createItem = untrack(() => useCreateBookingItem(queryId));
+	const updateRates = untrack(() => useUpdateBookingRates(queryId));
+
+	// Conversion rates (mirrors the quotation builder): SAR and USD -> PKR.
+	let rates = $state(untrack(() => ({ roe: Number(booking.roe) || 0, usd: Number(booking.usd_rate ?? 0) || 0 })));
+	const ratesDirty = $derived(
+		rates.roe !== (Number(booking.roe) || 0) || rates.usd !== (Number(booking.usd_rate ?? 0) || 0)
+	);
+	function saveRates() {
+		$updateRates.mutate({ booking, roe: Number(rates.roe), usdRate: Number(rates.usd) });
+	}
 
 	const LINE_TYPES: QuotationLineType[] = ['hotel', 'transfer', 'visa', 'ticket', 'other'];
 	const CURRENCIES: Currency[] = ['SAR', 'PKR', 'USD'];
@@ -83,6 +93,16 @@
 			{variance >= 0 ? '+' : ''}{formatAmount(variance, 'PKR')}
 		</div>
 	</Card>
+</div>
+
+<!-- Conversion rates: SAR & USD components convert to PKR through these. -->
+<div class="mb-3 flex flex-wrap items-end gap-2 rounded-xl border border-slate-200 bg-white p-3">
+	<div class="w-36"><Input label="ROE (1 SAR = PKR)" type="number" min="0" step="0.01" bind:value={rates.roe} /></div>
+	<div class="w-36"><Input label="USD (1 USD = PKR)" type="number" min="0" step="0.01" bind:value={rates.usd} /></div>
+	<Button size="sm" variant={ratesDirty ? 'primary' : 'secondary'} onclick={saveRates} disabled={!ratesDirty || $updateRates.isPending}>
+		{$updateRates.isPending ? 'Saving…' : 'Save rates'}
+	</Button>
+	<p class="text-xs text-slate-400">Tickets are usually PKR; hotels/transfers/visa SAR. Saving re-rolls the PKR totals.</p>
 </div>
 
 <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
