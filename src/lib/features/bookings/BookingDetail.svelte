@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Card } from '$ui';
+	import { Plus } from 'lucide-svelte';
+	import { Button, Card, Input, Select } from '$ui';
 	import { formatAmount } from '$lib/money';
-	import { useBookingItems } from './queries';
+	import type { Currency, QuotationLineType } from '$lib/database.types';
+	import { useVendors } from '$features/vendors/queries';
+	import { useBookingItems, useCreateBookingItem } from './queries';
 	import BookingItemRow from './BookingItemRow.svelte';
 	import type { Booking } from './types';
 
@@ -10,6 +13,49 @@
 	let { booking, queryId }: { booking: Booking; queryId: string } = $props();
 
 	const items = untrack(() => useBookingItems(booking.id));
+	const vendors = useVendors();
+	const createItem = untrack(() => useCreateBookingItem(queryId));
+
+	const LINE_TYPES: QuotationLineType[] = ['hotel', 'transfer', 'visa', 'ticket', 'other'];
+	const CURRENCIES: Currency[] = ['SAR', 'PKR', 'USD'];
+
+	let add = $state({
+		line_type: 'hotel' as QuotationLineType,
+		label: '',
+		vendor_id: '',
+		currency: 'SAR' as Currency,
+		actual_cost: 0,
+		actual_sell: 0
+	});
+	const vendorOptions = $derived([
+		{ value: '', label: '— vendor —' },
+		...($vendors.data ?? []).map((v) => ({ value: v.id, label: v.name }))
+	]);
+
+	function addService(e: SubmitEvent) {
+		e.preventDefault();
+		$createItem.mutate(
+			{
+				booking,
+				input: {
+					line_type: add.line_type,
+					label: add.label.trim() || add.line_type,
+					vendor_id: add.vendor_id || null,
+					currency: add.currency,
+					quoted_cost: 0,
+					quoted_sell: 0,
+					actual_cost: Number(add.actual_cost),
+					actual_sell: Number(add.actual_sell),
+					meta: {}
+				}
+			},
+			{
+				onSuccess: () => {
+					add = { line_type: 'hotel', label: '', vendor_id: '', currency: 'SAR', actual_cost: 0, actual_sell: 0 };
+				}
+			}
+		);
+	}
 
 	const variance = $derived(
 		Number(booking.actual_sell_pkr) -
@@ -57,9 +103,26 @@
 			{#each $items.data ?? [] as item (item.id)}
 				<BookingItemRow {item} {booking} {queryId} />
 			{/each}
+			{#if ($items.data ?? []).length === 0}
+				<tr><td colspan="8" class="px-3 py-6 text-center text-sm text-slate-400">No services yet — add what you're booking below.</td></tr>
+			{/if}
 		</tbody>
 	</table>
 </div>
+
+<!-- Add a vendor service: cost + sell feed the vendor's account automatically. -->
+<form onsubmit={addService} class="mt-3 rounded-xl border border-slate-200 bg-white p-3">
+	<div class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Add a service</div>
+	<div class="flex flex-wrap items-end gap-2">
+		<div class="w-28"><Select label="Service" bind:value={add.line_type} options={[...LINE_TYPES]} /></div>
+		<div class="min-w-[10rem] flex-1"><Input label="Description" bind:value={add.label} placeholder="e.g. Makkah hotel — Hilton" /></div>
+		<div class="w-40"><Select label="Vendor" bind:value={add.vendor_id} options={vendorOptions} /></div>
+		<div class="w-20"><Select label="Cur." bind:value={add.currency} options={[...CURRENCIES]} /></div>
+		<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={add.actual_cost} /></div>
+		<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={add.actual_sell} /></div>
+		<Button type="submit" size="sm" disabled={$createItem.isPending}><Plus class="h-4 w-4" /> Add</Button>
+	</div>
+</form>
 <p class="mt-2 text-xs text-slate-400">
-	SAR components convert at ROE {booking.roe}. Edit a row's vendor/costs and press ✓ to save.
+	SAR components convert at ROE {booking.roe}. A row's cost + selected vendor post to that vendor's account automatically.
 </p>

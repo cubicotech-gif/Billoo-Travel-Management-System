@@ -112,7 +112,7 @@
 			{ id: 'New Query', label: 'New Query', tone: 'warning', status: 'New Query', bookingStatus: null, alwaysOpen: true, items: fresh },
 			{ id: 'Working', label: 'Working', tone: 'info', status: 'Working', bookingStatus: null, alwaysOpen: true, items: notBooked.filter((q) => q.status === 'Working') },
 			{ id: 'Quoted', label: 'Quoted', tone: 'info', status: 'Quoted', bookingStatus: null, alwaysOpen: false, items: active.filter((q) => q.status === 'Quoted' && !isBooked(q)) },
-			{ id: 'Booking', label: 'Booking', tone: 'success', status: 'Booking', bookingStatus: null, alwaysOpen: false, items: active.filter((q) => q.status === 'Booking' && !q.booking_status) },
+			{ id: 'Booking', label: 'Booking in progress', tone: 'success', status: 'Booking', bookingStatus: null, alwaysOpen: false, items: active.filter((q) => q.status === 'Booking' && !q.booking_status) },
 			{ id: 'payments', label: 'Payments Due', tone: 'warning', status: 'Booking', bookingStatus: 'Pending Payment', alwaysOpen: false, items: lanes.payments.map((c) => c.query) },
 			{ id: 'checkins', label: 'Check-ins', tone: 'info', status: 'Booking', bookingStatus: 'Payment Done - Check-in Pending', alwaysOpen: false, items: lanes.checkins.map((c) => c.query) },
 			{ id: 'completed', label: 'Completed', tone: 'success', status: 'Booking', bookingStatus: 'Completed', alwaysOpen: false, items: lanes.completed.map((c) => c.query) }

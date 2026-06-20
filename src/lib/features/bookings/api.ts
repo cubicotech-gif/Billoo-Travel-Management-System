@@ -3,7 +3,7 @@ import { getQuotationLines } from '$features/quotations/api';
 import { logActivity } from '$features/queries/activity';
 import type { Quotation } from '$features/quotations/types';
 import { bookingTotals } from './totals';
-import type { Booking, BookingItem, BookingItemUpdate } from './types';
+import type { Booking, BookingItem, BookingItemUpdate, NewBookingItem } from './types';
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
 	if (result.error) throw new Error(result.error.message);
@@ -56,6 +56,17 @@ async function syncBookingTotals(bookingId: string, roe: number): Promise<void> 
  * Create a booking from an accepted quotation, auto-populating items from the
  * quotation lines (actuals start equal to quoted; staff then adjust).
  */
+/** Start an empty booking (no quotation) — services get added directly. */
+export async function createBlankBooking(queryId: string, roe = 1): Promise<Booking> {
+	const existing = await getBookingForQuery(queryId);
+	if (existing) return existing;
+	const booking = unwrap<Booking>(
+		await supabase.from('bookings').insert({ query_id: queryId, roe }).select().single()
+	);
+	logActivity({ query_id: queryId, kind: 'booking', summary: 'Booking started (blank)' });
+	return booking;
+}
+
 export async function createBookingFromQuotation(quotation: Quotation): Promise<Booking> {
 	// Guard: one active booking per query — return the existing one if present.
 	const existing = await getBookingForQuery(quotation.query_id);
@@ -104,4 +115,22 @@ export async function updateBookingItem(
 	);
 	await syncBookingTotals(booking.id, Number(booking.roe));
 	return item;
+}
+
+/** Add a service line to a booking (direct booking, or extra on a seeded one). */
+export async function createBookingItem(
+	booking: Booking,
+	input: Omit<NewBookingItem, 'booking_id'>
+): Promise<BookingItem> {
+	const item = unwrap<BookingItem>(
+		await supabase.from('booking_items').insert({ ...input, booking_id: booking.id }).select().single()
+	);
+	await syncBookingTotals(booking.id, Number(booking.roe));
+	return item;
+}
+
+export async function deleteBookingItem(id: string, booking: Booking): Promise<void> {
+	const { error } = await supabase.from('booking_items').delete().eq('id', id);
+	if (error) throw new Error(error.message);
+	await syncBookingTotals(booking.id, Number(booking.roe));
 }
