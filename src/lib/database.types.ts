@@ -589,6 +589,7 @@ export interface Database {
 					query_id: string;
 					quotation_id: string | null;
 					roe: number;
+					usd_rate: number | null;
 					quoted_cost_pkr: number;
 					quoted_sell_pkr: number;
 					actual_cost_pkr: number;
@@ -604,6 +605,7 @@ export interface Database {
 					query_id: string;
 					quotation_id?: string | null;
 					roe?: number;
+					usd_rate?: number | null;
 					quoted_cost_pkr?: number;
 					quoted_sell_pkr?: number;
 					actual_cost_pkr?: number;

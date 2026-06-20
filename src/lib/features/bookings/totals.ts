@@ -23,16 +23,31 @@ export interface BookingTotals {
 	variancePkr: number;
 }
 
-/** Convert a line-currency amount to PKR (SAR via roe, PKR as-is). */
-export function toPkr(amount: number, currency: Currency, roe: number): Money {
-	return currency === 'PKR' ? money(amount, 'PKR') : convertToPkr(money(amount, currency), roe);
+/** Conversion rates to PKR: roe = SAR->PKR, usdRate = USD->PKR. */
+export interface Rates {
+	roe: number;
+	usdRate: number;
 }
 
-export function bookingTotals(items: BookingItemAmounts[], roe: number): BookingTotals {
-	const quotedCost = sum(items.map((i) => toPkr(i.quoted_cost, i.currency, roe)));
-	const quotedSell = sum(items.map((i) => toPkr(i.quoted_sell, i.currency, roe)));
-	const actualCost = sum(items.map((i) => toPkr(i.actual_cost, i.currency, roe)));
-	const actualSell = sum(items.map((i) => toPkr(i.actual_sell, i.currency, roe)));
+/** Build rates from a booking row (USD rate falls back to roe for old rows). */
+export function ratesOf(b: { roe: number; usd_rate?: number | null }): Rates {
+	const roe = Number(b.roe) || 0;
+	const usdRate = Number(b.usd_rate ?? 0) || roe;
+	return { roe, usdRate };
+}
+
+/** Convert a line-currency amount to PKR (SAR via roe, USD via usdRate, PKR as-is). */
+export function toPkr(amount: number, currency: Currency, rates: Rates): Money {
+	if (currency === 'PKR') return money(amount, 'PKR');
+	const rate = currency === 'USD' ? rates.usdRate : rates.roe;
+	return convertToPkr(money(amount, currency), rate || rates.roe);
+}
+
+export function bookingTotals(items: BookingItemAmounts[], rates: Rates): BookingTotals {
+	const quotedCost = sum(items.map((i) => toPkr(i.quoted_cost, i.currency, rates)));
+	const quotedSell = sum(items.map((i) => toPkr(i.quoted_sell, i.currency, rates)));
+	const actualCost = sum(items.map((i) => toPkr(i.actual_cost, i.currency, rates)));
+	const actualSell = sum(items.map((i) => toPkr(i.actual_sell, i.currency, rates)));
 
 	const quotedProfit = subtract(quotedSell, quotedCost);
 	const actualProfit = subtract(actualSell, actualCost);

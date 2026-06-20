@@ -26,7 +26,7 @@ export const WORKFLOW_STAGES: WorkflowStage[] = [
 	},
 	{
 		status: 'Booking',
-		label: 'Booking',
+		label: 'Booking in progress',
 		hint: 'Vendor booking, documents and payment.',
 		tone: 'success'
 	},

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Map, CheckCircle2, Wallet, Building2, IdCard } from 'lucide-svelte';
+	import { Map, CheckCircle2, Wallet, Building2 } from 'lucide-svelte';
 	import { Badge, Button } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { BOOKING_STATUS_TONE } from './workflow';
@@ -7,8 +7,6 @@
 	import PaymentSchedule from '$features/payments/PaymentSchedule.svelte';
 	import ConfirmationPanel from './ConfirmationPanel.svelte';
 	import BookingDocChecklist from '$features/documents/BookingDocChecklist.svelte';
-	import DocumentsPanel from '$features/documents/DocumentsPanel.svelte';
-	import { PASSENGER_DOCUMENT_TYPES } from '$features/documents/api';
 	import type { Query } from './types';
 
 	let { query, queryId, reference }: { query: Query; queryId: string; reference: string } = $props();
@@ -89,17 +87,5 @@
 	<BookingPanel {queryId} />
 </section>
 
-<!-- Trip documents are managed from the header's Documents button (always
-     available, with drag-drop upload + share). Passenger profile docs stay here. -->
-
-{#if query.passenger_id}
-	<section class="mb-8">
-		{@render sectionHead(IdCard, 'Passenger documents (profile)')}
-		<DocumentsPanel
-			entityType="passenger"
-			entityId={query.passenger_id}
-			title="Passenger documents (profile)"
-			types={PASSENGER_DOCUMENT_TYPES}
-		/>
-	</section>
-{/if}
+<!-- All documents (trip + passenger profile) live in the header's Documents
+     button now — drag-drop upload, type chips, thumbnails, view and share. -->

@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Check } from 'lucide-svelte';
+	import { Check, Trash2 } from 'lucide-svelte';
 	import { Badge, Button, Input, Select } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import { useVendors } from '$features/vendors/queries';
-	import { useUpdateBookingItem } from './queries';
+	import { useUpdateBookingItem, useDeleteBookingItem } from './queries';
 	import { itemProfit } from './totals';
 	import type { Booking, BookingItem } from './types';
 
@@ -13,6 +13,7 @@
 
 	const vendors = useVendors();
 	const update = untrack(() => useUpdateBookingItem(queryId));
+	const remove = untrack(() => useDeleteBookingItem(queryId));
 
 	let form = $state(
 		untrack(() => ({
@@ -71,8 +72,18 @@
 		{variance >= 0 ? '+' : ''}{formatAmount(variance, item.currency)}
 	</td>
 	<td class="px-3 py-2">
-		<Button size="sm" variant="secondary" onclick={save} disabled={$update.isPending}>
-			<Check class="h-4 w-4" />
-		</Button>
+		<div class="flex justify-end gap-1">
+			<Button size="sm" variant="secondary" onclick={save} disabled={$update.isPending}>
+				<Check class="h-4 w-4" />
+			</Button>
+			<button
+				type="button"
+				onclick={() => confirm('Remove this service from the booking?') && $remove.mutate({ id: item.id, booking })}
+				class="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+				aria-label="Remove service"
+			>
+				<Trash2 class="h-4 w-4" />
+			</button>
+		</div>
 	</td>
 </tr>

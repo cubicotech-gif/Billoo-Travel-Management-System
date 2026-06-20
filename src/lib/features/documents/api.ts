@@ -29,6 +29,15 @@ export const QUERY_DOCUMENT_TYPES: DocumentType[] = [
 
 export const DOCUMENT_TYPES: DocumentType[] = PASSENGER_DOCUMENT_TYPES;
 
+/** Every distinct document type, for the unified Documents dialog. */
+export const ALL_DOCUMENT_TYPES: DocumentType[] = [
+	...new Set([...QUERY_DOCUMENT_TYPES, ...PASSENGER_DOCUMENT_TYPES])
+];
+
+/** Document types that belong on the passenger's reusable profile (identity /
+ *  eligibility), so uploads of these auto-route to the passenger when known. */
+export const PROFILE_BOUND_TYPES: DocumentType[] = ['passport', 'cnic', 'photo', 'vaccination', 'mahram'];
+
 /** Document types that carry a meaningful expiry (eligibility-critical). */
 export const EXPIRABLE_TYPES: DocumentType[] = ['passport', 'visa', 'vaccination'];
 
@@ -120,6 +129,42 @@ export async function signedUrl(path: string): Promise<string> {
 	const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(path, 3600);
 	if (error) throw new Error(error.message);
 	return data.signedUrl;
+}
+
+/** Pull a stored file down as a real File object — for Web Share / download. */
+export async function fetchDocFile(doc: Document): Promise<File> {
+	const url = await signedUrl(doc.file_url);
+	const res = await fetch(url);
+	if (!res.ok) throw new Error(`Could not fetch ${doc.file_name}`);
+	const blob = await res.blob();
+	return new File([blob], doc.file_name, { type: doc.mime_type || blob.type });
+}
+
+/**
+ * Share files via the OS share sheet (so they go straight into WhatsApp etc. on
+ * supported devices); falls back to downloading them when file-sharing isn't
+ * available (most desktop browsers). Returns how it was handled.
+ */
+export async function shareDocuments(docs: Document[]): Promise<'shared' | 'downloaded'> {
+	const files = await Promise.all(docs.map(fetchDocFile));
+	const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+	if (nav.canShare && nav.canShare({ files }) && navigator.share) {
+		await navigator.share({ files, title: files.length === 1 ? files[0]!.name : 'Documents' });
+		return 'shared';
+	}
+	for (const file of files) downloadFile(file);
+	return 'downloaded';
+}
+
+function downloadFile(file: File): void {
+	const url = URL.createObjectURL(file);
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = file.name;
+	document.body.appendChild(a);
+	a.click();
+	a.remove();
+	setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 export async function deleteDocument(doc: Document): Promise<void> {
