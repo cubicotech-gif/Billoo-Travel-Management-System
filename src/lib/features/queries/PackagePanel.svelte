@@ -99,16 +99,19 @@
 
 	let adding = $state(false);
 	let draft = $state('');
+	let noteError = $state<string | null>(null);
 	function addNote() {
 		const body = draft.trim();
 		if (!body) return;
+		noteError = null;
 		$addReply.mutate(
 			{ query_id: q.id, body, sender: 'us', author: auth.user?.email ?? null },
 			{
 				onSuccess: () => {
 					draft = '';
 					adding = false;
-				}
+				},
+				onError: (e) => (noteError = e instanceof Error ? e.message : 'Could not save — try again.')
 			}
 		);
 	}
@@ -213,6 +216,9 @@
 
 		{#if adding}
 			<div class="mb-2">
+				{#if noteError}
+					<p class="mb-1 rounded bg-red-50 px-2 py-1 text-[11px] text-red-600">{noteError}</p>
+				{/if}
 				<textarea
 					bind:value={draft}
 					rows="2"

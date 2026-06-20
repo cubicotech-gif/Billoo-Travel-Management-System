@@ -15,6 +15,7 @@
 
 	let draft = $state('');
 	let sender = $state<'client' | 'us'>('client');
+	let error = $state<string | null>(null);
 
 	// Keep the thread pinned to the newest message as it grows.
 	let thread = $state<HTMLElement | null>(null);
@@ -27,9 +28,13 @@
 	function send() {
 		const body = draft.trim();
 		if (!body) return;
+		error = null;
 		$addReply.mutate(
 			{ query_id: queryId, body, sender, author: sender === 'us' ? (auth.user?.email ?? null) : null },
-			{ onSuccess: () => (draft = '') }
+			{
+				onSuccess: () => (draft = ''),
+				onError: (e) => (error = e instanceof Error ? e.message : 'Could not save — try again.')
+			}
 		);
 	}
 
@@ -105,6 +110,9 @@
 
 	<!-- composer -->
 	<div class="border-t border-slate-100 p-3">
+		{#if error}
+			<p class="mb-2 rounded-lg bg-red-50 px-3 py-1.5 text-xs text-red-600">{error}</p>
+		{/if}
 		<div class="mb-2 inline-flex rounded-lg border border-slate-200 p-0.5 text-xs">
 			<button
 				type="button"
