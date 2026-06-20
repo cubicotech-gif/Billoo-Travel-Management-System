@@ -105,6 +105,56 @@ export async function createBookingFromQuotation(quotation: Quotation): Promise<
 	return booking;
 }
 
+/**
+ * Make the booking reflect a quotation: create it if absent, otherwise replace
+ * its items and rates from the quotation. Used by the booking-stage builder so
+ * each save re-drives the actual booking.
+ */
+export async function syncBookingFromQuotation(quotation: Quotation): Promise<Booking> {
+	const existing = await getBookingForQuery(quotation.query_id);
+	const lines = await getQuotationLines(quotation.id);
+
+	let booking: Booking;
+	if (existing) {
+		await supabase.from('booking_items').delete().eq('booking_id', existing.id);
+		const { error } = await supabase
+			.from('bookings')
+			.update({ quotation_id: quotation.id, roe: quotation.roe, usd_rate: quotation.usd_rate })
+			.eq('id', existing.id);
+		if (error) throw new Error(error.message);
+		booking = { ...existing, quotation_id: quotation.id, roe: quotation.roe, usd_rate: quotation.usd_rate };
+	} else {
+		booking = unwrap<Booking>(
+			await supabase
+				.from('bookings')
+				.insert({ query_id: quotation.query_id, quotation_id: quotation.id, roe: quotation.roe, usd_rate: quotation.usd_rate })
+				.select()
+				.single()
+		);
+	}
+
+	if (lines.length > 0) {
+		const rows = lines.map((l) => ({
+			booking_id: booking.id,
+			line_type: l.line_type,
+			label: l.label,
+			vendor_id: l.vendor_id,
+			currency: l.currency,
+			quoted_cost: Number(l.line_cost),
+			quoted_sell: Number(l.line_sell),
+			actual_cost: Number(l.line_cost),
+			actual_sell: Number(l.line_sell),
+			meta: l.meta ?? {}
+		}));
+		const { error } = await supabase.from('booking_items').insert(rows);
+		if (error) throw new Error(error.message);
+	}
+
+	await syncBookingTotals(booking.id, ratesOf(booking));
+	logActivity({ query_id: quotation.query_id, kind: 'booking', summary: 'Booking updated from builder' });
+	return booking;
+}
+
 export async function updateBookingItem(
 	id: string,
 	booking: Booking,
