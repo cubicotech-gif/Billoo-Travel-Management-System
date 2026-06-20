@@ -167,5 +167,5 @@
 	</div>
 
 	<QueryEditModal query={q} open={editing} onClose={() => (editing = false)} />
-	<DocumentsDialog entityType="query" entityId={id} title="Trip documents" open={docsOpen} onClose={() => (docsOpen = false)} />
+	<DocumentsDialog queryId={id} passengerId={q.passenger_id} title="Documents" open={docsOpen} onClose={() => (docsOpen = false)} />
 {/if}
