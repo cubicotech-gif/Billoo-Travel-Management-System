@@ -5,6 +5,8 @@
 	import { formatAmount } from '$lib/money';
 	import type { Currency, QuotationLineType } from '$lib/database.types';
 	import { useVendors } from '$features/vendors/queries';
+	import { useUploadDocument } from '$features/documents/queries';
+	import type { DocumentType } from '$features/documents/api';
 	import { useBookingItems, useCreateBookingItem, useUpdateBookingRates } from './queries';
 	import BookingItemRow from './BookingItemRow.svelte';
 	import type { Booking } from './types';
@@ -42,14 +44,21 @@
 		...($vendors.data ?? []).map((v) => ({ value: v.id, label: v.name }))
 	]);
 
+	// After a service is added, prompt to attach its invoice/voucher (or skip).
+	const uploadDoc = untrack(() => useUploadDocument('query', queryId));
+	let pending = $state<{ label: string } | null>(null);
+	let docType = $state<DocumentType>('invoice');
+	let docInput = $state<HTMLInputElement | null>(null);
+
 	function addService(e: SubmitEvent) {
 		e.preventDefault();
+		const label = add.label.trim() || add.line_type;
 		$createItem.mutate(
 			{
 				booking,
 				input: {
 					line_type: add.line_type,
-					label: add.label.trim() || add.line_type,
+					label,
 					vendor_id: add.vendor_id || null,
 					currency: add.currency,
 					quoted_cost: 0,
@@ -62,9 +71,22 @@
 			{
 				onSuccess: () => {
 					add = { line_type: 'hotel', label: '', vendor_id: '', currency: 'SAR', actual_cost: 0, actual_sell: 0 };
+					pending = { label };
 				}
 			}
 		);
+	}
+
+	function onDocPick(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const files = input.files;
+		if (files?.length) {
+			for (const file of Array.from(files)) {
+				$uploadDoc.mutate({ file, entityType: 'query', entityId: queryId, documentType: docType });
+			}
+			pending = null;
+		}
+		input.value = '';
 	}
 
 	const variance = $derived(
@@ -142,6 +164,16 @@
 		<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={add.actual_sell} /></div>
 		<Button type="submit" size="sm" disabled={$createItem.isPending}><Plus class="h-4 w-4" /> Add</Button>
 	</div>
+
+	{#if pending}
+		<div class="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 p-2.5">
+			<span class="text-sm text-slate-600">Upload the <span class="font-medium">{pending.label}</span> document?</span>
+			<div class="w-28"><Select bind:value={docType} options={['invoice', 'voucher', 'ticket', 'other']} /></div>
+			<Button type="button" size="sm" onclick={() => docInput?.click()}>Choose file</Button>
+			<button type="button" onclick={() => (pending = null)} class="text-xs text-slate-500 hover:text-slate-700">Upload later</button>
+			<input bind:this={docInput} type="file" multiple class="hidden" onchange={onDocPick} />
+		</div>
+	{/if}
 </form>
 <p class="mt-2 text-xs text-slate-400">
 	SAR components convert at ROE {booking.roe}. A row's cost + selected vendor post to that vendor's account automatically.
