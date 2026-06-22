@@ -377,6 +377,7 @@
 			...bk(t),
 			vehicleType: vehicleLabel(t),
 			route: routeLabel(t),
+			date: t.date || null,
 			currency: t.currency,
 			vendorId: t.vendorId || null,
 			costSar: num(t.cost),
@@ -805,6 +806,7 @@
 		{#each form.hotels as slot, hi (slot.id)}
 			{#if booking}
 				<ServiceShell
+					accent="hotel"
 					title={`Stay ${hi + 1}${slot.city ? ` · ${slot.city}` : ''}`}
 					subtitle={slot.name || ''}
 					booked={slot.booked}
@@ -842,6 +844,7 @@
 				{#if t.vehicle === 'Custom'}<div class="w-28"><Input label="Custom" bind:value={t.customVehicle} /></div>{/if}
 				<div class="w-44"><Select label="Route" bind:value={t.route} options={ROUTES} /></div>
 				{#if t.route === 'Custom'}<div class="w-40"><Input label="Custom route" bind:value={t.customRoute} /></div>{/if}
+				<div class="w-36"><Input label="Date" type="date" bind:value={t.date} /></div>
 				<div class="w-20"><Select label="Cur" bind:value={t.currency} options={['SAR', 'USD', 'PKR']} /></div>
 				<div class="w-40"><VendorPicker service="Transfer" bind:value={t.vendorId} /></div>
 				<div class="w-16"><Input label="Qty" type="number" min="0" bind:value={t.vehicles} /></div>
@@ -858,7 +861,7 @@
 				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Transfers</h2>
 				{@render transferPresets()}
 				{#each form.transfers as t, i (i)}
-					<ServiceShell title={routeLabel(t)} subtitle={vehicleLabel(t)} booked={t.booked} proof={t.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(t)} onUnmark={() => unmarkBooked(t)} onUploadProof={(f, d) => uploadProof(t, f, d)}>
+					<ServiceShell accent="transfer" title={routeLabel(t)} subtitle={vehicleLabel(t)} booked={t.booked} proof={t.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(t)} onUnmark={() => unmarkBooked(t)} onUploadProof={(f, d) => uploadProof(t, f, d)}>
 						{@render transferBody(t, i)}
 					</ServiceShell>
 				{/each}
@@ -895,7 +898,7 @@
 			<div class="space-y-2">
 				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Visas</h2>
 				{#each form.visas as v, i (i)}
-					<ServiceShell title={`${v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah'} visa`} subtitle={num(v.persons) > 0 ? `${num(v.persons)} pax` : 'all pax'} booked={v.booked} proof={v.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(v)} onUnmark={() => unmarkBooked(v)} onUploadProof={(f, d) => uploadProof(v, f, d)}>
+					<ServiceShell accent="visa" title={`${v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah'} visa`} subtitle={num(v.persons) > 0 ? `${num(v.persons)} pax` : 'all pax'} booked={v.booked} proof={v.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(v)} onUnmark={() => unmarkBooked(v)} onUploadProof={(f, d) => uploadProof(v, f, d)}>
 						{@render visaBody(v, i)}
 					</ServiceShell>
 				{/each}
@@ -933,7 +936,7 @@
 			<div class="space-y-2">
 				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Other services</h2>
 				{#each form.otherServices as o, i (i)}
-					<ServiceShell title={o.label || 'Service'} subtitle={num(o.qty) > 1 ? `×${num(o.qty)}` : ''} booked={o.booked} proof={o.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(o)} onUnmark={() => unmarkBooked(o)} onUploadProof={(f, d) => uploadProof(o, f, d)}>
+					<ServiceShell accent="other" title={o.label || 'Service'} subtitle={num(o.qty) > 1 ? `×${num(o.qty)}` : ''} booked={o.booked} proof={o.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(o)} onUnmark={() => unmarkBooked(o)} onUploadProof={(f, d) => uploadProof(o, f, d)}>
 						{@render otherBody(o, i)}
 					</ServiceShell>
 				{/each}
@@ -993,7 +996,7 @@
 		{/snippet}
 
 		{#if booking}
-			<ServiceShell title="Air tickets" subtitle={form.airlineInclude ? form.airline.name || '' : 'not included'} booked={form.airline.booked} proof={form.airline.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(form.airline)} onUnmark={() => unmarkBooked(form.airline)} onUploadProof={(f, d) => uploadProof(form.airline, f, d)}>
+			<ServiceShell accent="ticket" title="Air tickets" subtitle={form.airlineInclude ? form.airline.name || '' : 'not included'} booked={form.airline.booked} proof={form.airline.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(form.airline)} onUnmark={() => unmarkBooked(form.airline)} onUploadProof={(f, d) => uploadProof(form.airline, f, d)}>
 				{@render ticketsBody()}
 			</ServiceShell>
 		{:else}

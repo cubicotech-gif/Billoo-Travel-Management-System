@@ -1,16 +1,19 @@
 <script lang="ts">
-	import { untrack, type Snippet } from 'svelte';
-	import { ChevronDown, ChevronRight, CheckCircle2, Circle, Upload, AlertTriangle } from 'lucide-svelte';
+	import type { Snippet } from 'svelte';
+	import { ChevronDown, ChevronRight, CheckCircle2, Upload, AlertTriangle } from 'lucide-svelte';
 	import { Badge, Button } from '$ui';
 	import type { DocumentType } from '$features/documents/api';
 
 	// A collapsible card for ONE service in the booking stage: the agreed thing we
-	// actually pay a vendor for. Header carries its booked status, a Mark-booked
+	// actually pay a vendor for. Colour-coded by service type so the four core
+	// services read apart at a glance; header carries booked status, a Mark-booked
 	// toggle and an (optional) proof upload; the body holds the existing fields.
 	// Stays editable after booking — reopen and change, the totals/itinerary follow.
+	type Accent = 'hotel' | 'transfer' | 'visa' | 'ticket' | 'other';
 	let {
 		title,
 		subtitle = '',
+		accent = 'other',
 		booked = false,
 		proof = false,
 		busy = false,
@@ -21,6 +24,7 @@
 	}: {
 		title: string;
 		subtitle?: string;
+		accent?: Accent;
 		booked?: boolean;
 		proof?: boolean;
 		busy?: boolean;
@@ -30,8 +34,21 @@
 		children: Snippet;
 	} = $props();
 
-	// Cleaner look: booked services start collapsed, open ones stay expanded.
-	let open = $state(untrack(() => !booked));
+	// Static class strings (so Tailwind keeps them) per service colour.
+	const ACCENTS: Record<Accent, { ring: string; bar: string; head: string; dot: string; chip: string }> = {
+		hotel: { ring: 'border-indigo-200', bar: 'border-l-indigo-400', head: 'bg-indigo-50/70', dot: 'bg-indigo-400', chip: 'bg-indigo-100 text-indigo-700' },
+		transfer: { ring: 'border-amber-200', bar: 'border-l-amber-400', head: 'bg-amber-50/70', dot: 'bg-amber-400', chip: 'bg-amber-100 text-amber-700' },
+		visa: { ring: 'border-emerald-200', bar: 'border-l-emerald-400', head: 'bg-emerald-50/70', dot: 'bg-emerald-400', chip: 'bg-emerald-100 text-emerald-700' },
+		ticket: { ring: 'border-sky-200', bar: 'border-l-sky-400', head: 'bg-sky-50/70', dot: 'bg-sky-400', chip: 'bg-sky-100 text-sky-700' },
+		other: { ring: 'border-violet-200', bar: 'border-l-violet-400', head: 'bg-violet-50/70', dot: 'bg-violet-400', chip: 'bg-violet-100 text-violet-700' }
+	};
+	const c = $derived(ACCENTS[accent]);
+	const kindLabel = $derived(
+		accent === 'hotel' ? 'Hotel' : accent === 'transfer' ? 'Transfer' : accent === 'visa' ? 'Visa' : accent === 'ticket' ? 'Tickets' : 'Service'
+	);
+
+	// Always collapsed when the booking page opens — expand on demand.
+	let open = $state(false);
 	let docType = $state<DocumentType>('voucher');
 	let fileInput = $state<HTMLInputElement | null>(null);
 
@@ -45,15 +62,11 @@
 	}
 </script>
 
-<div class="rounded-xl border bg-white {booked ? 'border-green-200' : 'border-slate-200'}">
-	<div class="flex flex-wrap items-center gap-2 px-3 py-2.5">
+<div class="overflow-hidden rounded-xl border border-l-4 bg-white {c.ring} {c.bar}">
+	<div class="flex flex-wrap items-center gap-2 px-3 py-2.5 {c.head}">
 		<button type="button" onclick={() => (open = !open)} class="flex min-w-0 flex-1 items-center gap-2 text-left">
 			{#if open}<ChevronDown class="h-4 w-4 shrink-0 text-slate-400" />{:else}<ChevronRight class="h-4 w-4 shrink-0 text-slate-400" />{/if}
-			{#if booked}
-				<CheckCircle2 class="h-4 w-4 shrink-0 text-green-600" />
-			{:else}
-				<Circle class="h-4 w-4 shrink-0 text-slate-300" />
-			{/if}
+			<span class="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide {c.chip}">{kindLabel}</span>
 			<span class="truncate text-sm font-semibold text-slate-700">{title}</span>
 			{#if subtitle}<span class="truncate text-xs text-slate-400">{subtitle}</span>{/if}
 		</button>

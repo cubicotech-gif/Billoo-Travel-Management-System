@@ -96,6 +96,7 @@ export function personsInRooms(rooms: RoomType[]): number {
 export interface TransferRow extends BookedStatus {
 	vehicleType: string; // 4 / 7 / 14 / 50-seater / custom
 	route: string; // Airport → Makkah, etc.
+	date?: string | null; // pick-up date (confirmation voucher)
 	currency?: LineCurrency;
 	vendorId?: string | null;
 	costSar: number; // in `currency` (named for the SAR default)
@@ -326,7 +327,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			quantity: t.vehicles,
 			lineCost: toNumber(lineCost),
 			lineSell: toNumber(lineSell),
-			meta: { vehicle_type: t.vehicleType, route: t.route, ...bookedMeta(t) }
+			meta: { vehicle_type: t.vehicleType, route: t.route, date: t.date ?? null, ...bookedMeta(t) }
 		});
 	}
 

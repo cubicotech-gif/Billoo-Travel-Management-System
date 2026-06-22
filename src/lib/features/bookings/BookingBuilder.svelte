@@ -37,6 +37,19 @@
 	const completed = $derived($query.data?.booking_status === 'Completed');
 	const hasBooking = $derived(!!$booking.data);
 
+	// Auto-seed: on the Booking page there should always be a booking so the
+	// itinerary & invoice have data to show. If none exists yet but a source
+	// quotation does, drive a booking from it once (no need to hit Save first).
+	let seeded = $state(false);
+	$effect(() => {
+		if (!ready || seeded) return;
+		if ($booking.data || !pinned) return;
+		const src = ($quotations.data ?? []).find((q) => q.id === pinned);
+		if (!src) return;
+		seeded = true;
+		$sync.mutate(src);
+	});
+
 	// Brief "saved" confirmation after a save re-drives the booking.
 	let savedAt = $state(0);
 	$effect(() => {
