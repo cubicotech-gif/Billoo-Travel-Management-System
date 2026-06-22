@@ -45,7 +45,7 @@
 		totalNights
 	} from './itinerary';
 	import { persistRates, type RateSnapshot } from './autosave';
-	import { useCreateQuotation } from './queries';
+	import { useCreateQuotation, useUpdateQuotationFull } from './queries';
 	import { getQuotation, getQuotationLines } from './api';
 	import type { Quotation } from './types';
 	import {
@@ -97,10 +97,16 @@
 	const observations = useAllObservations();
 	const roe = useLatestRoe();
 	const createQuotation = untrack(() => useCreateQuotation(queryId));
+	const updateFull = untrack(() => useUpdateQuotationFull(queryId));
 	const setStatus = useSetQueryStatus();
 	const uploadDoc = untrack(() => useUploadDocument('query', queryId));
 
+	// In booking mode the builder edits one quotation in place — track its id so
+	// every save (incl. mark-booked) reuses it instead of minting a new version.
+	let savedId = $state(untrack(() => editId));
+
 	const booking = $derived(mode === 'booking');
+	const saving = $derived($createQuotation.isPending || $updateFull.isPending);
 	// Spread a form service's booked status into the calculator input.
 	const bk = (x: { booked: boolean; bookedAt: string; bookingRef: string; proof: boolean }) => ({
 		booked: x.booked,
@@ -152,6 +158,17 @@
 	}
 
 	let form = $state(blankForm());
+
+	// Booking progress: how many of the live services are marked booked.
+	const services = $derived([
+		...form.hotels,
+		...form.transfers,
+		...form.visas,
+		...form.otherServices,
+		...(form.airlineInclude ? [form.airline] : [])
+	]);
+	const serviceCount = $derived(services.length);
+	const bookedCount = $derived(services.filter((s) => s.booked).length);
 
 	let seeded = $state(false);
 	$effect(() => {
@@ -564,7 +581,7 @@
 			alert('Some components are in USD — set the USD → PKR rate first.');
 			return;
 		}
-		const quotation = await $createQuotation.mutateAsync({
+		const args = {
 			queryId,
 			roe: num(form.roeValue),
 			usd: num(form.usdValue) || null,
@@ -577,7 +594,16 @@
 			validUntil: form.validUntil || null,
 			inclusions: splitLines(form.inclusions),
 			exclusions: splitLines(form.exclusions)
-		});
+		};
+		// Booking stage edits update ONE quotation in place (no version spam — the
+		// booking is the source of truth). Quote stage mints a new version each save.
+		let quotation: Quotation;
+		if (booking && savedId) {
+			quotation = await $updateFull.mutateAsync({ id: savedId, args });
+		} else {
+			quotation = await $createQuotation.mutateAsync(args);
+			savedId = quotation.id;
+		}
 		// Smart auto-save: persist any new/changed hotel, transfer, ticket & visa
 		// rates so they're available (vendor-wise) next time. Best-effort.
 		try {
@@ -811,7 +837,7 @@
 					subtitle={slot.name || ''}
 					booked={slot.booked}
 					proof={slot.proof}
-					busy={$createQuotation.isPending}
+					busy={saving}
 					onMarkBooked={() => markBooked(slot)}
 					onUnmark={() => unmarkBooked(slot)}
 					onUploadProof={(f, d) => uploadProof(slot, f, d)}
@@ -861,7 +887,7 @@
 				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Transfers</h2>
 				{@render transferPresets()}
 				{#each form.transfers as t, i (i)}
-					<ServiceShell accent="transfer" title={routeLabel(t)} subtitle={vehicleLabel(t)} booked={t.booked} proof={t.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(t)} onUnmark={() => unmarkBooked(t)} onUploadProof={(f, d) => uploadProof(t, f, d)}>
+					<ServiceShell accent="transfer" title={routeLabel(t)} subtitle={vehicleLabel(t)} booked={t.booked} proof={t.proof} busy={saving} onMarkBooked={() => markBooked(t)} onUnmark={() => unmarkBooked(t)} onUploadProof={(f, d) => uploadProof(t, f, d)}>
 						{@render transferBody(t, i)}
 					</ServiceShell>
 				{/each}
@@ -898,7 +924,7 @@
 			<div class="space-y-2">
 				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Visas</h2>
 				{#each form.visas as v, i (i)}
-					<ServiceShell accent="visa" title={`${v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah'} visa`} subtitle={num(v.persons) > 0 ? `${num(v.persons)} pax` : 'all pax'} booked={v.booked} proof={v.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(v)} onUnmark={() => unmarkBooked(v)} onUploadProof={(f, d) => uploadProof(v, f, d)}>
+					<ServiceShell accent="visa" title={`${v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah'} visa`} subtitle={num(v.persons) > 0 ? `${num(v.persons)} pax` : 'all pax'} booked={v.booked} proof={v.proof} busy={saving} onMarkBooked={() => markBooked(v)} onUnmark={() => unmarkBooked(v)} onUploadProof={(f, d) => uploadProof(v, f, d)}>
 						{@render visaBody(v, i)}
 					</ServiceShell>
 				{/each}
@@ -936,7 +962,7 @@
 			<div class="space-y-2">
 				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Other services</h2>
 				{#each form.otherServices as o, i (i)}
-					<ServiceShell accent="other" title={o.label || 'Service'} subtitle={num(o.qty) > 1 ? `×${num(o.qty)}` : ''} booked={o.booked} proof={o.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(o)} onUnmark={() => unmarkBooked(o)} onUploadProof={(f, d) => uploadProof(o, f, d)}>
+					<ServiceShell accent="other" title={o.label || 'Service'} subtitle={num(o.qty) > 1 ? `×${num(o.qty)}` : ''} booked={o.booked} proof={o.proof} busy={saving} onMarkBooked={() => markBooked(o)} onUnmark={() => unmarkBooked(o)} onUploadProof={(f, d) => uploadProof(o, f, d)}>
 						{@render otherBody(o, i)}
 					</ServiceShell>
 				{/each}
@@ -996,7 +1022,7 @@
 		{/snippet}
 
 		{#if booking}
-			<ServiceShell accent="ticket" title="Air tickets" subtitle={form.airlineInclude ? form.airline.name || '' : 'not included'} booked={form.airline.booked} proof={form.airline.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(form.airline)} onUnmark={() => unmarkBooked(form.airline)} onUploadProof={(f, d) => uploadProof(form.airline, f, d)}>
+			<ServiceShell accent="ticket" title="Air tickets" subtitle={form.airlineInclude ? form.airline.name || '' : 'not included'} booked={form.airline.booked} proof={form.airline.proof} busy={saving} onMarkBooked={() => markBooked(form.airline)} onUnmark={() => unmarkBooked(form.airline)} onUploadProof={(f, d) => uploadProof(form.airline, f, d)}>
 				{@render ticketsBody()}
 			</ServiceShell>
 		{:else}
@@ -1008,11 +1034,31 @@
 
 	<div class="space-y-4 lg:sticky lg:top-4 lg:self-start">
 		<Card title={booking ? 'Invoice — cost sheet (staff)' : 'Breakdown (staff)'}>
+			{#if booking && serviceCount > 0}
+				<div class="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+					<div class="mb-1 flex items-center justify-between text-xs font-medium text-slate-600">
+						<span>Booking progress</span>
+						<span>{bookedCount} / {serviceCount} services booked</span>
+					</div>
+					<div class="h-2 overflow-hidden rounded-full bg-slate-200">
+						<div class="h-full rounded-full bg-emerald-500 transition-all" style="width: {serviceCount ? Math.round((bookedCount / serviceCount) * 100) : 0}%"></div>
+					</div>
+				</div>
+			{/if}
 			<div class="space-y-1.5 text-sm">
 				{#each result.lines as l, i (i)}
-					<div class="flex justify-between">
-						<span class="text-slate-500">{l.label}</span>
-						<span class="text-slate-700">{formatAmount(l.lineSell, l.currency)}</span>
+					<div class="flex items-center justify-between gap-2">
+						<span class="flex min-w-0 items-center gap-1.5 text-slate-500">
+							{#if booking}
+								{#if l.meta?.booked === true}
+									<Check class="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+								{:else}
+									<span class="h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300"></span>
+								{/if}
+							{/if}
+							<span class="truncate">{l.label}</span>
+						</span>
+						<span class="shrink-0 text-slate-700">{formatAmount(l.lineSell, l.currency)}</span>
 					</div>
 				{/each}
 				{#if result.lines.length === 0}<p class="text-slate-400">Pick items to price.</p>{/if}
@@ -1049,7 +1095,7 @@
 			<Card title="Save booking">
 				<p class="text-xs text-slate-500">These are the final agreed amounts we'll pay/charge. Mark each service booked as you arrange it — the itinerary and invoice update automatically. Saving records the booking.</p>
 				<div class="mt-3 flex flex-wrap gap-2">
-					<Button size="sm" onclick={() => save(false)} disabled={$createQuotation.isPending}><Save class="h-4 w-4" /> Save booking</Button>
+					<Button size="sm" onclick={() => save(false)} disabled={saving}><Save class="h-4 w-4" /> Save booking</Button>
 					<Button variant="secondary" size="sm" href="/queries/{queryId}/invoice"><Copy class="h-4 w-4" /> Invoice</Button>
 				</div>
 			</Card>
@@ -1066,8 +1112,8 @@
 					<Button variant="secondary" size="sm" onclick={copyWa}>
 						{#if copied}<Check class="h-4 w-4" /> Copied{:else}<Copy class="h-4 w-4" /> Copy{/if}
 					</Button>
-					<Button size="sm" onclick={() => save(false)} disabled={$createQuotation.isPending}><Save class="h-4 w-4" /> Save</Button>
-					<Button variant="secondary" size="sm" onclick={() => save(true)} disabled={$createQuotation.isPending}><Plus class="h-4 w-4" /> Save & add another</Button>
+					<Button size="sm" onclick={() => save(false)} disabled={saving}><Save class="h-4 w-4" /> Save</Button>
+					<Button variant="secondary" size="sm" onclick={() => save(true)} disabled={saving}><Plus class="h-4 w-4" /> Save & add another</Button>
 				</div>
 			</Card>
 		{/if}

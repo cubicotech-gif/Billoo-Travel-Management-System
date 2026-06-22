@@ -37,8 +37,8 @@
 			try {
 				query = await getQuery(queryId);
 				const booking = await getBookingForQuery(queryId);
-				if (booking) {
-					const items = await listBookingItems(booking.id);
+				const items = booking ? await listBookingItems(booking.id) : [];
+				if (booking && items.length > 0) {
 					rows = items.map((i) => ({
 						lineType: i.line_type,
 						label: i.label,
@@ -49,6 +49,8 @@
 					totalPkr = Number(booking.actual_sell_pkr);
 					ref = booking.id.slice(0, 6).toUpperCase();
 				} else {
+					// No booking yet (or it has no items) — fall back to the latest
+					// quotation so the document is never blank when a quote exists.
 					const quotes = await listQuotations(queryId);
 					const accepted = quotes.find((q) => q.status === 'accepted') ?? quotes[0];
 					if (accepted) {
@@ -61,7 +63,7 @@
 							meta: l.meta ?? {}
 						}));
 						totalPkr = Number(accepted.total_sell_pkr);
-						ref = accepted.id.slice(0, 6).toUpperCase();
+						ref = (booking?.id ?? accepted.id).slice(0, 6).toUpperCase();
 					}
 				}
 			} catch (e) {

@@ -8,6 +8,7 @@ import {
 	removeQuotation,
 	setQuotationStatus,
 	updateQuotation,
+	updateQuotationFull,
 	type SaveQuotationArgs
 } from './api';
 import type { Quotation } from './types';
@@ -40,6 +41,15 @@ export function useCreateQuotation(queryId: string) {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (args: SaveQuotationArgs) => createQuotation(args),
+		onSuccess: () => invalidate(client, queryId)
+	});
+}
+
+export function useUpdateQuotationFull(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ id, args }: { id: string; args: SaveQuotationArgs }) =>
+			updateQuotationFull(id, args),
 		onSuccess: () => invalidate(client, queryId)
 	});
 }

@@ -4,13 +4,24 @@
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { page } from '$app/stores';
 	import type { Snippet } from 'svelte';
-	import { LayoutDashboard, ClipboardList, Users, Building2, Wallet, Tags } from 'lucide-svelte';
+	import { LayoutDashboard, ClipboardList, Users, Building2, Wallet, Tags, PanelLeftClose, PanelLeftOpen } from 'lucide-svelte';
 	import { createQueryClient } from '$lib/query-client';
 	import { subscribeQueriesRealtime } from '$features/queries/realtime';
 
 	let { children }: { children: Snippet } = $props();
 
 	const queryClient = createQueryClient();
+
+	// Collapsible sidebar — more canvas for the wide booking/board views. Remembers
+	// the choice across reloads.
+	let collapsed = $state(false);
+	onMount(() => {
+		collapsed = localStorage.getItem('nav:collapsed') === '1';
+	});
+	function toggleNav() {
+		collapsed = !collapsed;
+		localStorage.setItem('nav:collapsed', collapsed ? '1' : '0');
+	}
 
 	// Keep every open console live as queries move and conversations grow.
 	onMount(() => subscribeQueriesRealtime(queryClient));
@@ -37,32 +48,50 @@
 
 <QueryClientProvider client={queryClient}>
 	<div class="flex min-h-screen">
-		<aside class="flex w-60 flex-col border-r border-slate-200 bg-white">
-			<div class="px-5 py-5">
-				<div class="text-lg font-bold text-brand-700">Billoo Travel</div>
-				<div class="text-xs text-slate-400">Umrah Season Console</div>
+		<aside class="flex shrink-0 flex-col border-r border-slate-200 bg-white transition-all duration-200 {collapsed ? 'w-16' : 'w-60'}">
+			<div class="flex items-center justify-between gap-2 px-3 py-5">
+				{#if !collapsed}
+					<div class="min-w-0 pl-2">
+						<div class="truncate text-lg font-bold text-brand-700">Billoo Travel</div>
+						<div class="truncate text-xs text-slate-400">Umrah Season Console</div>
+					</div>
+				{/if}
+				<button
+					type="button"
+					onclick={toggleNav}
+					class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+					aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					title={collapsed ? 'Expand' : 'Collapse'}
+				>
+					{#if collapsed}<PanelLeftOpen class="h-5 w-5" />{:else}<PanelLeftClose class="h-5 w-5" />{/if}
+				</button>
 			</div>
 			<nav class="flex-1 space-y-1 px-3">
 				{#each nav as item (item.href)}
 					<a
 						href={item.href}
-						class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors {isActive(
+						title={item.label}
+						class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors {collapsed ? 'justify-center' : ''} {isActive(
 							item.href
 						)
 							? 'bg-brand-50 text-brand-700'
 							: 'text-slate-600 hover:bg-slate-50'}"
 					>
-						<item.icon class="h-4 w-4" />
-						{item.label}
+						<item.icon class="h-4 w-4 shrink-0" />
+						{#if !collapsed}{item.label}{/if}
 					</a>
 				{/each}
 			</nav>
 			<div class="border-t border-slate-100 p-3">
-				<span
-					class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700"
-				>
-					Dev mode · no auth
-				</span>
+				{#if collapsed}
+					<span class="flex justify-center" title="Dev mode · no auth">
+						<span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
+					</span>
+				{:else}
+					<span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+						Dev mode · no auth
+					</span>
+				{/if}
 			</div>
 		</aside>
 		<main class="flex-1 overflow-y-auto">
