@@ -8,6 +8,11 @@
 	import { listQuotations, getQuotationLines } from '$features/quotations/api';
 	import type { Query } from '$features/queries/types';
 
+	// Client confirmation document, styled after the agency's manual voucher:
+	// branded header, blue section bars and per-service breakdown tables
+	// (passenger/visa, transfers, accommodation). The 'voucher' kind additionally
+	// prints the charges + total; 'itinerary' is price-free. Reads the live
+	// booking items, falling back to the latest quotation so it always has data.
 	let { queryId, kind }: { queryId: string; kind: 'voucher' | 'itinerary' } = $props();
 
 	interface Row {
@@ -21,6 +26,7 @@
 	let query = $state<Query | null>(null);
 	let rows = $state<Row[]>([]);
 	let totalPkr = $state(0);
+	let ref = $state('');
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
 
@@ -41,6 +47,7 @@
 						meta: i.meta ?? {}
 					}));
 					totalPkr = Number(booking.actual_sell_pkr);
+					ref = booking.id.slice(0, 6).toUpperCase();
 				} else {
 					const quotes = await listQuotations(queryId);
 					const accepted = quotes.find((q) => q.status === 'accepted') ?? quotes[0];
@@ -54,6 +61,7 @@
 							meta: l.meta ?? {}
 						}));
 						totalPkr = Number(accepted.total_sell_pkr);
+						ref = accepted.id.slice(0, 6).toUpperCase();
 					}
 				}
 			} catch (e) {
@@ -62,9 +70,10 @@
 		})();
 	});
 
-	const title = $derived(kind === 'voucher' ? 'Booking Voucher' : 'Travel Itinerary');
+	const isVoucher = $derived(kind === 'voucher');
 
-	const hotels = $derived(rows.filter((r) => r.lineType === 'hotel'));
+	// Accommodation = hotel room lines (skip the breakfast/meal helper lines).
+	const stays = $derived(rows.filter((r) => r.lineType === 'hotel' && r.meta?.kind !== 'breakfast'));
 	const transfers = $derived(rows.filter((r) => r.lineType === 'transfer'));
 	const visas = $derived(rows.filter((r) => r.lineType === 'visa'));
 	const tickets = $derived(rows.filter((r) => r.lineType === 'ticket'));
@@ -73,22 +82,29 @@
 		const v = meta[key];
 		return v == null ? '' : String(v);
 	}
-	function hotelDates(meta: Record<string, unknown>): string {
-		const ci = str(meta, 'check_in');
-		const co = str(meta, 'check_out');
-		const nights = str(meta, 'nights');
-		if (ci && co) return `${ci} → ${co}${nights ? ` (${nights} nights)` : ''}`;
-		return nights ? `${nights} nights` : '';
+	function fmtDate(value: string): string {
+		if (!value) return '';
+		const d = new Date(value);
+		if (Number.isNaN(d.getTime())) return value;
+		return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+	}
+	const MEALS: Record<string, string> = { RO: 'R/O', BB: 'B/B', HB: 'H/B', FB: 'F/B' };
+	function meal(m: string): string {
+		return MEALS[m] ?? (m || 'R/O');
+	}
+	// Split "A → B" (or ->, /, " to ") into pick-up / drop-off.
+	function legs(route: string): { from: string; to: string } {
+		const parts = route.split(/→|->|\s+to\s+|\s\/\s/i).map((p) => p.trim());
+		return { from: parts[0] ?? route, to: parts[1] ?? '' };
+	}
+	function pax(): string {
+		if (!query) return '';
+		const bits = [`${query.adults} Adult${query.adults === 1 ? '' : 's'}`];
+		if (query.children) bits.push(`${query.children} Child`);
+		if (query.infants) bits.push(`${query.infants} Infant`);
+		return bits.join(' · ');
 	}
 </script>
-
-{#snippet statusPill(meta: Record<string, unknown>)}
-	{#if meta.booked === true}
-		<span class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">Booked</span>
-	{:else}
-		<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending</span>
-	{/if}
-{/snippet}
 
 <div class="no-print mb-4 flex items-center justify-between">
 	<a href="/queries/{queryId}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
@@ -102,100 +118,175 @@
 {:else if !query}
 	<p class="text-slate-400">Loading…</p>
 {:else}
-	<div class="mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white p-8">
-		<div class="mb-6 flex items-start justify-between border-b border-slate-200 pb-4">
+	<div class="mx-auto max-w-3xl bg-white p-8 text-slate-800 shadow-sm print:shadow-none">
+		<!-- Letterhead -->
+		<div class="mb-4 flex items-start justify-between gap-4 border-b-2 border-brand-600 pb-4">
 			<div>
-				<div class="text-xl font-bold text-brand-700">Billoo Travel</div>
-				<div class="text-xs text-slate-400">Umrah & Travel Services</div>
+				<div class="text-2xl font-extrabold tracking-tight text-brand-700">Billoo<span class="font-light text-slate-500"> Travels</span></div>
+				<div class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Since 1969 · Umrah & Travel</div>
 			</div>
-			<div class="text-right">
-				<div class="text-lg font-semibold text-slate-800">{title}</div>
-				<div class="font-mono text-xs text-slate-400">{query.query_number}</div>
+			<div class="text-right" dir="rtl">
+				<div class="text-base font-semibold text-emerald-700">اللّٰهُمَّ اجعل هذه العُمرة مبرورة</div>
+				<div class="text-base font-semibold text-emerald-700">وذنبنا مغفورا</div>
 			</div>
 		</div>
 
-		<div class="mb-6 grid grid-cols-2 gap-4 text-sm">
-			<div>
-				<div class="text-xs uppercase tracking-wide text-slate-400">Passenger</div>
-				<div class="font-medium text-slate-800">{query.client_name}</div>
-				<div class="text-slate-500">{query.client_phone}</div>
+		<!-- Confirmation banner -->
+		<div class="mb-5 text-center">
+			<div class="text-sm font-semibold italic text-brand-700">
+				{isVoucher ? 'We are Pleased To Confirm your Booking' : 'Your Travel Itinerary'}
 			</div>
-			<div>
-				<div class="text-xs uppercase tracking-wide text-slate-400">Package</div>
-				<div class="font-medium text-slate-800">{query.package_type ?? query.destination}</div>
-				<div class="text-slate-500">
-					{query.adults} adult{query.adults === 1 ? '' : 's'}{query.children ? `, ${query.children} child` : ''}{query.infants ? `, ${query.infants} infant` : ''}
-				</div>
+			<div class="mt-1 text-base font-bold uppercase text-slate-800">{query.client_name}</div>
+			<div class="text-xs text-slate-500">
+				{query.package_type ?? query.destination} · {pax()}
+				<span class="ml-2 font-mono text-slate-400">Ref {ref}</span>
 			</div>
 		</div>
 
-		<!-- Itinerary: structured by component, with dates & room types. -->
-		{#if hotels.length}
-			<div class="mb-5">
-				<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Accommodation</h3>
-				{#each hotels as h, i (i)}
-					<div class="mb-2 flex items-start justify-between gap-4 text-sm">
-						<div>
-							<div class="font-medium text-slate-800">{str(h.meta, 'city')} · {str(h.meta, 'hotel')}</div>
-							<div class="text-slate-500">
-								{str(h.meta, 'room_type')}{str(h.meta, 'qty') ? ` ×${str(h.meta, 'qty')}` : ''}
-								{#if hotelDates(h.meta)}· {hotelDates(h.meta)}{/if}
-							</div>
-						</div>
-						<div class="flex shrink-0 items-center gap-2">
-							{@render statusPill(h.meta)}
-							{#if kind === 'voucher'}<div class="text-slate-600">{formatAmount(h.amount, h.currency)}</div>{/if}
-						</div>
-					</div>
-				{/each}
-			</div>
-		{/if}
-
-		{#if transfers.length}
-			<div class="mb-5">
-				<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Transfers</h3>
-				{#each transfers as t, i (i)}
-					<div class="mb-1 flex items-center justify-between text-sm">
-						<span class="text-slate-700">{t.label}</span>
-						<div class="flex shrink-0 items-center gap-2">
-							{@render statusPill(t.meta)}
-							{#if kind === 'voucher'}<span class="text-slate-600">{formatAmount(t.amount, t.currency)}</span>{/if}
-						</div>
-					</div>
-				{/each}
-			</div>
-		{/if}
-
+		<!-- Passenger / Visa details -->
 		{#if visas.length || tickets.length}
-			<div class="mb-5">
-				<h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Visa & Tickets</h3>
-				{#each [...visas, ...tickets] as r, i (i)}
-					<div class="mb-1 flex items-center justify-between text-sm">
-						<span class="text-slate-700">{r.label}</span>
-						<div class="flex shrink-0 items-center gap-2">
-							{@render statusPill(r.meta)}
-							{#if kind === 'voucher'}<span class="text-slate-600">{formatAmount(r.amount, r.currency)}</span>{/if}
-						</div>
-					</div>
-				{/each}
+			<div class="mb-4 overflow-hidden rounded border border-slate-200">
+				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Passenger Details</div>
+				<table class="w-full text-xs">
+					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
+						<tr>
+							<th class="px-3 py-1.5 font-semibold">Description</th>
+							<th class="px-3 py-1.5 text-center font-semibold">Adult</th>
+							<th class="px-3 py-1.5 text-center font-semibold">Child</th>
+							<th class="px-3 py-1.5 text-center font-semibold">Infant</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-100">
+						{#each visas as v, i (i)}
+							<tr>
+								<td class="px-3 py-2 font-medium text-slate-700">
+									{(str(v.meta, 'visa_type') || 'Umrah').toUpperCase()} VISA FOR {str(v.meta, 'persons') || (query.adults + query.children + query.infants)} PERSON(S)
+								</td>
+								<td class="px-3 py-2 text-center">{query.adults}</td>
+								<td class="px-3 py-2 text-center">{query.children}</td>
+								<td class="px-3 py-2 text-center">{query.infants}</td>
+							</tr>
+						{/each}
+						{#each tickets as t, i (i)}
+							<tr>
+								<td class="px-3 py-2 font-medium text-slate-700">
+									{t.label}{str(t.meta, 'pnr') ? ` · PNR ${str(t.meta, 'pnr')}` : ''}{str(t.meta, 'route') ? ` · ${str(t.meta, 'route')}` : ''}
+								</td>
+								<td class="px-3 py-2 text-center" colspan="3">{str(t.meta, 'fare_class') || 'Air ticket'}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+
+		<!-- Transfer details -->
+		{#if transfers.length}
+			<div class="mb-4 overflow-hidden rounded border border-slate-200">
+				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Transfer Details</div>
+				<table class="w-full text-xs">
+					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
+						<tr>
+							<th class="px-3 py-1.5 font-semibold">Vehicle</th>
+							<th class="px-3 py-1.5 font-semibold">Pick Up</th>
+							<th class="px-3 py-1.5 font-semibold">Date</th>
+							<th class="px-3 py-1.5 font-semibold">Drop Off</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-100">
+						{#each transfers as t, i (i)}
+							{@const l = legs(str(t.meta, 'route') || t.label)}
+							<tr>
+								<td class="px-3 py-2 font-medium text-slate-700">{str(t.meta, 'vehicle_type') || '—'}</td>
+								<td class="px-3 py-2 text-slate-700">{l.from}</td>
+								<td class="px-3 py-2 text-slate-600">{fmtDate(str(t.meta, 'date')) || '—'}</td>
+								<td class="px-3 py-2 text-slate-700">{l.to || '—'}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+
+		<!-- Accommodation details -->
+		{#if stays.length}
+			<div class="mb-4 overflow-hidden rounded border border-slate-200">
+				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Accommodation Details</div>
+				<table class="w-full text-xs">
+					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
+						<tr>
+							<th class="px-2 py-1.5 font-semibold">City</th>
+							<th class="px-2 py-1.5 font-semibold">Hotel</th>
+							<th class="px-2 py-1.5 font-semibold">Check-in</th>
+							<th class="px-2 py-1.5 font-semibold">Check-out</th>
+							<th class="px-2 py-1.5 text-center font-semibold">Nights</th>
+							<th class="px-2 py-1.5 font-semibold">Room Type</th>
+							<th class="px-2 py-1.5 text-center font-semibold">Rooms</th>
+							<th class="px-2 py-1.5 text-center font-semibold">Meal</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-100">
+						{#each stays as h, i (i)}
+							<tr>
+								<td class="px-2 py-2 font-medium text-slate-700">{str(h.meta, 'city')}</td>
+								<td class="px-2 py-2 text-slate-700">{str(h.meta, 'hotel')}</td>
+								<td class="px-2 py-2 text-slate-600">{fmtDate(str(h.meta, 'check_in')) || '—'}</td>
+								<td class="px-2 py-2 text-slate-600">{fmtDate(str(h.meta, 'check_out')) || '—'}</td>
+								<td class="px-2 py-2 text-center text-slate-700">{str(h.meta, 'nights') || '—'}</td>
+								<td class="px-2 py-2 text-slate-700">{str(h.meta, 'room_type') || 'Room'}</td>
+								<td class="px-2 py-2 text-center text-slate-700">{str(h.meta, 'qty') || 1}</td>
+								<td class="px-2 py-2 text-center text-slate-700">{meal(str(h.meta, 'meal_plan'))}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
 			</div>
 		{/if}
 
 		{#if rows.length === 0}
-			<p class="py-3 text-sm text-slate-400">No items — create a booking or accept a quotation first.</p>
+			<p class="py-6 text-center text-sm text-slate-400">
+				No services yet — build & save the booking, then this confirmation fills in automatically.
+			</p>
 		{/if}
 
-		{#if kind === 'voucher'}
-			<div class="flex justify-end border-t border-slate-200 pt-3">
-				<div class="text-right">
-					<div class="text-xs uppercase tracking-wide text-slate-400">Total</div>
-					<div class="text-xl font-bold text-slate-800">{formatAmount(totalPkr, 'PKR')}</div>
-				</div>
+		<!-- Charges (voucher only) -->
+		{#if isVoucher && rows.length}
+			<div class="mb-4 overflow-hidden rounded border border-slate-200">
+				<div class="bg-slate-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Charges</div>
+				<table class="w-full text-xs">
+					<tbody class="divide-y divide-slate-100">
+						{#each rows as r, i (i)}
+							<tr>
+								<td class="px-3 py-1.5 text-slate-600">{r.label}</td>
+								<td class="px-3 py-1.5 text-right text-slate-700">{formatAmount(r.amount, r.currency)}</td>
+							</tr>
+						{/each}
+						<tr class="bg-slate-50 font-bold text-slate-800">
+							<td class="px-3 py-2">Total</td>
+							<td class="px-3 py-2 text-right">{formatAmount(totalPkr, 'PKR')}</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
 		{/if}
 
-		<p class="mt-8 text-center text-xs text-slate-400">
-			Generated by Billoo Travel · {new Date().toLocaleDateString()}
+		<!-- Policy note -->
+		<div class="mb-3 rounded border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
+			<div class="mb-1 font-bold uppercase text-slate-700">Note: Check-in / Check-out Timings & Policies</div>
+			<p class="mb-1">The usual check-in time is 4:00 PM. Rooms may not be available for early check-in unless specifically requested in advance. Luggage may be deposited at the hotel reception and collected once the room is allotted.</p>
+			<p>Official check-out time is 12:00 noon. Any late check-out may involve additional charges — please check with the hotel reception in advance.</p>
+		</div>
+
+		<p class="mb-4 text-center text-[11px] font-semibold text-brand-700">
+			Carry valid passport and travel documents (original &amp; copy) at all times during your journey. Ensure your departure from Saudi Arabia is within the visa validity period to avoid penalties.
 		</p>
+
+		<div class="text-center text-xs font-semibold text-slate-600">Thank you for choosing BillooTravels.com</div>
+
+		<!-- Footer -->
+		<div class="mt-4 border-t border-slate-200 pt-3 text-center text-[10px] leading-relaxed text-slate-500">
+			<div class="font-semibold text-slate-600">M-2 Mezzanine Floor, Plot No 41-C, 27th Commercial Street, Phase-V, Tauheed Commercial, DHA Karachi</div>
+			<div>Email: Billootravels@gmail.com · www.Billootravels.com · 021 35876791 / 92 / 93</div>
+		</div>
 	</div>
 {/if}
