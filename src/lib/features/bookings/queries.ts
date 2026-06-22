@@ -7,6 +7,8 @@ import {
 	deleteBookingItem,
 	getBookingForQuery,
 	listBookingItems,
+	setBookingBasis,
+	startBlankBooking,
 	syncBookingFromQuotation,
 	updateBookingItem,
 	updateBookingRates
@@ -89,6 +91,30 @@ export function useDeleteBookingItem(queryId: string) {
 		onSuccess: (_v, vars) => {
 			client.invalidateQueries({ queryKey: itemsKey(vars.booking.id) });
 			client.invalidateQueries({ queryKey: bookingKey(queryId) });
+		}
+	});
+}
+
+export function useSetBookingBasis(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (sourceQuotationId: string) => setBookingBasis(queryId, sourceQuotationId),
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: bookingKey(queryId) });
+			client.invalidateQueries({ queryKey: ['quotations', queryId] });
+			client.invalidateQueries({ queryKey: ['queries', queryId] });
+		}
+	});
+}
+
+export function useStartBlankBooking(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: () => startBlankBooking(queryId),
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: bookingKey(queryId) });
+			client.invalidateQueries({ queryKey: ['quotations', queryId] });
+			client.invalidateQueries({ queryKey: ['queries', queryId] });
 		}
 	});
 }

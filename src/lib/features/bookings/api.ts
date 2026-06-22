@@ -1,5 +1,5 @@
 import { supabase } from '$lib/supabase';
-import { getQuotationLines } from '$features/quotations/api';
+import { cloneQuotation, createBlankBookingQuotation, getQuotationLines, setQuotationStatus } from '$features/quotations/api';
 import { logActivity } from '$features/queries/activity';
 import type { Quotation } from '$features/quotations/types';
 import { bookingTotals, ratesOf, type Rates } from './totals';
@@ -110,6 +110,32 @@ export async function createBookingFromQuotation(quotation: Quotation): Promise<
  * its items and rates from the quotation. Used by the booking-stage builder so
  * each save re-drives the actual booking.
  */
+/**
+ * Drift a booking from a chosen quotation version. The picked tier is accepted
+ * (no need to go back to Working), then CLONED into a working copy the booking
+ * owns and edits — so the client-facing tier quote stays frozen. Any previous
+ * working copy is archived so it drops out of the version picker.
+ */
+export async function setBookingBasis(queryId: string, sourceQuotationId: string): Promise<Booking> {
+	await setQuotationStatus(sourceQuotationId, 'accepted');
+	const existing = await getBookingForQuery(queryId);
+	if (existing?.quotation_id && existing.quotation_id !== sourceQuotationId) {
+		await setQuotationStatus(existing.quotation_id, 'archived');
+	}
+	const copy = await cloneQuotation(sourceQuotationId, 'accepted');
+	return syncBookingFromQuotation(copy);
+}
+
+/** Start a booking from scratch — an empty accepted working copy, no tier. */
+export async function startBlankBooking(queryId: string): Promise<Booking> {
+	const existing = await getBookingForQuery(queryId);
+	if (existing?.quotation_id) {
+		await setQuotationStatus(existing.quotation_id, 'archived');
+	}
+	const copy = await createBlankBookingQuotation(queryId);
+	return syncBookingFromQuotation(copy);
+}
+
 export async function syncBookingFromQuotation(quotation: Quotation): Promise<Booking> {
 	const existing = await getBookingForQuery(quotation.query_id);
 	const lines = await getQuotationLines(quotation.id);
