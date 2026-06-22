@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Sparkles, Map, CheckCircle2, RotateCcw, Check } from 'lucide-svelte';
+	import { Sparkles, Map, FileText, CheckCircle2, RotateCcw, Check } from 'lucide-svelte';
 	import { Badge, Button } from '$ui';
 	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
 	import { useQuotations, useAcceptQuotation } from '$features/quotations/queries';
@@ -91,6 +91,9 @@
 		<div class="flex items-center gap-2">
 			<Button size="sm" variant="secondary" href="/queries/{queryId}/itinerary">
 				<Map class="h-4 w-4" /> Client itinerary
+			</Button>
+			<Button size="sm" variant="secondary" href="/queries/{queryId}/invoice">
+				<FileText class="h-4 w-4" /> Invoice
 			</Button>
 			{#if hasBooking}
 				<Button

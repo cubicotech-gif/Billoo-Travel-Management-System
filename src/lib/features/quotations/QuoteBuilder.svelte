@@ -67,10 +67,15 @@
 		roomTypeEnum,
 		roomLabelFromEnum,
 		type HotelForm,
-		type TransferForm
+		type TransferForm,
+		type VisaForm,
+		type OtherServiceForm
 	} from './edit-map';
 	import RangeCalendar from './RangeCalendar.svelte';
 	import QuotationList from './QuotationList.svelte';
+	import ServiceShell from './ServiceShell.svelte';
+	import { useUploadDocument } from '$features/documents/queries';
+	import type { DocumentType } from '$features/documents/api';
 
 	let {
 		queryId,
@@ -93,6 +98,16 @@
 	const roe = useLatestRoe();
 	const createQuotation = untrack(() => useCreateQuotation(queryId));
 	const setStatus = useSetQueryStatus();
+	const uploadDoc = untrack(() => useUploadDocument('query', queryId));
+
+	const booking = $derived(mode === 'booking');
+	// Spread a form service's booked status into the calculator input.
+	const bk = (x: { booked: boolean; bookedAt: string; bookingRef: string; proof: boolean }) => ({
+		booked: x.booked,
+		bookedAt: x.bookedAt || null,
+		bookingRef: x.bookingRef || null,
+		proof: x.proof
+	});
 
 	const pool = $derived(latestRates($rates.data ?? []));
 	const byId = $derived(new Map(pool.map((r) => [r.id, r])));
@@ -323,6 +338,7 @@
 		if (!h.name || num(h.nights) <= 0) return null;
 		const city = h.city || 'Hotel';
 		return {
+			...bk(h),
 			city,
 			name: h.name || city,
 			currency: h.currency,
@@ -358,6 +374,7 @@
 			.map((h) => hotelInput(h))
 			.filter((h): h is NonNullable<typeof h> => h !== null);
 		const transfers = form.transfers.map((t) => ({
+			...bk(t),
 			vehicleType: vehicleLabel(t),
 			route: routeLabel(t),
 			currency: t.currency,
@@ -367,6 +384,7 @@
 			vehicles: num(t.vehicles)
 		}));
 		const visas = form.visas.map((v) => ({
+			...bk(v),
 			visaType: v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah',
 			currency: v.currency,
 			vendorId: v.vendorId || null,
@@ -375,6 +393,7 @@
 			persons: num(v.persons)
 		}));
 		const otherServices = form.otherServices.map((o) => ({
+			...bk(o),
 			label: o.label,
 			currency: o.currency,
 			vendorId: o.vendorId || null,
@@ -392,7 +411,7 @@
 			visas,
 			otherServices,
 			tickets: form.airlineInclude
-				? { airlineName: ai.name || 'Tickets', rateCardId: ai.sel === OTHER || !ai.sel ? null : ai.sel, route: ai.route || null, fareClass: ai.fareClass || null, pnr: ai.pnr || null, adultCost: num(ai.adultCost), adultSell: num(ai.adultSell), childCost: num(ai.childCost), childSell: num(ai.childSell), infantCost: num(ai.infantCost), infantSell: num(ai.infantSell) }
+				? { ...bk(ai), airlineName: ai.name || 'Tickets', rateCardId: ai.sel === OTHER || !ai.sel ? null : ai.sel, route: ai.route || null, fareClass: ai.fareClass || null, pnr: ai.pnr || null, adultCost: num(ai.adultCost), adultSell: num(ai.adultSell), childCost: num(ai.childCost), childSell: num(ai.childSell), infantCost: num(ai.infantCost), infantSell: num(ai.infantSell) }
 				: null
 		};
 	});
@@ -593,6 +612,33 @@
 		if (addAnother) resetLines();
 		else onSaved?.(quotation);
 	}
+
+	// --- Per-service booking (booking stage) --------------------------------
+	// Marking/unmarking/attaching a proof saves immediately so the booking,
+	// itinerary and invoice reflect it at once. Services stay fully editable.
+	type Svc = { booked: boolean; bookedAt: string; proof: boolean };
+	async function markBooked(svc: Svc) {
+		svc.booked = true;
+		if (!svc.bookedAt) svc.bookedAt = new Date().toISOString();
+		await save(false);
+	}
+	async function unmarkBooked(svc: Svc) {
+		svc.booked = false;
+		svc.bookedAt = '';
+		svc.proof = false;
+		await save(false);
+	}
+	function uploadProof(svc: Svc, file: File, docType: DocumentType) {
+		$uploadDoc.mutate(
+			{ file, entityType: 'query', entityId: queryId, documentType: docType },
+			{
+				onSuccess: () => {
+					svc.proof = true;
+					save(false);
+				}
+			}
+		);
+	}
 </script>
 
 {#if !embedded}
@@ -601,14 +647,16 @@
 	</a>
 {/if}
 
-<div class="mb-6">
-	<h1 class="text-2xl font-bold text-slate-800">Build quotation</h1>
-	<p class="text-sm text-slate-500">Prices pull from the latest Rates. SAR converts to PKR via the ROE. Manual entries auto-save to the rate database; hotel costs are captured into Service Rates → Hotels.</p>
-</div>
+{#if !booking}
+	<div class="mb-6">
+		<h1 class="text-2xl font-bold text-slate-800">Build quotation</h1>
+		<p class="text-sm text-slate-500">Prices pull from the latest Rates. SAR converts to PKR via the ROE. Manual entries auto-save to the rate database; hotel costs are captured into Service Rates → Hotels.</p>
+	</div>
+{/if}
 
 <div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 	<div class="space-y-4 lg:col-span-2">
-		<Card title="Pax, rates & label">
+		<Card title={booking ? 'Pax & agreed rates' : 'Pax, rates & label'}>
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-6">
 				<Input label="ROE (1 SAR = PKR)" type="number" min="0" step="0.0001" bind:value={form.roeValue} />
 				<Input label="USD (1 USD = PKR)" type="number" min="0" step="0.0001" bind:value={form.usdValue} />
@@ -618,17 +666,19 @@
 				<Input label="Tier (e.g. 3★ / Premium)" bind:value={form.label} placeholder="e.g. 5-star" />
 			</div>
 			<p class="mt-1 text-xs text-slate-400">USD rate only needed if a stay/transfer/visa below is set to USD.</p>
-			<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-				<Input label="Valid until" type="date" bind:value={form.validUntil} />
-				<div>
-					<span class="mb-1 block text-sm font-medium text-slate-700">Inclusions (one per line)</span>
-					<textarea bind:value={form.inclusions} rows="3" placeholder="Visa&#10;Hotels&#10;Transfers" class="w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
+			{#if !booking}
+				<div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+					<Input label="Valid until" type="date" bind:value={form.validUntil} />
+					<div>
+						<span class="mb-1 block text-sm font-medium text-slate-700">Inclusions (one per line)</span>
+						<textarea bind:value={form.inclusions} rows="3" placeholder="Visa&#10;Hotels&#10;Transfers" class="w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
+					</div>
+					<div>
+						<span class="mb-1 block text-sm font-medium text-slate-700">Exclusions (one per line)</span>
+						<textarea bind:value={form.exclusions} rows="3" placeholder="Air tickets&#10;Meals" class="w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
+					</div>
 				</div>
-				<div>
-					<span class="mb-1 block text-sm font-medium text-slate-700">Exclusions (one per line)</span>
-					<textarea bind:value={form.exclusions} rows="3" placeholder="Air tickets&#10;Meals" class="w-full rounded-lg border border-slate-300 p-2 text-xs focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"></textarea>
-				</div>
-			</div>
+			{/if}
 		</Card>
 
 		<!-- Itinerary: a free-ordered sequence of stays with chained dates. -->
@@ -639,10 +689,9 @@
 			</span>
 		</div>
 
-		{#each form.hotels as slot, hi (slot.id)}
+		{#snippet stayBody(slot: HotelForm, hi: number)}
 			{@const age = hotelRateAge(slot)}
-			<Card title={`Stay ${hi + 1}${slot.city ? ` · ${slot.city}` : ''}`}>
-				<div class="space-y-3">
+			<div class="space-y-3">
 					<div class="flex items-center justify-between">
 						<div class="flex items-center gap-2">
 							<span class="text-xs font-semibold uppercase text-slate-400">Stay {hi + 1}</span>
@@ -751,12 +800,32 @@
 						{/key}
 					{/if}
 				</div>
-			</Card>
+		{/snippet}
+
+		{#each form.hotels as slot, hi (slot.id)}
+			{#if booking}
+				<ServiceShell
+					title={`Stay ${hi + 1}${slot.city ? ` · ${slot.city}` : ''}`}
+					subtitle={slot.name || ''}
+					booked={slot.booked}
+					proof={slot.proof}
+					busy={$createQuotation.isPending}
+					onMarkBooked={() => markBooked(slot)}
+					onUnmark={() => unmarkBooked(slot)}
+					onUploadProof={(f, d) => uploadProof(slot, f, d)}
+				>
+					{@render stayBody(slot, hi)}
+				</ServiceShell>
+			{:else}
+				<Card title={`Stay ${hi + 1}${slot.city ? ` · ${slot.city}` : ''}`}>
+					{@render stayBody(slot, hi)}
+				</Card>
+			{/if}
 		{/each}
 
 		<Button type="button" variant="secondary" size="sm" onclick={addStay}><Plus class="h-4 w-4" /> Add stay</Button>
 
-		<Card title="Transfers (SAR · per vehicle)">
+		{#snippet transferPresets()}
 			<div class="mb-3 flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-3">
 				<span class="text-xs font-medium text-slate-400">Full transport:</span>
 				{#each TRANSFER_PRESETS as p (p.label)}
@@ -765,75 +834,127 @@
 					</button>
 				{/each}
 			</div>
+		{/snippet}
+		{#snippet transferBody(t: TransferForm, i: number)}
+			<div class="flex flex-wrap items-end gap-2">
+				<div class="w-44"><Select label="Saved rate" bind:value={t.sel} options={transferOpts} onchange={() => onTransferSel(t)} /></div>
+				<div class="w-32"><Select label="Vehicle" bind:value={t.vehicle} options={VEHICLES} /></div>
+				{#if t.vehicle === 'Custom'}<div class="w-28"><Input label="Custom" bind:value={t.customVehicle} /></div>{/if}
+				<div class="w-44"><Select label="Route" bind:value={t.route} options={ROUTES} /></div>
+				{#if t.route === 'Custom'}<div class="w-40"><Input label="Custom route" bind:value={t.customRoute} /></div>{/if}
+				<div class="w-20"><Select label="Cur" bind:value={t.currency} options={['SAR', 'USD', 'PKR']} /></div>
+				<div class="w-40"><VendorPicker service="Transfer" bind:value={t.vendorId} /></div>
+				<div class="w-16"><Input label="Qty" type="number" min="0" bind:value={t.vehicles} /></div>
+				<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={t.cost} /></div>
+				<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={t.sell} /></div>
+				<button type="button" onclick={() => form.transfers.splice(i, 1)} class="mb-1 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove transfer">
+					<Trash2 class="h-4 w-4" />
+				</button>
+			</div>
+		{/snippet}
+
+		{#if booking}
 			<div class="space-y-2">
+				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Transfers</h2>
+				{@render transferPresets()}
 				{#each form.transfers as t, i (i)}
-					<div class="flex flex-wrap items-end gap-2">
-						<div class="w-44"><Select label="Saved rate" bind:value={t.sel} options={transferOpts} onchange={() => onTransferSel(t)} /></div>
-						<div class="w-32"><Select label="Vehicle" bind:value={t.vehicle} options={VEHICLES} /></div>
-						{#if t.vehicle === 'Custom'}<div class="w-28"><Input label="Custom" bind:value={t.customVehicle} /></div>{/if}
-						<div class="w-44"><Select label="Route" bind:value={t.route} options={ROUTES} /></div>
-						{#if t.route === 'Custom'}<div class="w-40"><Input label="Custom route" bind:value={t.customRoute} /></div>{/if}
-						<div class="w-20"><Select label="Cur" bind:value={t.currency} options={['SAR', 'USD', 'PKR']} /></div>
-						<div class="w-40"><VendorPicker service="Transfer" bind:value={t.vendorId} /></div>
-						<div class="w-16"><Input label="Qty" type="number" min="0" bind:value={t.vehicles} /></div>
-						<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={t.cost} /></div>
-						<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={t.sell} /></div>
-						<button type="button" onclick={() => form.transfers.splice(i, 1)} class="mb-1 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove transfer">
-							<Trash2 class="h-4 w-4" />
-						</button>
-					</div>
+					<ServiceShell title={routeLabel(t)} subtitle={vehicleLabel(t)} booked={t.booked} proof={t.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(t)} onUnmark={() => unmarkBooked(t)} onUploadProof={(f, d) => uploadProof(t, f, d)}>
+						{@render transferBody(t, i)}
+					</ServiceShell>
 				{/each}
 				<Button size="sm" variant="ghost" onclick={() => form.transfers.push(newTransfer())}><Plus class="h-4 w-4" /> Transfer</Button>
 			</div>
-		</Card>
+		{:else}
+			<Card title="Transfers (SAR · per vehicle)">
+				{@render transferPresets()}
+				<div class="space-y-2">
+					{#each form.transfers as t, i (i)}
+						{@render transferBody(t, i)}
+					{/each}
+					<Button size="sm" variant="ghost" onclick={() => form.transfers.push(newTransfer())}><Plus class="h-4 w-4" /> Transfer</Button>
+				</div>
+			</Card>
+		{/if}
 
-		<Card title="Visas (per line, by headcount)">
-			<p class="mb-2 text-xs text-slate-400">Each line covers a set number of people — e.g. 2× Masar + 2× Non-Masar in a family of 4. Persons 0 = everyone. Visa is quoted as its own total.</p>
+		{#snippet visaBody(v: VisaForm, i: number)}
+			<div class="flex flex-wrap items-end gap-2">
+				<div class="w-32"><Select label="Visa type" bind:value={v.type} options={['Umrah', 'Other']} /></div>
+				{#if v.type === 'Other'}<div class="w-32"><Input label="Label" bind:value={v.otherLabel} placeholder="e.g. Non-Masar" /></div>{/if}
+				<div class="w-20"><Input label="Persons" type="number" min="0" bind:value={v.persons} /></div>
+				<div class="w-20"><Select label="Cur" bind:value={v.currency} options={['SAR', 'USD', 'PKR']} /></div>
+				<div class="w-36"><VendorPicker service="Visa" bind:value={v.vendorId} /></div>
+				<div class="w-24"><Input label="Cost/pp" type="number" min="0" step="0.01" bind:value={v.cost} /></div>
+				<div class="w-24"><Input label="Sell/pp" type="number" min="0" step="0.01" bind:value={v.sell} /></div>
+				<button type="button" onclick={() => form.visas.splice(i, 1)} class="mb-1 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove visa">
+					<Trash2 class="h-4 w-4" />
+				</button>
+			</div>
+		{/snippet}
+
+		{#if booking}
 			<div class="space-y-2">
+				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Visas</h2>
 				{#each form.visas as v, i (i)}
-					<div class="flex flex-wrap items-end gap-2">
-						<div class="w-32"><Select label="Visa type" bind:value={v.type} options={['Umrah', 'Other']} /></div>
-						{#if v.type === 'Other'}<div class="w-32"><Input label="Label" bind:value={v.otherLabel} placeholder="e.g. Non-Masar" /></div>{/if}
-						<div class="w-20"><Input label="Persons" type="number" min="0" bind:value={v.persons} /></div>
-						<div class="w-20"><Select label="Cur" bind:value={v.currency} options={['SAR', 'USD', 'PKR']} /></div>
-						<div class="w-36"><VendorPicker service="Visa" bind:value={v.vendorId} /></div>
-						<div class="w-24"><Input label="Cost/pp" type="number" min="0" step="0.01" bind:value={v.cost} /></div>
-						<div class="w-24"><Input label="Sell/pp" type="number" min="0" step="0.01" bind:value={v.sell} /></div>
-						<button type="button" onclick={() => form.visas.splice(i, 1)} class="mb-1 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove visa">
-							<Trash2 class="h-4 w-4" />
-						</button>
-					</div>
+					<ServiceShell title={`${v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah'} visa`} subtitle={num(v.persons) > 0 ? `${num(v.persons)} pax` : 'all pax'} booked={v.booked} proof={v.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(v)} onUnmark={() => unmarkBooked(v)} onUploadProof={(f, d) => uploadProof(v, f, d)}>
+						{@render visaBody(v, i)}
+					</ServiceShell>
 				{/each}
-				{#if form.visas.length === 0}
-					<p class="text-xs text-slate-400">No visa on this quote.</p>
-				{/if}
 				<Button size="sm" variant="ghost" onclick={() => form.visas.push(blankVisa())}><Plus class="h-4 w-4" /> Visa</Button>
 			</div>
-		</Card>
+		{:else}
+			<Card title="Visas (per line, by headcount)">
+				<p class="mb-2 text-xs text-slate-400">Each line covers a set number of people — e.g. 2× Masar + 2× Non-Masar in a family of 4. Persons 0 = everyone. Visa is quoted as its own total.</p>
+				<div class="space-y-2">
+					{#each form.visas as v, i (i)}
+						{@render visaBody(v, i)}
+					{/each}
+					{#if form.visas.length === 0}
+						<p class="text-xs text-slate-400">No visa on this quote.</p>
+					{/if}
+					<Button size="sm" variant="ghost" onclick={() => form.visas.push(blankVisa())}><Plus class="h-4 w-4" /> Visa</Button>
+				</div>
+			</Card>
+		{/if}
 
-		<Card title="Other services">
-			<p class="mb-2 text-xs text-slate-400">Add-ons like Polio certificate, insurance, etc. Priced as their own total.</p>
+		{#snippet otherBody(o: OtherServiceForm, i: number)}
+			<div class="flex flex-wrap items-end gap-2">
+				<div class="w-44"><Input label="Service" bind:value={o.label} placeholder="e.g. Polio certificate" /></div>
+				<div class="w-16"><Input label="Qty" type="number" min="1" bind:value={o.qty} /></div>
+				<div class="w-20"><Select label="Cur" bind:value={o.currency} options={['PKR', 'SAR', 'USD']} /></div>
+				<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={o.cost} /></div>
+				<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={o.sell} /></div>
+				<button type="button" onclick={() => form.otherServices.splice(i, 1)} class="mb-1 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove service">
+					<Trash2 class="h-4 w-4" />
+				</button>
+			</div>
+		{/snippet}
+
+		{#if booking}
 			<div class="space-y-2">
+				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Other services</h2>
 				{#each form.otherServices as o, i (i)}
-					<div class="flex flex-wrap items-end gap-2">
-						<div class="w-44"><Input label="Service" bind:value={o.label} placeholder="e.g. Polio certificate" /></div>
-						<div class="w-16"><Input label="Qty" type="number" min="1" bind:value={o.qty} /></div>
-						<div class="w-20"><Select label="Cur" bind:value={o.currency} options={['PKR', 'SAR', 'USD']} /></div>
-						<div class="w-24"><Input label="Cost" type="number" min="0" step="0.01" bind:value={o.cost} /></div>
-						<div class="w-24"><Input label="Sell" type="number" min="0" step="0.01" bind:value={o.sell} /></div>
-						<button type="button" onclick={() => form.otherServices.splice(i, 1)} class="mb-1 rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove service">
-							<Trash2 class="h-4 w-4" />
-						</button>
-					</div>
+					<ServiceShell title={o.label || 'Service'} subtitle={num(o.qty) > 1 ? `×${num(o.qty)}` : ''} booked={o.booked} proof={o.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(o)} onUnmark={() => unmarkBooked(o)} onUploadProof={(f, d) => uploadProof(o, f, d)}>
+						{@render otherBody(o, i)}
+					</ServiceShell>
 				{/each}
-				{#if form.otherServices.length === 0}
-					<p class="text-xs text-slate-400">No extra services.</p>
-				{/if}
 				<Button size="sm" variant="ghost" onclick={() => form.otherServices.push(blankOtherService())}><Plus class="h-4 w-4" /> Service</Button>
 			</div>
-		</Card>
+		{:else}
+			<Card title="Other services">
+				<p class="mb-2 text-xs text-slate-400">Add-ons like Polio certificate, insurance, etc. Priced as their own total.</p>
+				<div class="space-y-2">
+					{#each form.otherServices as o, i (i)}
+						{@render otherBody(o, i)}
+					{/each}
+					{#if form.otherServices.length === 0}
+						<p class="text-xs text-slate-400">No extra services.</p>
+					{/if}
+					<Button size="sm" variant="ghost" onclick={() => form.otherServices.push(blankOtherService())}><Plus class="h-4 w-4" /> Service</Button>
+				</div>
+			</Card>
+		{/if}
 
-		<Card title="Tickets (PKR)">
+		{#snippet ticketsBody()}
 			<label class="mb-3 flex items-center gap-2 text-sm text-slate-600">
 				<input type="checkbox" bind:checked={form.airlineInclude} class="rounded border-slate-300" /> Include air tickets
 			</label>
@@ -869,11 +990,21 @@
 					</div>
 				</div>
 			{/if}
-		</Card>
+		{/snippet}
+
+		{#if booking}
+			<ServiceShell title="Air tickets" subtitle={form.airlineInclude ? form.airline.name || '' : 'not included'} booked={form.airline.booked} proof={form.airline.proof} busy={$createQuotation.isPending} onMarkBooked={() => markBooked(form.airline)} onUnmark={() => unmarkBooked(form.airline)} onUploadProof={(f, d) => uploadProof(form.airline, f, d)}>
+				{@render ticketsBody()}
+			</ServiceShell>
+		{:else}
+			<Card title="Tickets (PKR)">
+				{@render ticketsBody()}
+			</Card>
+		{/if}
 	</div>
 
 	<div class="space-y-4 lg:sticky lg:top-4 lg:self-start">
-		<Card title="Breakdown (staff)">
+		<Card title={booking ? 'Invoice — cost sheet (staff)' : 'Breakdown (staff)'}>
 			<div class="space-y-1.5 text-sm">
 				{#each result.lines as l, i (i)}
 					<div class="flex justify-between">
@@ -911,22 +1042,32 @@
 			</div>
 		</Card>
 
-		<Card title="WhatsApp message">
-			<textarea
-				bind:value={whatsappText}
-				oninput={() => (dirty = true)}
-				rows="14"
-				class="w-full rounded-lg border border-slate-300 p-3 text-xs text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
-			></textarea>
-			<div class="mt-3 flex flex-wrap gap-2">
-				<Button variant="ghost" size="sm" onclick={regenerate}><RefreshCw class="h-4 w-4" /> Regenerate</Button>
-				<Button variant="secondary" size="sm" onclick={copyWa}>
-					{#if copied}<Check class="h-4 w-4" /> Copied{:else}<Copy class="h-4 w-4" /> Copy{/if}
-				</Button>
-				<Button size="sm" onclick={() => save(false)} disabled={$createQuotation.isPending}><Save class="h-4 w-4" /> Save</Button>
-				<Button variant="secondary" size="sm" onclick={() => save(true)} disabled={$createQuotation.isPending}><Plus class="h-4 w-4" /> Save & add another</Button>
-			</div>
-		</Card>
+		{#if booking}
+			<Card title="Save booking">
+				<p class="text-xs text-slate-500">These are the final agreed amounts we'll pay/charge. Mark each service booked as you arrange it — the itinerary and invoice update automatically. Saving records the booking.</p>
+				<div class="mt-3 flex flex-wrap gap-2">
+					<Button size="sm" onclick={() => save(false)} disabled={$createQuotation.isPending}><Save class="h-4 w-4" /> Save booking</Button>
+					<Button variant="secondary" size="sm" href="/queries/{queryId}/invoice"><Copy class="h-4 w-4" /> Invoice</Button>
+				</div>
+			</Card>
+		{:else}
+			<Card title="WhatsApp message">
+				<textarea
+					bind:value={whatsappText}
+					oninput={() => (dirty = true)}
+					rows="14"
+					class="w-full rounded-lg border border-slate-300 p-3 text-xs text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+				></textarea>
+				<div class="mt-3 flex flex-wrap gap-2">
+					<Button variant="ghost" size="sm" onclick={regenerate}><RefreshCw class="h-4 w-4" /> Regenerate</Button>
+					<Button variant="secondary" size="sm" onclick={copyWa}>
+						{#if copied}<Check class="h-4 w-4" /> Copied{:else}<Copy class="h-4 w-4" /> Copy{/if}
+					</Button>
+					<Button size="sm" onclick={() => save(false)} disabled={$createQuotation.isPending}><Save class="h-4 w-4" /> Save</Button>
+					<Button variant="secondary" size="sm" onclick={() => save(true)} disabled={$createQuotation.isPending}><Plus class="h-4 w-4" /> Save & add another</Button>
+				</div>
+			</Card>
+		{/if}
 	</div>
 </div>
 
