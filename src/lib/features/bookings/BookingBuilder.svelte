@@ -1,135 +1,152 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Sparkles, Map, FileText, CheckCircle2, RotateCcw, Check } from 'lucide-svelte';
-	import { Badge, Button } from '$ui';
+	import { Map, FileText, CheckCircle2, Check, Layers, ChevronDown, ChevronRight, FilePlus2 } from 'lucide-svelte';
+	import { Button } from '$ui';
 	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
 	import { useQuotations } from '$features/quotations/queries';
 	import type { Quotation } from '$features/quotations/types';
-	import { useQueryDetail, useUpdateQuery } from '$features/queries/queries';
-	import { useBookingForQuery, useSyncBookingFromQuotation } from './queries';
+	import { useUpdateQuery } from '$features/queries/queries';
+	import {
+		useBookingForQuery,
+		useSyncBookingFromQuotation,
+		useSetBookingBasis,
+		useStartBlankBooking
+	} from './queries';
 
 	let { queryId }: { queryId: string } = $props();
 
-	const query = untrack(() => useQueryDetail(queryId));
 	const booking = untrack(() => useBookingForQuery(queryId));
 	const quotations = untrack(() => useQuotations(queryId));
 	const sync = untrack(() => useSyncBookingFromQuotation(queryId));
+	const setBasis = untrack(() => useSetBookingBasis(queryId));
+	const startBlank = untrack(() => useStartBlankBooking(queryId));
 	const update = useUpdateQuery();
 
-	// Pin the version the builder opens with ONCE — the booking's source version,
-	// else the accepted one, else the latest. Pinning avoids remounting (and
-	// losing the user's edits) every time a save re-syncs the booking.
-	let pinned = $state<string | undefined>(undefined);
-	let ready = $state(false);
-	$effect(() => {
-		if (ready) return;
-		if ($query.isLoading || $booking.isLoading || $quotations.isLoading) return;
-		const b = $booking.data;
-		const qs = [...($quotations.data ?? [])];
-		pinned =
-			b?.quotation_id ??
-			qs.find((q) => q.status === 'accepted')?.id ??
-			qs.sort((a, c) => c.version - a.version)[0]?.id;
-		ready = true;
-	});
-
-	const completed = $derived($query.data?.booking_status === 'Completed');
 	const hasBooking = $derived(!!$booking.data);
+	// The quotation the booking currently edits (its own working copy).
+	const basis = $derived($booking.data?.quotation_id ?? undefined);
 
-	// Auto-seed: on the Booking page there should always be a booking so the
-	// itinerary & invoice have data to show. If none exists yet but a source
-	// quotation does, drive a booking from it once (no need to hit Save first).
-	let seeded = $state(false);
-	$effect(() => {
-		if (!ready || seeded) return;
-		if ($booking.data || !pinned) return;
-		const src = ($quotations.data ?? []).find((q) => q.id === pinned);
-		if (!src) return;
-		seeded = true;
-		$sync.mutate(src);
-	});
+	// Versions to drift from = the client tier quotes: everything except archived
+	// ones and the booking's own working copy.
+	const tiers = $derived(
+		[...($quotations.data ?? [])]
+			.filter((q) => q.status !== 'archived' && q.id !== basis)
+			.sort((a, b) => b.version - a.version)
+	);
+
+	// Picker visible by default until a booking exists; then tucked behind a toggle.
+	let pickerOpen = $state(false);
+	const showPicker = $derived(!hasBooking || pickerOpen);
+
+	const busy = $derived($setBasis.isPending || $startBlank.isPending);
+
+	function drift(sourceId: string) {
+		if (hasBooking && !confirm('Switch the booking to this version? It replaces the current booking services with this version (your tier quotes stay untouched).')) return;
+		$setBasis.mutate(sourceId, { onSuccess: () => (pickerOpen = false) });
+	}
+	function blank() {
+		if (hasBooking && !confirm('Start the booking over from a blank sheet?')) return;
+		$startBlank.mutate(undefined, { onSuccess: () => (pickerOpen = false) });
+	}
 
 	// Brief "saved" confirmation after a save re-drives the booking.
 	let savedAt = $state(0);
 	$effect(() => {
 		if (!savedAt) return;
-		const t = setTimeout(() => (savedAt = 0), 3500);
+		const t = setTimeout(() => (savedAt = 0), 3000);
 		return () => clearTimeout(t);
 	});
 
-	// A booking-stage save updates the quotation in place (no new version). Refresh
-	// the query's headline totals quietly (no "Moved to Booking" churn) and
-	// re-drive the booking from it.
+	// A booking-stage save updates the working copy in place (no new version).
+	// Refresh the query's headline totals quietly and re-drive the booking.
 	function onSaved(q: Quotation) {
 		$update.mutate({ id: queryId, patch: { cost_price: q.total_cost_pkr, selling_price: q.total_sell_pkr } });
 		$sync.mutate(q, { onSuccess: () => (savedAt = Date.now()) });
 	}
 
-	function toggleCompleted() {
-		const patch = completed
-			? { booking_status: null, completed_date: null }
-			: { booking_status: 'Completed' as const, completed_date: new Date().toISOString() };
-		$update.mutate({ id: queryId, patch });
+	function markCompleted() {
+		$update.mutate({ id: queryId, patch: { booking_status: 'Completed', completed_date: new Date().toISOString() } });
 	}
 
-	const busy = $derived($update.isPending || $sync.isPending);
+	function fmtDate(iso: string): string {
+		return new Date(iso).toLocaleDateString();
+	}
 </script>
 
-<div
-	class="rounded-2xl border p-4 shadow-sm transition-colors {completed
-		? 'border-green-300 bg-green-50/50'
-		: 'border-emerald-200 bg-emerald-50/40'}"
->
+<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 	<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-		<div class="flex flex-wrap items-center gap-2">
-			<Sparkles class="h-4 w-4 {completed ? 'text-green-600' : 'text-emerald-600'}" />
-			<h2 class="text-sm font-semibold {completed ? 'text-green-800' : 'text-emerald-800'}">
-				{completed ? 'Booking completed' : 'Finalize the booking'}
-			</h2>
-			{#if completed}
-				<Badge tone="success">Completed</Badge>
-			{:else}
-				<span class="text-xs text-emerald-700/70">
-					same builder — saving books these services (the breakdown panel is our cost sheet)
-				</span>
-			{/if}
-			{#if busy}
-				<span class="text-xs text-slate-400">saving…</span>
-			{:else if savedAt}
-				<span class="inline-flex items-center gap-1 text-xs font-medium text-green-600">
-					<Check class="h-3.5 w-3.5" /> Booked
-				</span>
-			{/if}
-		</div>
+		<h2 class="text-sm font-semibold text-slate-700">Finalize the booking</h2>
 		<div class="flex items-center gap-2">
-			<Button size="sm" variant="secondary" href="/queries/{queryId}/itinerary">
-				<Map class="h-4 w-4" /> Client itinerary
-			</Button>
-			<Button size="sm" variant="secondary" href="/queries/{queryId}/invoice">
-				<FileText class="h-4 w-4" /> Invoice
-			</Button>
+			{#if busy}<span class="text-xs text-slate-400">working…</span>
+			{:else if savedAt}<span class="inline-flex items-center gap-1 text-xs font-medium text-green-600"><Check class="h-3.5 w-3.5" /> Saved</span>{/if}
+			<Button size="sm" variant="secondary" href="/queries/{queryId}/itinerary"><Map class="h-4 w-4" /> Itinerary</Button>
+			<Button size="sm" variant="secondary" href="/queries/{queryId}/invoice"><FileText class="h-4 w-4" /> Invoice</Button>
 			{#if hasBooking}
-				<Button
-					size="sm"
-					variant={completed ? 'ghost' : 'primary'}
-					disabled={$update.isPending}
-					onclick={toggleCompleted}
-				>
-					{#if completed}
-						<RotateCcw class="h-4 w-4" /> Reopen
-					{:else}
-						<CheckCircle2 class="h-4 w-4" /> Mark completed
-					{/if}
-				</Button>
+				<Button size="sm" disabled={$update.isPending} onclick={markCompleted}><CheckCircle2 class="h-4 w-4" /> Mark completed</Button>
 			{/if}
 		</div>
 	</div>
 
-	<div class="rounded-xl bg-white p-3">
-		{#if ready}
-			<QuoteBuilder {queryId} editId={pinned} embedded mode="booking" {onSaved} />
-		{:else}
-			<p class="p-4 text-sm text-slate-400">Loading booking…</p>
+	<!-- Booking basis: pick a quotation version to drift from (or start blank). -->
+	<div class="mb-3 rounded-xl border border-slate-200">
+		<button
+			type="button"
+			onclick={() => (pickerOpen = !pickerOpen)}
+			class="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
+			disabled={!hasBooking}
+		>
+			<span class="flex items-center gap-2 text-sm font-medium text-slate-600">
+				<Layers class="h-4 w-4 text-slate-400" />
+				{#if hasBooking}Booking basis · choose a version to drift from{:else}Start the booking — pick a quotation version{/if}
+			</span>
+			{#if hasBooking}
+				{#if pickerOpen}<ChevronDown class="h-4 w-4 text-slate-400" />{:else}<ChevronRight class="h-4 w-4 text-slate-400" />{/if}
+			{/if}
+		</button>
+
+		{#if showPicker}
+			<div class="space-y-1.5 border-t border-slate-100 p-3">
+				{#if $quotations.isLoading}
+					<p class="text-sm text-slate-400">Loading versions…</p>
+				{:else}
+					{#each tiers as q (q.id)}
+						<div class="flex items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2">
+							<div class="min-w-0">
+								<div class="truncate text-sm font-medium text-slate-700">
+									Quote v{q.version}{q.label ? ` · ${q.label}` : ''}
+								</div>
+								<div class="text-xs text-slate-400">{q.status} · {fmtDate(q.created_at)}</div>
+							</div>
+							<Button size="sm" variant="secondary" disabled={busy} onclick={() => drift(q.id)}>
+								{hasBooking ? 'Switch to this' : 'Start from this'}
+							</Button>
+						</div>
+					{/each}
+					{#if tiers.length === 0}
+						<p class="text-sm text-slate-400">No quotation versions yet.</p>
+					{/if}
+					<button
+						type="button"
+						onclick={blank}
+						disabled={busy}
+						class="flex w-full items-center gap-2 rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-500 hover:border-brand-300 hover:text-brand-600 disabled:opacity-50"
+					>
+						<FilePlus2 class="h-4 w-4" /> Start a blank booking
+					</button>
+				{/if}
+			</div>
 		{/if}
 	</div>
+
+	{#if hasBooking && basis}
+		<div class="rounded-xl bg-slate-50/50 p-3">
+			{#key basis}
+				<QuoteBuilder {queryId} editId={basis} embedded mode="booking" {onSaved} />
+			{/key}
+		</div>
+	{:else if !hasBooking}
+		<p class="px-1 py-6 text-center text-sm text-slate-400">
+			Pick a quotation version above (or start blank) to begin the booking.
+		</p>
+	{/if}
 </div>

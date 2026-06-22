@@ -209,6 +209,101 @@ export async function setQuotationStatus(
 	);
 }
 
+/** Copy a quotation's lines onto another quotation (vendor, meta, prices intact). */
+async function copyQuotationLines(fromId: string, toId: string): Promise<void> {
+	const lines = await getQuotationLines(fromId);
+	if (lines.length === 0) return;
+	const rows = lines.map((l) => ({
+		quotation_id: toId,
+		line_type: l.line_type,
+		label: l.label,
+		rate_card_id: l.rate_card_id,
+		vendor_id: l.vendor_id,
+		currency: l.currency,
+		unit_cost: l.unit_cost,
+		unit_sell: l.unit_sell,
+		quantity: l.quantity,
+		line_cost: l.line_cost,
+		line_sell: l.line_sell,
+		meta: l.meta
+	}));
+	const { error } = await supabase.from('quotation_lines').insert(rows);
+	if (error) throw new Error(error.message);
+}
+
+/**
+ * Clone a quotation into a fresh version — used by the booking stage to "drift"
+ * from a chosen tier: the booking gets its OWN working copy to edit, while the
+ * original client quote stays frozen. Lines (incl. vendor/meta) are duplicated.
+ */
+export async function cloneQuotation(
+	sourceId: string,
+	status: Quotation['status'] = 'accepted'
+): Promise<Quotation> {
+	const src = await getQuotation(sourceId);
+	const version = await nextVersion(src.query_id);
+	const copy = unwrap<Quotation>(
+		await supabase
+			.from('quotations')
+			.insert({
+				query_id: src.query_id,
+				version,
+				roe: src.roe,
+				usd_rate: src.usd_rate,
+				adults: src.adults,
+				children: src.children,
+				infants: src.infants,
+				sar_cost: src.sar_cost,
+				sar_sell: src.sar_sell,
+				tickets_cost_pkr: src.tickets_cost_pkr,
+				tickets_sell_pkr: src.tickets_sell_pkr,
+				total_cost_pkr: src.total_cost_pkr,
+				total_sell_pkr: src.total_sell_pkr,
+				profit_pkr: src.profit_pkr,
+				per_person_pkr: src.per_person_pkr,
+				pp_include_infants: src.pp_include_infants,
+				label: src.label,
+				valid_until: src.valid_until,
+				inclusions: src.inclusions,
+				exclusions: src.exclusions,
+				whatsapp_text: src.whatsapp_text,
+				status
+			})
+			.select()
+			.single()
+	);
+	await copyQuotationLines(sourceId, copy.id);
+	return copy;
+}
+
+/** An empty accepted quotation — the working copy for a from-scratch booking. */
+export async function createBlankBookingQuotation(queryId: string): Promise<Quotation> {
+	const version = await nextVersion(queryId);
+	const q = unwrap<{ adults: number; children: number; infants: number }>(
+		await supabase.from('queries').select('adults, children, infants').eq('id', queryId).single()
+	);
+	return unwrap<Quotation>(
+		await supabase
+			.from('quotations')
+			.insert({
+				query_id: queryId,
+				version,
+				roe: 0,
+				adults: q.adults,
+				children: q.children,
+				infants: q.infants,
+				total_cost_pkr: 0,
+				total_sell_pkr: 0,
+				profit_pkr: 0,
+				per_person_pkr: 0,
+				whatsapp_text: '',
+				status: 'accepted'
+			})
+			.select()
+			.single()
+	);
+}
+
 /** Edit a saved quotation's message text and/or label. */
 export async function updateQuotation(
 	id: string,
