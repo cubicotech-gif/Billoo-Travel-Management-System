@@ -82,6 +82,14 @@
 	}
 </script>
 
+{#snippet statusPill(meta: Record<string, unknown>)}
+	{#if meta.booked === true}
+		<span class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">Booked</span>
+	{:else}
+		<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending</span>
+	{/if}
+{/snippet}
+
 <div class="no-print mb-4 flex items-center justify-between">
 	<a href="/queries/{queryId}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
 		<ArrowLeft class="h-4 w-4" /> Back to query
@@ -134,7 +142,10 @@
 								{#if hotelDates(h.meta)}· {hotelDates(h.meta)}{/if}
 							</div>
 						</div>
-						{#if kind === 'voucher'}<div class="text-slate-600">{formatAmount(h.amount, h.currency)}</div>{/if}
+						<div class="flex shrink-0 items-center gap-2">
+							{@render statusPill(h.meta)}
+							{#if kind === 'voucher'}<div class="text-slate-600">{formatAmount(h.amount, h.currency)}</div>{/if}
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -146,7 +157,10 @@
 				{#each transfers as t, i (i)}
 					<div class="mb-1 flex items-center justify-between text-sm">
 						<span class="text-slate-700">{t.label}</span>
-						{#if kind === 'voucher'}<span class="text-slate-600">{formatAmount(t.amount, t.currency)}</span>{/if}
+						<div class="flex shrink-0 items-center gap-2">
+							{@render statusPill(t.meta)}
+							{#if kind === 'voucher'}<span class="text-slate-600">{formatAmount(t.amount, t.currency)}</span>{/if}
+						</div>
 					</div>
 				{/each}
 			</div>
@@ -158,7 +172,10 @@
 				{#each [...visas, ...tickets] as r, i (i)}
 					<div class="mb-1 flex items-center justify-between text-sm">
 						<span class="text-slate-700">{r.label}</span>
-						{#if kind === 'voucher'}<span class="text-slate-600">{formatAmount(r.amount, r.currency)}</span>{/if}
+						<div class="flex shrink-0 items-center gap-2">
+							{@render statusPill(r.meta)}
+							{#if kind === 'voucher'}<span class="text-slate-600">{formatAmount(r.amount, r.currency)}</span>{/if}
+						</div>
 					</div>
 				{/each}
 			</div>

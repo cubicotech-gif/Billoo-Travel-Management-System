@@ -94,7 +94,25 @@ export type BreakfastMode = 'none' | 'included' | 'separate';
  *  selling price is always PKR. */
 export type LineCurrency = 'SAR' | 'USD' | 'PKR';
 
-export interface HotelForm {
+/** Per-service booking status carried on the form (booking stage). */
+export interface BookedFields {
+	booked: boolean;
+	bookedAt: string; // ISO, '' = not booked
+	bookingRef: string; // vendor confirmation no. (optional)
+	proof: boolean; // a proof/voucher document was filed
+}
+const blankBooked = (): BookedFields => ({ booked: false, bookedAt: '', bookingRef: '', proof: false });
+/** Read booked status off a line's meta when reopening a saved booking. */
+function readBooked(meta: Record<string, unknown>): BookedFields {
+	return {
+		booked: meta.booked === true,
+		bookedAt: meta.booked_at == null ? '' : String(meta.booked_at),
+		bookingRef: meta.booking_ref == null ? '' : String(meta.booking_ref),
+		proof: meta.proof === true
+	};
+}
+
+export interface HotelForm extends BookedFields {
 	id: string;
 	hotelId: string; // canonical hotels.id (from the searchable select)
 	city: string;
@@ -113,7 +131,7 @@ export interface HotelForm {
 	breakfastCost: number;
 	breakfastSell: number;
 }
-export interface TransferForm {
+export interface TransferForm extends BookedFields {
 	sel: string; // '' (custom) | a saved transfer rate id
 	vehicle: string;
 	customVehicle: string;
@@ -125,7 +143,7 @@ export interface TransferForm {
 	sell: number;
 	vehicles: number;
 }
-export interface VisaForm {
+export interface VisaForm extends BookedFields {
 	type: string;
 	otherLabel: string;
 	currency: LineCurrency;
@@ -134,7 +152,7 @@ export interface VisaForm {
 	sell: number;
 	persons: number; // how many people this visa covers (0 = all passengers)
 }
-export interface OtherServiceForm {
+export interface OtherServiceForm extends BookedFields {
 	label: string;
 	currency: LineCurrency;
 	vendorId: string;
@@ -142,7 +160,7 @@ export interface OtherServiceForm {
 	sell: number;
 	qty: number;
 }
-export interface AirlineForm {
+export interface AirlineForm extends BookedFields {
 	sel: string;
 	name: string;
 	route: string;
@@ -175,11 +193,11 @@ export interface BuilderForm {
 }
 
 export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 });
-export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, currency: 'SAR', sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0 });
-export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Jeddah Airport → Makkah', customRoute: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, vehicles: 1 });
-export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, persons: 0 });
-export const blankOtherService = (): OtherServiceForm => ({ label: '', currency: 'PKR', vendorId: '', cost: 0, sell: 0, qty: 1 });
-export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0 });
+export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, currency: 'SAR', sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0, ...blankBooked() });
+export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Jeddah Airport → Makkah', customRoute: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, vehicles: 1, ...blankBooked() });
+export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, persons: 0, ...blankBooked() });
+export const blankOtherService = (): OtherServiceForm => ({ label: '', currency: 'PKR', vendorId: '', cost: 0, sell: 0, qty: 1, ...blankBooked() });
+export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0, ...blankBooked() });
 
 export function blankForm(): BuilderForm {
 	return {
@@ -258,6 +276,7 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				slot.nights = n(meta, 'nights');
 				slot.checkIn = s(meta, 'check_in');
 				slot.checkOut = s(meta, 'check_out');
+				Object.assign(slot, readBooked(meta));
 				staySlots.set(key, slot);
 				stayOrder.push(key);
 			}
@@ -292,7 +311,8 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				vendorId: l.vendor_id ?? '',
 				cost: Number(l.unit_cost),
 				sell: Number(l.unit_sell),
-				vehicles: l.quantity
+				vehicles: l.quantity,
+				...readBooked(meta)
 			});
 		} else if (l.line_type === 'visa') {
 			const vt = s(meta, 'visa_type') || 'Umrah';
@@ -303,7 +323,8 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				vendorId: l.vendor_id ?? '',
 				cost: Number(l.unit_cost),
 				sell: Number(l.unit_sell),
-				persons: n(meta, 'persons') || l.quantity || 0
+				persons: n(meta, 'persons') || l.quantity || 0,
+				...readBooked(meta)
 			});
 		} else if (l.line_type === 'other') {
 			otherServices.push({
@@ -312,7 +333,8 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				vendorId: l.vendor_id ?? '',
 				cost: Number(l.unit_cost),
 				sell: Number(l.unit_sell),
-				qty: l.quantity || 1
+				qty: l.quantity || 1,
+				...readBooked(meta)
 			});
 		} else if (l.line_type === 'ticket') {
 			form.airlineInclude = true;
@@ -322,6 +344,7 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				form.airline.route = s(meta, 'route');
 				form.airline.fareClass = s(meta, 'fare_class');
 				form.airline.pnr = s(meta, 'pnr');
+				Object.assign(form.airline, readBooked(meta));
 				airlineSet = true;
 			}
 			const t = s(meta, 'pax_type');

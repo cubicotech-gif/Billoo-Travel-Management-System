@@ -20,6 +20,30 @@ import {
 /** Currency a line can be priced in. PKR is used as-is (no conversion). */
 export type LineCurrency = 'SAR' | 'USD' | 'PKR';
 
+/**
+ * Per-service booking status (booking stage only). A service is the agreed,
+ * final thing we actually pay a vendor for; once arranged it's marked booked,
+ * with an optional vendor reference and a flag for whether its proof/voucher
+ * has been filed. Stamped into every line a service produces so the booking,
+ * itinerary and invoice all reflect it. Absent/false in plain quote mode.
+ */
+export interface BookedStatus {
+	booked?: boolean;
+	bookedAt?: string | null;
+	bookingRef?: string | null;
+	proof?: boolean;
+}
+
+/** Normalise booked status into the flat keys carried on each line's meta. */
+export function bookedMeta(s: BookedStatus): Record<string, unknown> {
+	return {
+		booked: !!s.booked,
+		booked_at: s.bookedAt ?? null,
+		booking_ref: s.bookingRef || null,
+		proof: !!s.proof
+	};
+}
+
 export interface PaxCounts {
 	adults: number;
 	children: number;
@@ -49,7 +73,7 @@ export interface BreakfastInput {
 	included?: boolean; // bundled in the room rate — show it, don't price it
 }
 
-export interface HotelInput {
+export interface HotelInput extends BookedStatus {
 	city: string;
 	name: string;
 	currency?: LineCurrency; // SAR (default) or USD
@@ -69,7 +93,7 @@ export function personsInRooms(rooms: RoomType[]): number {
 	return rooms.reduce((a, r) => a + r.occupancy * r.qty, 0);
 }
 
-export interface TransferRow {
+export interface TransferRow extends BookedStatus {
 	vehicleType: string; // 4 / 7 / 14 / 50-seater / custom
 	route: string; // Airport → Makkah, etc.
 	currency?: LineCurrency;
@@ -79,7 +103,7 @@ export interface TransferRow {
 	vehicles: number;
 }
 
-export interface VisaInput {
+export interface VisaInput extends BookedStatus {
 	visaType: string; // 'Umrah' or a custom label
 	currency?: LineCurrency;
 	vendorId?: string | null;
@@ -90,7 +114,7 @@ export interface VisaInput {
 }
 
 /** A free-form add-on (Polio cert, insurance, …). Priced like any line. */
-export interface OtherServiceInput {
+export interface OtherServiceInput extends BookedStatus {
 	label: string;
 	currency?: LineCurrency;
 	vendorId?: string | null;
@@ -99,7 +123,7 @@ export interface OtherServiceInput {
 	qty: number;
 }
 
-export interface TicketsInput {
+export interface TicketsInput extends BookedStatus {
 	airlineName: string;
 	rateCardId?: string | null;
 	// Flights are in-house (no vendor) — capture flight detail instead.
@@ -236,7 +260,8 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 					qty: rt.qty,
 					nights: h.nights,
 					check_in: h.checkIn ?? null,
-					check_out: h.checkOut ?? null
+					check_out: h.checkOut ?? null,
+					...bookedMeta(h)
 				}
 			});
 		}
@@ -275,7 +300,8 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 						meal_plan: h.mealPlan ?? null,
 						persons: b.persons,
 						persons_auto: b.personsAuto ?? true,
-						nights: h.nights
+						nights: h.nights,
+						...bookedMeta(h)
 					}
 				});
 			}
@@ -300,7 +326,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			quantity: t.vehicles,
 			lineCost: toNumber(lineCost),
 			lineSell: toNumber(lineSell),
-			meta: { vehicle_type: t.vehicleType, route: t.route }
+			meta: { vehicle_type: t.vehicleType, route: t.route, ...bookedMeta(t) }
 		});
 	}
 
@@ -335,7 +361,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			quantity: vpersons,
 			lineCost: toNumber(lineCost),
 			lineSell: toNumber(lineSell),
-			meta: { visa_type: v.visaType, visa_index: vi, persons: vpersons }
+			meta: { visa_type: v.visaType, visa_index: vi, persons: vpersons, ...bookedMeta(v) }
 		});
 	});
 
@@ -362,7 +388,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			quantity: qty,
 			lineCost: toNumber(lineCost),
 			lineSell: toNumber(lineSell),
-			meta: { other_index: si }
+			meta: { other_index: si, ...bookedMeta(s) }
 		});
 	});
 
@@ -396,7 +422,8 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 					pax_type: ty.key,
 					route: t.route ?? null,
 					fare_class: t.fareClass ?? null,
-					pnr: t.pnr ?? null
+					pnr: t.pnr ?? null,
+					...bookedMeta(t)
 				}
 			});
 		}
