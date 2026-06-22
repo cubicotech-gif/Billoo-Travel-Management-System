@@ -140,6 +140,66 @@ export async function createQuotation(args: SaveQuotationArgs): Promise<Quotatio
 	return quotation;
 }
 
+/**
+ * Update an EXISTING quotation in place — replace its totals and line breakdown
+ * without minting a new version. Used by the booking stage so finalising/marking
+ * services doesn't spam the version history with v7, v8, v9… (the booking, not
+ * the quote, is the source of truth there). Logs nothing — booking edits are
+ * routine and the booking timeline already records the meaningful moves.
+ */
+export async function updateQuotationFull(id: string, args: SaveQuotationArgs): Promise<Quotation> {
+	const quotation = unwrap<Quotation>(
+		await supabase
+			.from('quotations')
+			.update({
+				roe: args.roe,
+				usd_rate: args.usd && args.usd > 0 ? args.usd : null,
+				adults: args.pax.adults,
+				children: args.pax.children,
+				infants: args.pax.infants,
+				sar_cost: args.result.sarCost,
+				sar_sell: args.result.sarSell,
+				tickets_cost_pkr: args.result.ticketsCostPkr,
+				tickets_sell_pkr: args.result.ticketsSellPkr,
+				total_cost_pkr: args.result.totalCostPkr,
+				total_sell_pkr: args.result.totalSellPkr,
+				profit_pkr: args.result.profitPkr,
+				per_person_pkr: args.perPersonPkr ?? 0,
+				pp_include_infants: args.ppIncludeInfants ?? false,
+				label: args.label ?? null,
+				valid_until: args.validUntil ?? null,
+				inclusions: args.inclusions ?? [],
+				exclusions: args.exclusions ?? [],
+				whatsapp_text: args.whatsappText
+			})
+			.eq('id', id)
+			.select()
+			.single()
+	);
+
+	await supabase.from('quotation_lines').delete().eq('quotation_id', id);
+	if (args.result.lines.length > 0) {
+		const rows = args.result.lines.map((l) => ({
+			quotation_id: id,
+			line_type: l.line_type,
+			label: l.label,
+			rate_card_id: l.rateCardId,
+			vendor_id: l.vendorId,
+			currency: l.currency,
+			unit_cost: l.unitCost,
+			unit_sell: l.unitSell,
+			quantity: l.quantity,
+			line_cost: l.lineCost,
+			line_sell: l.lineSell,
+			meta: l.meta
+		}));
+		const { error } = await supabase.from('quotation_lines').insert(rows);
+		if (error) throw new Error(error.message);
+	}
+
+	return quotation;
+}
+
 export async function setQuotationStatus(
 	id: string,
 	status: Quotation['status']

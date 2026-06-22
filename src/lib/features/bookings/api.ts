@@ -151,7 +151,11 @@ export async function syncBookingFromQuotation(quotation: Quotation): Promise<Bo
 	}
 
 	await syncBookingTotals(booking.id, ratesOf(booking));
-	logActivity({ query_id: quotation.query_id, kind: 'booking', summary: 'Booking updated from builder' });
+	// Log only the first time the booking is created — routine re-syncs (every
+	// mark-booked / edit) must NOT flood the timeline.
+	if (!existing) {
+		logActivity({ query_id: quotation.query_id, kind: 'booking', summary: 'Booking started' });
+	}
 	return booking;
 }
 

@@ -3,7 +3,7 @@
 	import { Sparkles, Map, FileText, CheckCircle2, RotateCcw, Check } from 'lucide-svelte';
 	import { Badge, Button } from '$ui';
 	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
-	import { useQuotations, useAcceptQuotation } from '$features/quotations/queries';
+	import { useQuotations } from '$features/quotations/queries';
 	import type { Quotation } from '$features/quotations/types';
 	import { useQueryDetail, useUpdateQuery } from '$features/queries/queries';
 	import { useBookingForQuery, useSyncBookingFromQuotation } from './queries';
@@ -13,7 +13,6 @@
 	const query = untrack(() => useQueryDetail(queryId));
 	const booking = untrack(() => useBookingForQuery(queryId));
 	const quotations = untrack(() => useQuotations(queryId));
-	const accept = untrack(() => useAcceptQuotation(queryId));
 	const sync = untrack(() => useSyncBookingFromQuotation(queryId));
 	const update = useUpdateQuery();
 
@@ -58,11 +57,12 @@
 		return () => clearTimeout(t);
 	});
 
-	// A save writes a new version; accept it, then re-drive the booking from it.
+	// A booking-stage save updates the quotation in place (no new version). Refresh
+	// the query's headline totals quietly (no "Moved to Booking" churn) and
+	// re-drive the booking from it.
 	function onSaved(q: Quotation) {
-		$accept.mutate(q, {
-			onSettled: () => $sync.mutate(q, { onSuccess: () => (savedAt = Date.now()) })
-		});
+		$update.mutate({ id: queryId, patch: { cost_price: q.total_cost_pkr, selling_price: q.total_sell_pkr } });
+		$sync.mutate(q, { onSuccess: () => (savedAt = Date.now()) });
 	}
 
 	function toggleCompleted() {
@@ -72,7 +72,7 @@
 		$update.mutate({ id: queryId, patch });
 	}
 
-	const busy = $derived($accept.isPending || $sync.isPending);
+	const busy = $derived($update.isPending || $sync.isPending);
 </script>
 
 <div

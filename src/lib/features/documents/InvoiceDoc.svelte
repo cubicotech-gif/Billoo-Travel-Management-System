@@ -37,9 +37,9 @@
 			try {
 				query = await getQuery(queryId);
 				const booking = await getBookingForQuery(queryId);
-				if (booking) {
+				const items = booking ? await listBookingItems(booking.id) : [];
+				if (booking && items.length > 0) {
 					const rates: Rates = ratesOf(booking);
-					const items = await listBookingItems(booking.id);
 					rows = items.map((i) => ({
 						lineType: i.line_type,
 						label: i.label,
