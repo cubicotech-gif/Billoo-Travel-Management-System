@@ -11,28 +11,41 @@ export interface ChainStay {
 	nights: number;
 	/** When true the user pinned this stay's check-in — don't auto-chain it. */
 	lockCheckIn?: boolean;
+	/** A second hotel sharing the SAME period as the previous (anchor) stay —
+	 *  inherits its dates/nights and is excluded from the night total. */
+	parallel?: boolean;
 }
 
 /**
  * Re-chain an ordered list of stays in place. The FIRST stay keeps its own
  * check-in; every following stay's check-in defaults to the previous stay's
- * check-out UNLESS the user has pinned it (lockCheckIn). Each stay's nights are
- * treated as the source of truth (so reorders preserve durations and re-flow
- * the dates); if nights are unset but both dates exist, nights are derived.
+ * check-out UNLESS the user has pinned it (lockCheckIn). Parallel stays (a 2nd
+ * hotel for the same nights) inherit the anchor stay's dates and don't advance
+ * the chain. Each stay's nights are the source of truth (so reorders preserve
+ * durations and re-flow the dates); if nights are unset but both dates exist,
+ * nights are derived.
  */
 export function rechain(stays: ChainStay[]): void {
+	let anchor: ChainStay | null = null;
 	for (let i = 0; i < stays.length; i++) {
 		const s = stays[i];
 		if (!s) continue;
-		if (i > 0 && !s.lockCheckIn) {
-			const prev = stays[i - 1];
-			if (prev && prev.checkOut) s.checkIn = prev.checkOut;
+		if (s.parallel && anchor) {
+			// Same period as the anchor — mirror its dates, don't move the chain.
+			s.checkIn = anchor.checkIn;
+			s.checkOut = anchor.checkOut;
+			s.nights = anchor.nights;
+			continue;
+		}
+		if (anchor && !s.lockCheckIn && anchor.checkOut) {
+			s.checkIn = anchor.checkOut;
 		}
 		if (s.checkIn && s.nights > 0) {
 			s.checkOut = addDays(s.checkIn, s.nights);
 		} else if (s.checkIn && s.checkOut) {
 			s.nights = nightsBetween(s.checkIn, s.checkOut);
 		}
+		anchor = s;
 	}
 }
 
@@ -83,6 +96,7 @@ export function moveStay(stays: ChainStay[], from: number, to: number): void {
 	rechain(stays);
 }
 
-export function totalNights(stays: { nights: number }[]): number {
-	return stays.reduce((a, s) => a + (Number(s.nights) || 0), 0);
+export function totalNights(stays: { nights: number; parallel?: boolean }[]): number {
+	// Parallel stays (a 2nd hotel for the same nights) must not double-count.
+	return stays.reduce((a, s) => a + (s.parallel ? 0 : Number(s.nights) || 0), 0);
 }

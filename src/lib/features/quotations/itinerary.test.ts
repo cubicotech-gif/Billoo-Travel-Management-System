@@ -91,6 +91,25 @@ describe('itinerary chaining', () => {
 		expect(stays[1]?.checkIn).toBe('2026-04-10');
 	});
 
+	it('parallel hotel shares the anchor dates and is not double-counted', () => {
+		// Makkah 4N with TWO hotels (parallel), then Madinah 3N.
+		const stays: ChainStay[] = [
+			stay('2026-04-04', '', 4),
+			{ ...stay('', '', 0), parallel: true },
+			stay('', '', 3)
+		];
+		rechain(stays);
+		// 2nd hotel mirrors stay 1's period exactly.
+		expect(stays[1]?.checkIn).toBe('2026-04-04');
+		expect(stays[1]?.checkOut).toBe('2026-04-08');
+		expect(stays[1]?.nights).toBe(4);
+		// Madinah chains from the anchor's check-out, not the parallel sibling.
+		expect(stays[2]?.checkIn).toBe('2026-04-08');
+		expect(stays[2]?.checkOut).toBe('2026-04-11');
+		// 4 + 3 = 7 (the parallel 4 nights are not added again).
+		expect(totalNights(stays)).toBe(7);
+	});
+
 	it('relinks a pinned stay back into the auto-chain', () => {
 		const stays = [stay('2026-04-04', '', 4), stay('2026-04-10', '', 3)];
 		const s1 = stays[1];

@@ -125,6 +125,7 @@ export interface HotelForm extends BookedFields {
 	checkOut: string;
 	nights: number;
 	lockCheckIn: boolean; // user pinned this stay's check-in (don't auto-chain)
+	parallel: boolean; // a 2nd hotel sharing the previous stay's dates/nights
 	rooms: RoomRow[];
 	breakfastMode: BreakfastMode;
 	breakfastPersons: number; // 0 = auto (room occupancy)
@@ -194,7 +195,7 @@ export interface BuilderForm {
 }
 
 export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 });
-export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, currency: 'SAR', sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0, ...blankBooked() });
+export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, currency: 'SAR', sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, parallel: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0, ...blankBooked() });
 export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Jeddah Airport → Makkah', customRoute: '', date: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, vehicles: 1, ...blankBooked() });
 export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, persons: 0, ...blankBooked() });
 export const blankOtherService = (): OtherServiceForm => ({ label: '', currency: 'PKR', vendorId: '', cost: 0, sell: 0, qty: 1, ...blankBooked() });
@@ -277,6 +278,7 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				slot.nights = n(meta, 'nights');
 				slot.checkIn = s(meta, 'check_in');
 				slot.checkOut = s(meta, 'check_out');
+				slot.parallel = meta.parallel === true;
 				Object.assign(slot, readBooked(meta));
 				staySlots.set(key, slot);
 				stayOrder.push(key);
