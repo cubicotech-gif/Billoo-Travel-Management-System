@@ -1,14 +1,19 @@
 -- =====================================================
--- apply-all.sql — bring a live database up to date
+-- apply-all.sql — bring a LIVE database up to date (safe to re-run)
 -- =====================================================
--- Concatenates every migration in database/migrations (date order), then the
--- dev open-access policies, then reloads PostgREST's schema cache. Every
--- statement is idempotent (IF NOT EXISTS / DROP POLICY IF EXISTS), so running
--- this repeatedly is safe. Run it once in the Supabase SQL editor whenever the
--- app reports a 400 "could not find column" (schema drift).
+-- Concatenates every migration (date order), then dev-open-access, then a
+-- schema-cache reload. Designed to run on a database that already has data:
+--   * every column/table/index uses IF NOT EXISTS,
+--   * every replayed CHECK constraint is added NOT VALID, so the historical
+--     (narrower) constraint definitions can't fail on rows that later migrations
+--     made valid (e.g. package_type 'Umrah Plus', the 4-stage statuses). New
+--     writes are still validated against the final constraint.
 --
--- NOTE: assumes the baseline database/complete-schema.sql has already been
--- applied. For a brand-new database, run complete-schema.sql first.
+-- Run this in the Supabase SQL editor whenever the app reports a 400
+-- "could not find column" (schema drift).
+--
+-- DO NOT run database/complete-schema.sql on an existing database — that file is
+-- the from-scratch baseline and its early constraints predate your data.
 -- =====================================================
 
 
@@ -58,7 +63,7 @@ ALTER TABLE public.queries ADD CONSTRAINT queries_status_check CHECK (status IN 
 	'Delivery',
 	'Completed',
 	'Cancelled'
-));
+)) NOT VALID;
 
 
 -- ----------------------------------------------------------------
@@ -119,7 +124,7 @@ ALTER TABLE public.queries ADD CONSTRAINT queries_status_check CHECK (status IN 
 	'Quoted',
 	'Booking',
 	'Cancelled'
-));
+)) NOT VALID;
 
 ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_booking_status_check;
 ALTER TABLE public.queries ADD CONSTRAINT queries_booking_status_check CHECK (
@@ -130,7 +135,7 @@ ALTER TABLE public.queries ADD CONSTRAINT queries_booking_status_check CHECK (
 		'Partial Payment',
 		'Completed'
 	)
-);
+) NOT VALID;
 
 
 -- ----------------------------------------------------------------
@@ -232,7 +237,7 @@ ALTER TABLE public.queries
 ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_package_type_check;
 ALTER TABLE public.queries ADD CONSTRAINT queries_package_type_check CHECK (
 	package_type IS NULL OR package_type IN ('Umrah', 'Tour', 'Leisure')
-);
+) NOT VALID;
 
 CREATE INDEX IF NOT EXISTS idx_queries_passenger_id ON public.queries (passenger_id);
 CREATE INDEX IF NOT EXISTS idx_passengers_is_deleted ON public.passengers (is_deleted);
@@ -421,7 +426,7 @@ ALTER TABLE public.documents ADD CONSTRAINT documents_document_type_check CHECK 
 		'passport', 'cnic', 'visa', 'photo', 'vaccination', 'mahram',
 		'ticket', 'voucher', 'invoice', 'receipt', 'other'
 	)
-);
+) NOT VALID;
 
 
 -- ----------------------------------------------------------------
@@ -487,7 +492,7 @@ CREATE TRIGGER update_query_payments_updated_at BEFORE UPDATE ON public.query_pa
 ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_package_type_check;
 ALTER TABLE public.queries ADD CONSTRAINT queries_package_type_check CHECK (
 	package_type IS NULL OR package_type IN ('Umrah', 'Umrah Plus', 'Tour', 'Leisure')
-);
+) NOT VALID;
 
 -- Repeatable city blocks (Umrah cities, Umrah-Plus extra city, multi-city tours).
 -- Each: { city, arrival_date, nights, hotel_preference, activities }.
@@ -554,23 +559,23 @@ ALTER TABLE public.vendors
 ALTER TABLE public.quotation_lines DROP CONSTRAINT IF EXISTS quotation_lines_line_type_check;
 ALTER TABLE public.quotation_lines
 	ADD CONSTRAINT quotation_lines_line_type_check
-	CHECK (line_type IN ('hotel', 'transfer', 'visa', 'ticket', 'other'));
+	CHECK (line_type IN ('hotel', 'transfer', 'visa', 'ticket', 'other')) NOT VALID;
 
 ALTER TABLE public.quotation_lines DROP CONSTRAINT IF EXISTS quotation_lines_currency_check;
 ALTER TABLE public.quotation_lines
 	ADD CONSTRAINT quotation_lines_currency_check
-	CHECK (currency IN ('SAR', 'PKR', 'USD'));
+	CHECK (currency IN ('SAR', 'PKR', 'USD')) NOT VALID;
 
 -- The bookings line table mirrors the same shape.
 ALTER TABLE public.booking_items DROP CONSTRAINT IF EXISTS booking_items_line_type_check;
 ALTER TABLE public.booking_items
 	ADD CONSTRAINT booking_items_line_type_check
-	CHECK (line_type IN ('hotel', 'transfer', 'visa', 'ticket', 'other'));
+	CHECK (line_type IN ('hotel', 'transfer', 'visa', 'ticket', 'other')) NOT VALID;
 
 ALTER TABLE public.booking_items DROP CONSTRAINT IF EXISTS booking_items_currency_check;
 ALTER TABLE public.booking_items
 	ADD CONSTRAINT booking_items_currency_check
-	CHECK (currency IN ('SAR', 'PKR', 'USD'));
+	CHECK (currency IN ('SAR', 'PKR', 'USD')) NOT VALID;
 
 -- ROLLBACK (run manually if needed):
 -- ALTER TABLE public.quotation_lines DROP CONSTRAINT IF EXISTS quotation_lines_line_type_check;
@@ -1459,7 +1464,7 @@ BEGIN
 		SELECT 1 FROM pg_constraint WHERE conname = 'query_replies_sender_check'
 	) THEN
 		ALTER TABLE public.query_replies
-			ADD CONSTRAINT query_replies_sender_check CHECK (sender IN ('client', 'us'));
+			ADD CONSTRAINT query_replies_sender_check CHECK (sender IN ('client', 'us')) NOT VALID;
 	END IF;
 END $$;
 
