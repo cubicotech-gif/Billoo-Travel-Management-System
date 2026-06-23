@@ -77,6 +77,7 @@ export interface HotelInput extends BookedStatus {
 	city: string;
 	name: string;
 	currency?: LineCurrency; // SAR (default) or USD
+	parallel?: boolean; // 2nd hotel sharing the previous stay's dates
 	hotelId?: string | null;
 	mealPlan?: string | null;
 	rateCardId?: string | null;
@@ -262,6 +263,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 					nights: h.nights,
 					check_in: h.checkIn ?? null,
 					check_out: h.checkOut ?? null,
+					parallel: !!h.parallel,
 					...bookedMeta(h)
 				}
 			});
@@ -302,6 +304,7 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 						persons: b.persons,
 						persons_auto: b.personsAuto ?? true,
 						nights: h.nights,
+						parallel: !!h.parallel,
 						...bookedMeta(h)
 					}
 				});

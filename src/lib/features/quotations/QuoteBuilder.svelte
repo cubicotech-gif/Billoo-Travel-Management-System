@@ -210,6 +210,24 @@
 		form.hotels.push(blankHotel(''));
 		rechain(form.hotels);
 	}
+	// A 2nd hotel for the SAME period as stay `i`: same city/dates/nights, but its
+	// own vendor/rooms. Flagged parallel so it inherits dates and isn't double-counted.
+	function addHotelToStay(i: number) {
+		const anchor = form.hotels[i];
+		if (!anchor) return;
+		const h = blankHotel(anchor.city);
+		h.parallel = true;
+		h.lockCheckIn = true;
+		h.checkIn = anchor.checkIn;
+		h.checkOut = anchor.checkOut;
+		h.nights = anchor.nights;
+		form.hotels.splice(i + 1, 0, h);
+		rechain(form.hotels);
+	}
+	// Display number for a stay = count of non-parallel stays up to & incl. it.
+	function stayNo(i: number): number {
+		return form.hotels.slice(0, i + 1).filter((h) => !h.parallel).length;
+	}
 	function removeStay(i: number) {
 		form.hotels.splice(i, 1);
 		rechain(form.hotels);
@@ -359,6 +377,7 @@
 			city,
 			name: h.name || city,
 			currency: h.currency,
+			parallel: h.parallel,
 			hotelId: h.hotelId || null,
 			mealPlan: h.mealPlan || 'RO',
 			vendorId: h.vendorId || null,
@@ -721,7 +740,9 @@
 			<div class="space-y-3">
 					<div class="flex items-center justify-between">
 						<div class="flex items-center gap-2">
-							<span class="text-xs font-semibold uppercase text-slate-400">Stay {hi + 1}</span>
+							<span class="text-xs font-semibold uppercase text-slate-400">
+								Stay {stayNo(hi)}{slot.parallel ? ' · 2nd hotel (same dates)' : ''}
+							</span>
 							<select bind:value={slot.currency} class="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-medium text-slate-600 focus:border-brand-500 focus:outline-none">
 								<option value="SAR">SAR</option>
 								<option value="USD">USD</option>
@@ -754,7 +775,13 @@
 							{/if}
 						</div>
 						<div>
-							{#if hi === 0}
+							{#if slot.parallel}
+								<div class="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-xs text-slate-500">
+									Shares <span class="font-medium">Stay {stayNo(hi)}</span> dates —
+									{slot.checkIn || '—'} → {slot.checkOut || '—'} ({num(slot.nights)} night{num(slot.nights) === 1 ? '' : 's'}).
+									<br />A second hotel for the same period; not double-counted in the night total.
+								</div>
+							{:else if hi === 0}
 								<span class="mb-1 block text-sm font-medium text-slate-700">Dates (check-in → check-out)</span>
 								<RangeCalendar bind:start={slot.checkIn} bind:end={slot.checkOut} onChange={() => onStayDates(hi)} />
 							{:else}
@@ -770,9 +797,11 @@
 									{/if}
 								</p>
 							{/if}
-							<div class="mt-2 w-24">
-								<Input label="Nights" type="number" min="0" bind:value={slot.nights} onchange={() => onStayNights(hi)} />
-							</div>
+							{#if !slot.parallel}
+								<div class="mt-2 w-24">
+									<Input label="Nights" type="number" min="0" bind:value={slot.nights} onchange={() => onStayNights(hi)} />
+								</div>
+							{/if}
 						</div>
 					</div>
 
@@ -826,6 +855,14 @@
 							<HotelRatePanel hotelId={slot.hotelId} onPick={(p) => applyRatePick(slot, p)} />
 						{/key}
 					{/if}
+
+					{#if !slot.parallel}
+						<div class="border-t border-slate-100 pt-2">
+							<Button type="button" variant="ghost" size="sm" onclick={() => addHotelToStay(hi)}>
+								<Plus class="h-4 w-4" /> Add another hotel (same dates)
+							</Button>
+						</div>
+					{/if}
 				</div>
 		{/snippet}
 
@@ -833,7 +870,7 @@
 			{#if booking}
 				<ServiceShell
 					accent="hotel"
-					title={`Stay ${hi + 1}${slot.city ? ` · ${slot.city}` : ''}`}
+					title={`Stay ${stayNo(hi)}${slot.parallel ? ' · 2nd hotel' : ''}${slot.city ? ` · ${slot.city}` : ''}`}
 					subtitle={slot.name || ''}
 					booked={slot.booked}
 					proof={slot.proof}
@@ -845,7 +882,7 @@
 					{@render stayBody(slot, hi)}
 				</ServiceShell>
 			{:else}
-				<Card title={`Stay ${hi + 1}${slot.city ? ` · ${slot.city}` : ''}`}>
+				<Card title={`Stay ${stayNo(hi)}${slot.parallel ? ' · 2nd hotel' : ''}${slot.city ? ` · ${slot.city}` : ''}`}>
 					{@render stayBody(slot, hi)}
 				</Card>
 			{/if}
