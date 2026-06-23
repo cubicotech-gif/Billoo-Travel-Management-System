@@ -1,9 +1,15 @@
 -- =====================================================
 -- Billoo Travel Management System - Complete Database Schema
 -- =====================================================
--- This is the single authoritative schema for the entire system.
--- Safe to run multiple times (idempotent).
+-- This is the from-scratch baseline for a BRAND-NEW (empty) database.
 -- Includes all tables, indexes, triggers, RLS policies, and functions.
+--
+-- ⚠️  DO NOT run this on a database that already has data. Some early CHECK
+--     constraints here (e.g. queries_package_type_check without 'Umrah Plus',
+--     the older status set) predate values your live rows now hold, so they
+--     fail with "check constraint ... is violated by some row".
+--     To bring an EXISTING database up to date, run database/apply-all.sql
+--     instead — it's additive and adds replayed CHECK constraints as NOT VALID.
 -- Last updated: 2026-03-25
 -- =====================================================
 
