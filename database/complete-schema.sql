@@ -52,11 +52,12 @@ CREATE TABLE IF NOT EXISTS public.queries (
   )),
   booking_status TEXT CHECK (booking_status IS NULL OR booking_status IN (
     'Pending Payment',
-    'Payment Done - Check-in Pending',
-    'Check-in Done - Payment Pending',
-    'Partial Payment',
+    'Payment Done - Check-in Left',
+    'Payment Pending - Check-in Left',
+    'Payment Pending - Travel Done',
     'Completed'
   )),
+  booking_status_locked BOOLEAN NOT NULL DEFAULT FALSE,
   assigned_to UUID REFERENCES public.users(id) ON DELETE SET NULL,
   notes TEXT,
 
@@ -1287,9 +1288,9 @@ ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_booking_status_chec
 ALTER TABLE public.queries ADD CONSTRAINT queries_booking_status_check CHECK (
 	booking_status IS NULL OR booking_status IN (
 		'Pending Payment',
-		'Payment Done - Check-in Pending',
-		'Check-in Done - Payment Pending',
-		'Partial Payment',
+		'Payment Done - Check-in Left',
+		'Payment Pending - Check-in Left',
+		'Payment Pending - Travel Done',
 		'Completed'
 	)
 );
@@ -1319,6 +1320,10 @@ CREATE TABLE IF NOT EXISTS public.bookings (
 	actual_cost_pkr NUMERIC(12, 2) NOT NULL DEFAULT 0,
 	actual_sell_pkr NUMERIC(12, 2) NOT NULL DEFAULT 0,
 	profit_pkr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+
+	-- Order-level discount (PKR) on the package total the client owes.
+	discount_pkr NUMERIC(12, 2) NOT NULL DEFAULT 0,
+	discount_note TEXT,
 
 	notes TEXT,
 	is_deleted BOOLEAN NOT NULL DEFAULT FALSE,

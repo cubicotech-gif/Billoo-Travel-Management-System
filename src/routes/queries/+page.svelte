@@ -15,7 +15,7 @@
 	import { useAllQuotations } from '$features/quotations/queries';
 	import { latestQuotationByQuery } from '$features/quotations/api';
 	import { isBooked, groupIntoLanes } from '$features/operations/lanes';
-	import { daysSince, isStuck } from '$features/queries/workflow';
+	import { daysSince, isStuck, POST_COMPLETE_STATUSES } from '$features/queries/workflow';
 	import type { BookingStatus, PackageType, QueryStatus } from '$lib/database.types';
 	import type { Query } from '$features/queries/types';
 
@@ -114,7 +114,7 @@
 			{ id: 'Quoted', label: 'Quoted', tone: 'info', status: 'Quoted', bookingStatus: null, alwaysOpen: false, items: active.filter((q) => q.status === 'Quoted' && !isBooked(q)) },
 			{ id: 'Booking', label: 'Booking in progress', tone: 'success', status: 'Booking', bookingStatus: null, alwaysOpen: false, items: active.filter((q) => q.status === 'Booking' && !q.booking_status) },
 			{ id: 'payments', label: 'Payments Due', tone: 'warning', status: 'Booking', bookingStatus: 'Pending Payment', alwaysOpen: false, items: lanes.payments.map((c) => c.query) },
-			{ id: 'checkins', label: 'Check-ins', tone: 'info', status: 'Booking', bookingStatus: 'Payment Done - Check-in Pending', alwaysOpen: false, items: lanes.checkins.map((c) => c.query) },
+			{ id: 'checkins', label: 'Check-ins', tone: 'info', status: 'Booking', bookingStatus: 'Payment Done - Check-in Left', alwaysOpen: false, items: lanes.checkins.map((c) => c.query) },
 			{ id: 'completed', label: 'Completed', tone: 'success', status: 'Booking', bookingStatus: 'Completed', alwaysOpen: false, items: lanes.completed.map((c) => c.query) }
 		];
 	});
@@ -146,7 +146,17 @@
 			booking_status: col.bookingStatus,
 			stage_changed_at: new Date().toISOString()
 		};
-		if (col.bookingStatus === 'Completed') patch.completed_date = q.completed_date ?? new Date().toISOString();
+		// Dropping into a booking sub-lane is a manual classification: pin it so the
+		// money/date auto-router won't immediately move it back. The plain "Booking
+		// in progress" column (no booking_status) reopens it to the builder.
+		if (col.status === 'Booking') {
+			patch.booking_status_locked = col.bookingStatus != null;
+			if (col.bookingStatus == null) {
+				patch.completed_date = null;
+			} else if (POST_COMPLETE_STATUSES.includes(col.bookingStatus)) {
+				patch.completed_date = q.completed_date ?? new Date().toISOString();
+			}
+		}
 		$update.mutate({ id, patch });
 	}
 </script>

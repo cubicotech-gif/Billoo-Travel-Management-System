@@ -29,6 +29,7 @@
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingBuilder from '$features/bookings/BookingBuilder.svelte';
 	import BookingSummary from '$features/bookings/BookingSummary.svelte';
+	import BookingLifecyclePanel from '$features/bookings/BookingLifecyclePanel.svelte';
 	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
 	import DocumentsDialog from '$features/documents/DocumentsDialog.svelte';
 
@@ -154,11 +155,12 @@
 			<QuotedChat queryId={id} {latest} />
 			<QuotationList queryId={id} />
 		{:else if q.status === 'Booking'}
-			{#if q.booking_status === 'Completed'}
+			{#if q.completed_date}
 				<BookingSummary queryId={id} />
 			{:else}
 				<BookingBuilder queryId={id} />
 			{/if}
+			<BookingLifecyclePanel queryId={id} />
 		{:else}
 			<Card title="Cancelled — edit & restore">
 				<p class="mb-4 text-sm text-slate-500">

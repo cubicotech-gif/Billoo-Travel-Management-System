@@ -47,9 +47,14 @@ New Query  →  Working  ⇄  Quoted (Awaiting Client)
 **Transitions:** `New Query → Working`, `Working → Quoted`, `Quoted → Working`
 (tweaks), `Quoted → Booking` (approved). Cancelled is a manual side-exit.
 
-**Post-booking is a status field on the Booking, not a column:**
-Pending Payment · Payment Done — Check-in Pending · Check-in Done — Payment
-Pending · Partial Payment · Completed. Completed bookings can be hidden from the
+**Post-booking is a status field on the Booking, not a column.** Once a booking
+is *marked complete* the status is driven automatically by money (recorded
+payments vs the package total minus any discount) and the trip's final date,
+with a manual override available:
+Pending Payment (still building) · Payment Done — Check-in Left (paid, trip
+ahead) · Payment Pending — Check-in Left (balance due, trip ahead) · Payment
+Pending — Travel Done (trip over but still owed) · Completed (paid in full AND
+the trip's final date has passed). Completed bookings can be hidden from the
 active board.
 
 ## 4. Stage Detail
@@ -127,8 +132,16 @@ Reads from **Daily Rates**.
 - **Document uploads:** passenger docs (passports, tickets) + vendor docs
   (receipts, vouchers). Attach to booking, appear on passenger profile.
   Add/replace/delete.
-- **Payment & check-in status:** Pending Payment · Payment Done — Check-in
-  Pending · Check-in Done — Payment Pending · Partial Payment · Completed.
+- **Per-service proof:** mark each service booked, then either upload a new
+  proof/voucher OR link a document already filed (query docs or the passenger
+  vault) — the linked doc satisfies the proof for that service.
+- **Payments:** record client payments (amount + date) from the booking — they
+  reduce the balance and surface on the passenger profile. An order-level
+  discount lowers what's owed. Edit / delete / remove any payment.
+- **Payment & check-in status (auto, with override):** Pending Payment · Payment
+  Done — Check-in Left · Payment Pending — Check-in Left · Payment Pending —
+  Travel Done · Completed. The system files the booking into the right bucket on
+  every payment/date change; staff can pin a manual override.
 
 ## 5. Daily Rates / Admin Module
 - Dedicated admin page, updated each morning.

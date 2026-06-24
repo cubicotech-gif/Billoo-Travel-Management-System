@@ -10,7 +10,8 @@
 		useBookingForQuery,
 		useSyncBookingFromQuotation,
 		useSetBookingBasis,
-		useStartBlankBooking
+		useStartBlankBooking,
+		useMarkBookingComplete
 	} from './queries';
 
 	let { queryId }: { queryId: string } = $props();
@@ -20,6 +21,7 @@
 	const sync = untrack(() => useSyncBookingFromQuotation(queryId));
 	const setBasis = untrack(() => useSetBookingBasis(queryId));
 	const startBlank = untrack(() => useStartBlankBooking(queryId));
+	const markComplete = untrack(() => useMarkBookingComplete(queryId));
 	const update = useUpdateQuery();
 
 	const hasBooking = $derived(!!$booking.data);
@@ -64,8 +66,10 @@
 		$sync.mutate(q, { onSuccess: () => (savedAt = Date.now()) });
 	}
 
+	// Finalise the booking: the system stamps the completion date and auto-routes
+	// to the right check-in-left bucket based on payments vs the package total.
 	function markCompleted() {
-		$update.mutate({ id: queryId, patch: { booking_status: 'Completed', completed_date: new Date().toISOString() } });
+		$markComplete.mutate();
 	}
 
 	function fmtDate(iso: string): string {
@@ -82,7 +86,7 @@
 			<Button size="sm" variant="secondary" href="/queries/{queryId}/itinerary"><Map class="h-4 w-4" /> Itinerary</Button>
 			<Button size="sm" variant="secondary" href="/queries/{queryId}/invoice"><FileText class="h-4 w-4" /> Invoice</Button>
 			{#if hasBooking}
-				<Button size="sm" disabled={$update.isPending} onclick={markCompleted}><CheckCircle2 class="h-4 w-4" /> Mark completed</Button>
+				<Button size="sm" disabled={$markComplete.isPending} onclick={markCompleted}><CheckCircle2 class="h-4 w-4" /> Mark completed</Button>
 			{/if}
 		</div>
 	</div>

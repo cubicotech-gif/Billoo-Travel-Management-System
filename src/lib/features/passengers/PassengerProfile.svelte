@@ -8,12 +8,34 @@
 	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
 	import { PASSENGER_DOCUMENT_TYPES } from '$features/documents/api';
 	import { usePassenger, usePassengerQueries } from './queries';
+	import { listPaymentsForQueries, paymentStatus, type Payment } from '$features/payments/api';
+	import { sum, money, toNumber } from '$lib/money';
 	import { fullName } from './types';
 
 	let { id }: { id: string } = $props();
 
 	const passenger = untrack(() => usePassenger(id));
 	const queries = untrack(() => usePassengerQueries(id));
+
+	// Payment ledger across every query for this passenger — early payments and
+	// booking balances all land here once recorded.
+	let payments = $state<Payment[]>([]);
+	const queryRef = $derived(
+		new Map(($queries.data ?? []).map((q) => [q.id, q.query_number]))
+	);
+	$effect(() => {
+		const ids = ($queries.data ?? []).map((q) => q.id);
+		if (ids.length === 0) {
+			payments = [];
+			return;
+		}
+		listPaymentsForQueries(ids).then((r) => (payments = r));
+	});
+	const totalPaid = $derived(
+		toNumber(sum(payments.filter((p) => p.status === 'paid').map((p) => money(Number(p.amount), 'PKR'))))
+	);
+
+	const payTone = { paid: 'success', overdue: 'danger', pending: 'warning' } as const;
 
 	function fmtDate(iso: string | null): string {
 		return iso ? new Date(iso).toLocaleDateString() : '—';
@@ -96,6 +118,48 @@
 			</table>
 		</div>
 	{/if}
+
+	<div class="mt-8">
+		<div class="mb-3 flex items-center justify-between">
+			<h2 class="text-lg font-semibold text-slate-800">Payments</h2>
+			{#if payments.length}
+				<span class="text-sm text-slate-500">Total received: <span class="font-semibold text-green-600">{formatAmount(totalPaid, 'PKR')}</span></span>
+			{/if}
+		</div>
+		{#if payments.length === 0}
+			<div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">
+				No payments recorded yet.
+			</div>
+		{:else}
+			<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+				<table class="w-full text-sm">
+					<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+						<tr>
+							<th class="px-4 py-3 font-medium">Query</th>
+							<th class="px-4 py-3 font-medium">Label</th>
+							<th class="px-4 py-3 text-right font-medium">Amount</th>
+							<th class="px-4 py-3 font-medium">Date</th>
+							<th class="px-4 py-3 font-medium">Status</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-50">
+						{#each payments as pay (pay.id)}
+							{@const st = paymentStatus(pay)}
+							<tr class="hover:bg-slate-50">
+								<td class="px-4 py-3 font-mono text-xs">
+									<a href="/queries/{pay.query_id}" class="text-brand-600 hover:underline">{queryRef.get(pay.query_id) ?? '—'}</a>
+								</td>
+								<td class="px-4 py-3 text-slate-600">{pay.label}</td>
+								<td class="px-4 py-3 text-right text-slate-700">{formatAmount(Number(pay.amount), 'PKR')}</td>
+								<td class="px-4 py-3 text-xs text-slate-400">{fmtDate(pay.paid_date ?? pay.due_date)}</td>
+								<td class="px-4 py-3"><Badge tone={payTone[st]}>{st}</Badge></td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+	</div>
 
 	<div class="mt-8">
 		<DocumentsPanel

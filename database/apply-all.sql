@@ -653,11 +653,12 @@ DROP POLICY IF EXISTS dev_open_access ON public.hotels;
 CREATE POLICY dev_open_access ON public.hotels
 	FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 3. Backfill — final approved canonical list (92). TRUNCATE first so the table
---    matches the file exactly (replaces the earlier 14-row seed; some canonical
---    names were renamed). Safe: nothing references hotels yet. `notes` from the
+-- 3. Backfill — final approved canonical list (92). Upsert by (lower(name),
+--    city) so this is safe to replay on a live DB: rate_cards / rate_observations
+--    now carry hotel_id FKs, so the original TRUNCATE here fails (and would also
+--    wipe referencing rows). ON CONFLICT DO NOTHING just ensures the canonical
+--    set exists without touching anything that points at it. `notes` from the
 --    CSV is intentionally not loaded (no notes column on this table).
-TRUNCATE public.hotels;
 INSERT INTO public.hotels (name, city, aliases) VALUES
 	('Grand Plaza Al Madinah',        'madinah', ARRAY['Grand Plaza Madinah','Grand Plaza']::text[]),
 	('Gulnar Taibah',                 'madinah', '{}'::text[]),
@@ -750,7 +751,8 @@ INSERT INTO public.hotels (name, city, aliases) VALUES
 	('Masarat Royal',                 'makkah',  '{}'::text[]),
 	('Masarat Rulyem',                'makkah',  '{}'::text[]),
 	('Nozol Sharoon',                 'makkah',  '{}'::text[]),
-	('Zem Al Muzalal',                'makkah',  '{}'::text[]);
+	('Zem Al Muzalal',                'makkah',  '{}'::text[])
+ON CONFLICT (lower(name), city) DO NOTHING;
 
 -- Verify: SELECT count(*) FROM public.hotels;  -- 92  (76 madinah, 16 makkah)
 
@@ -1477,6 +1479,41 @@ END $$;
 -- two rates). Existing rows fall back to roe at read time.
 
 ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS usd_rate NUMERIC;
+
+
+-- ----------------------------------------------------------------
+-- migration: 20260629_booking_lifecycle.sql
+-- ----------------------------------------------------------------
+-- Money-driven booking lifecycle: payment-vs-package check-in stages, a
+-- "trip over but still owed" column, an order discount, and a manual override.
+
+ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_booking_status_check;
+
+UPDATE public.queries SET booking_status = CASE booking_status
+	WHEN 'Payment Done - Check-in Pending' THEN 'Payment Done - Check-in Left'
+	WHEN 'Check-in Done - Payment Pending' THEN 'Payment Pending - Travel Done'
+	WHEN 'Partial Payment'                 THEN 'Payment Pending - Check-in Left'
+	ELSE booking_status
+END
+WHERE booking_status IS NOT NULL;
+
+ALTER TABLE public.queries ADD CONSTRAINT queries_booking_status_check CHECK (
+	booking_status IS NULL OR booking_status IN (
+		'Pending Payment',
+		'Payment Done - Check-in Left',
+		'Payment Pending - Check-in Left',
+		'Payment Pending - Travel Done',
+		'Completed'
+	)
+);
+
+ALTER TABLE public.queries
+	ADD COLUMN IF NOT EXISTS booking_status_locked BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE public.bookings
+	ADD COLUMN IF NOT EXISTS discount_pkr NUMERIC(12, 2) NOT NULL DEFAULT 0;
+ALTER TABLE public.bookings
+	ADD COLUMN IF NOT EXISTS discount_note TEXT;
 
 
 -- ----------------------------------------------------------------

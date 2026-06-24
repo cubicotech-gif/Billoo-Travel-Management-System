@@ -26,6 +26,19 @@ export async function getPayment(id: string): Promise<Payment> {
 	return unwrap(await supabase.from('query_payments').select('*').eq('id', id).single());
 }
 
+/** All payments across a set of queries — powers the passenger-profile ledger. */
+export async function listPaymentsForQueries(queryIds: string[]): Promise<Payment[]> {
+	if (queryIds.length === 0) return [];
+	return unwrap(
+		await supabase
+			.from('query_payments')
+			.select('*')
+			.in('query_id', queryIds)
+			.order('paid_date', { ascending: false, nullsFirst: false })
+			.order('created_at', { ascending: false })
+	);
+}
+
 export async function createPayment(input: NewPayment): Promise<Payment> {
 	return unwrap<Payment>(await supabase.from('query_payments').insert(input).select().single());
 }

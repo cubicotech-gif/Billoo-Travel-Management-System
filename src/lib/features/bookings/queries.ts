@@ -10,9 +10,18 @@ import {
 	setBookingBasis,
 	startBlankBooking,
 	syncBookingFromQuotation,
+	updateBookingDiscount,
 	updateBookingItem,
 	updateBookingRates
 } from './api';
+import {
+	clearBookingStatusOverride,
+	markBookingComplete,
+	reconcileBookingLifecycle,
+	reopenBooking,
+	setBookingStatusManual
+} from './lifecycle-actions';
+import type { BookingStatus } from '$lib/database.types';
 import type { Booking, BookingItemUpdate, NewBookingItem } from './types';
 
 const bookingKey = (queryId: string) => ['booking', queryId] as const;
@@ -139,5 +148,65 @@ export function useUpdateBookingRates(queryId: string) {
 			client.invalidateQueries({ queryKey: bookingKey(queryId) });
 			client.invalidateQueries({ queryKey: ['queries', queryId] });
 		}
+	});
+}
+
+// --- Booking lifecycle (money/date-driven status + discount + override) ----
+
+/** Invalidate every cache that a lifecycle move can touch. */
+function invalidateLifecycle(client: ReturnType<typeof useQueryClient>, queryId: string) {
+	client.invalidateQueries({ queryKey: bookingKey(queryId) });
+	client.invalidateQueries({ queryKey: ['queries', queryId] });
+	client.invalidateQueries({ queryKey: ['payments', queryId] });
+}
+
+export function useMarkBookingComplete(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: () => markBookingComplete(queryId),
+		onSuccess: () => invalidateLifecycle(client, queryId)
+	});
+}
+
+export function useReopenBooking(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: () => reopenBooking(queryId),
+		onSuccess: () => invalidateLifecycle(client, queryId)
+	});
+}
+
+export function useReconcileBookingLifecycle(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: () => reconcileBookingLifecycle(queryId),
+		onSuccess: () => invalidateLifecycle(client, queryId)
+	});
+}
+
+export function useSetBookingStatusManual(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (status: BookingStatus) => setBookingStatusManual(queryId, status),
+		onSuccess: () => invalidateLifecycle(client, queryId)
+	});
+}
+
+export function useClearBookingStatusOverride(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: () => clearBookingStatusOverride(queryId),
+		onSuccess: () => invalidateLifecycle(client, queryId)
+	});
+}
+
+export function useUpdateBookingDiscount(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ bookingId, discountPkr, note }: { bookingId: string; discountPkr: number; note: string | null }) =>
+			updateBookingDiscount(bookingId, discountPkr, note).then(() =>
+				reconcileBookingLifecycle(queryId)
+			),
+		onSuccess: () => invalidateLifecycle(client, queryId)
 	});
 }

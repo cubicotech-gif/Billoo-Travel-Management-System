@@ -100,15 +100,17 @@ export interface BookedFields {
 	bookedAt: string; // ISO, '' = not booked
 	bookingRef: string; // vendor confirmation no. (optional)
 	proof: boolean; // a proof/voucher document was filed
+	proofDocId: string; // id of the linked proof document ('' = none)
 }
-const blankBooked = (): BookedFields => ({ booked: false, bookedAt: '', bookingRef: '', proof: false });
+const blankBooked = (): BookedFields => ({ booked: false, bookedAt: '', bookingRef: '', proof: false, proofDocId: '' });
 /** Read booked status off a line's meta when reopening a saved booking. */
 function readBooked(meta: Record<string, unknown>): BookedFields {
 	return {
 		booked: meta.booked === true,
 		bookedAt: meta.booked_at == null ? '' : String(meta.booked_at),
 		bookingRef: meta.booking_ref == null ? '' : String(meta.booking_ref),
-		proof: meta.proof === true
+		proof: meta.proof === true,
+		proofDocId: meta.proof_doc_id == null ? '' : String(meta.proof_doc_id)
 	};
 }
 
