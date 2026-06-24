@@ -38,7 +38,11 @@ ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_status_check;
 -- 2. Drop the old default so the UPDATE/constraint swap is clean.
 ALTER TABLE public.queries ALTER COLUMN status DROP DEFAULT;
 
--- 3. Map existing data onto the new stage names.
+-- 3. Map existing data onto the new stage names. Pass through the *newer*
+--    4-stage values untouched — without these, replaying this historical block
+--    on an already-migrated DB would dump Working/Quoted/Booking into 'Inquiry'
+--    (then 'New Query'), silently flattening the board. The constraint below is
+--    NOT VALID, so the preserved values survive for 20260603 to finalise.
 UPDATE public.queries SET status = CASE status
 	WHEN 'New Query - Not Responded'  THEN 'Inquiry'
 	WHEN 'Responded - Awaiting Reply' THEN 'Inquiry'
@@ -50,6 +54,11 @@ UPDATE public.queries SET status = CASE status
 	WHEN 'In Delivery'                THEN 'Delivery'
 	WHEN 'Completed'                  THEN 'Completed'
 	WHEN 'Cancelled'                  THEN 'Cancelled'
+	-- already-current 4-stage values pass through unchanged
+	WHEN 'New Query'                  THEN 'New Query'
+	WHEN 'Working'                    THEN 'Working'
+	WHEN 'Quoted'                     THEN 'Quoted'
+	WHEN 'Booking'                    THEN 'Booking'
 	ELSE 'Inquiry'
 END;
 

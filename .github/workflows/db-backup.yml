@@ -1,0 +1,51 @@
+name: Daily DB backup
+
+# Free safety net: dumps the whole Supabase Postgres database once a day and
+# keeps each dump as a downloadable workflow artifact for 30 days. Also runnable
+# on demand from the Actions tab ("Run workflow").
+#
+# One-time setup:
+#   1. Supabase → Settings → Database → Connection string → URI (use the
+#      "Session pooler" or direct connection URI; it looks like
+#      postgresql://postgres:[PASSWORD]@db.<ref>.supabase.co:5432/postgres).
+#   2. GitHub repo → Settings → Secrets and variables → Actions → New secret:
+#      name SUPABASE_DB_URL, value = that URI.
+# That's it — backups start running automatically.
+#
+# To restore a dump:  gunzip -c billoo-YYYYMMDD-HHMMSS.sql.gz | psql "$SUPABASE_DB_URL"
+
+on:
+  schedule:
+    - cron: '0 2 * * *' # 02:00 UTC every day
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install pg_dump (latest client)
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Dump database
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::Missing SUPABASE_DB_URL secret — see the setup notes in this workflow file."
+            exit 1
+          fi
+          mkdir -p backups
+          stamp="$(date +%Y%m%d-%H%M%S)"
+          pg_dump "${SUPABASE_DB_URL}" --no-owner --no-privileges | gzip > "backups/billoo-${stamp}.sql.gz"
+          ls -lh backups
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: backups/*.sql.gz
+          retention-days: 30
