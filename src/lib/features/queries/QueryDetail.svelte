@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, ArrowRight, Ban, Pencil, Trash2, RotateCcw, FolderOpen } from 'lucide-svelte';
+	import { ArrowLeft, ArrowRight, Ban, Pencil, Trash2, RotateCcw, FolderOpen, Wallet } from 'lucide-svelte';
 	import { Badge, Button, Card, WhatsAppLink } from '$ui';
 	import {
 		useQueryDetail,
@@ -29,7 +29,7 @@
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingBuilder from '$features/bookings/BookingBuilder.svelte';
 	import BookingSummary from '$features/bookings/BookingSummary.svelte';
-	import BookingLifecyclePanel from '$features/bookings/BookingLifecyclePanel.svelte';
+	import PaymentsDialog from '$features/bookings/PaymentsDialog.svelte';
 	import PassengerDocAlert from '$features/documents/PassengerDocAlert.svelte';
 	import DocumentsDialog from '$features/documents/DocumentsDialog.svelte';
 
@@ -45,6 +45,7 @@
 
 	let editing = $state(false);
 	let docsOpen = $state(false);
+	let paymentsOpen = $state(false);
 
 	// Latest quotation = highest version.
 	const latest = $derived(
@@ -127,6 +128,7 @@
 				</Button>
 			{/if}
 			<Button variant="secondary" onclick={() => (docsOpen = true)}><FolderOpen class="h-4 w-4" /> Documents</Button>
+				<Button variant="secondary" onclick={() => (paymentsOpen = true)}><Wallet class="h-4 w-4" /> Payments</Button>
 			<Button variant="ghost" onclick={() => (editing = true)}><Pencil class="h-4 w-4" /> Edit</Button>
 			<Button variant="ghost" disabled={$softDelete.isPending} onclick={deleteQuery}>
 				<Trash2 class="h-4 w-4" /> Delete
@@ -160,7 +162,6 @@
 			{:else}
 				<BookingBuilder queryId={id} />
 			{/if}
-			<BookingLifecyclePanel queryId={id} />
 		{:else}
 			<Card title="Cancelled — edit & restore">
 				<p class="mb-4 text-sm text-slate-500">
@@ -173,4 +174,5 @@
 
 	<QueryEditModal query={q} open={editing} onClose={() => (editing = false)} />
 	<DocumentsDialog queryId={id} passengerId={q.passenger_id} title="Documents" open={docsOpen} onClose={() => (docsOpen = false)} />
+	<PaymentsDialog queryId={id} title="Payments — {q.client_name}" open={paymentsOpen} onClose={() => (paymentsOpen = false)} />
 {/if}

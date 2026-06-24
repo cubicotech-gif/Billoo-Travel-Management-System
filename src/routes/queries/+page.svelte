@@ -14,7 +14,7 @@
 	import QuotedCard from '$features/queries/QuotedCard.svelte';
 	import { useAllQuotations } from '$features/quotations/queries';
 	import { latestQuotationByQuery } from '$features/quotations/api';
-	import { isBooked, groupIntoLanes } from '$features/operations/lanes';
+	import { isBooked } from '$features/operations/lanes';
 	import { daysSince, isStuck, POST_COMPLETE_STATUSES } from '$features/queries/workflow';
 	import type { BookingStatus, PackageType, QueryStatus } from '$lib/database.types';
 	import type { Query } from '$features/queries/types';
@@ -100,7 +100,17 @@
 
 	const filtered = $derived(all.filter(matches));
 	const active = $derived(filtered.filter((q) => q.status !== 'Cancelled'));
-	const lanes = $derived(groupIntoLanes(filtered));
+
+	// The Booking stage is split into real columns — one per payment/check-in
+	// lifecycle bucket — so booked deals live in proper stages, not behind a badge.
+	const BOOKING_LANES: { id: string; label: string; tone: string; bookingStatus: BookingStatus | null }[] = [
+		{ id: 'Booking', label: 'Booking in progress', tone: 'success', bookingStatus: null },
+		{ id: 'bs-pending-payment', label: 'Pending payment', tone: 'warning', bookingStatus: 'Pending Payment' },
+		{ id: 'bs-unpaid-checkin', label: 'Unpaid · check-in left', tone: 'warning', bookingStatus: 'Payment Pending - Check-in Left' },
+		{ id: 'bs-paid-checkin', label: 'Paid · check-in left', tone: 'info', bookingStatus: 'Payment Done - Check-in Left' },
+		{ id: 'bs-travel-done', label: 'Trip over · unpaid', tone: 'danger', bookingStatus: 'Payment Pending - Travel Done' },
+		{ id: 'completed', label: 'Completed', tone: 'success', bookingStatus: 'Completed' }
+	];
 
 	// All stages live in one row. New Query + Working stay open; the rest collapse
 	// to a thin bar you click to expand.
@@ -108,14 +118,21 @@
 		const notBooked = active.filter((q) => !isBooked(q));
 		const known: QueryStatus[] = ['Working', 'Quoted', 'Booking'];
 		const fresh = notBooked.filter((q) => q.status === 'New Query' || !known.includes(q.status));
+		const bookingItems = (bs: BookingStatus | null) =>
+			active.filter((q) => q.status === 'Booking' && (q.booking_status ?? null) === bs);
 		return [
 			{ id: 'New Query', label: 'New Query', tone: 'warning', status: 'New Query', bookingStatus: null, alwaysOpen: true, items: fresh },
 			{ id: 'Working', label: 'Working', tone: 'info', status: 'Working', bookingStatus: null, alwaysOpen: true, items: notBooked.filter((q) => q.status === 'Working') },
 			{ id: 'Quoted', label: 'Quoted', tone: 'info', status: 'Quoted', bookingStatus: null, alwaysOpen: false, items: active.filter((q) => q.status === 'Quoted' && !isBooked(q)) },
-			{ id: 'Booking', label: 'Booking in progress', tone: 'success', status: 'Booking', bookingStatus: null, alwaysOpen: false, items: active.filter((q) => q.status === 'Booking' && !q.booking_status) },
-			{ id: 'payments', label: 'Payments Due', tone: 'warning', status: 'Booking', bookingStatus: 'Pending Payment', alwaysOpen: false, items: lanes.payments.map((c) => c.query) },
-			{ id: 'checkins', label: 'Check-ins', tone: 'info', status: 'Booking', bookingStatus: 'Payment Done - Check-in Left', alwaysOpen: false, items: lanes.checkins.map((c) => c.query) },
-			{ id: 'completed', label: 'Completed', tone: 'success', status: 'Booking', bookingStatus: 'Completed', alwaysOpen: false, items: lanes.completed.map((c) => c.query) }
+			...BOOKING_LANES.map((l) => ({
+				id: l.id,
+				label: l.label,
+				tone: l.tone,
+				status: 'Booking' as QueryStatus,
+				bookingStatus: l.bookingStatus,
+				alwaysOpen: false,
+				items: bookingItems(l.bookingStatus)
+			}))
 		];
 	});
 
