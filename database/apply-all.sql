@@ -1480,6 +1480,41 @@ ALTER TABLE public.bookings ADD COLUMN IF NOT EXISTS usd_rate NUMERIC;
 
 
 -- ----------------------------------------------------------------
+-- migration: 20260629_booking_lifecycle.sql
+-- ----------------------------------------------------------------
+-- Money-driven booking lifecycle: payment-vs-package check-in stages, a
+-- "trip over but still owed" column, an order discount, and a manual override.
+
+ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_booking_status_check;
+
+UPDATE public.queries SET booking_status = CASE booking_status
+	WHEN 'Payment Done - Check-in Pending' THEN 'Payment Done - Check-in Left'
+	WHEN 'Check-in Done - Payment Pending' THEN 'Payment Pending - Travel Done'
+	WHEN 'Partial Payment'                 THEN 'Payment Pending - Check-in Left'
+	ELSE booking_status
+END
+WHERE booking_status IS NOT NULL;
+
+ALTER TABLE public.queries ADD CONSTRAINT queries_booking_status_check CHECK (
+	booking_status IS NULL OR booking_status IN (
+		'Pending Payment',
+		'Payment Done - Check-in Left',
+		'Payment Pending - Check-in Left',
+		'Payment Pending - Travel Done',
+		'Completed'
+	)
+);
+
+ALTER TABLE public.queries
+	ADD COLUMN IF NOT EXISTS booking_status_locked BOOLEAN NOT NULL DEFAULT FALSE;
+
+ALTER TABLE public.bookings
+	ADD COLUMN IF NOT EXISTS discount_pkr NUMERIC(12, 2) NOT NULL DEFAULT 0;
+ALTER TABLE public.bookings
+	ADD COLUMN IF NOT EXISTS discount_note TEXT;
+
+
+-- ----------------------------------------------------------------
 -- dev-open-access.sql (anon RLS for the build-out phase)
 -- ----------------------------------------------------------------
 -- =====================================================

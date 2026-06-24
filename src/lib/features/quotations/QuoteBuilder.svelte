@@ -74,8 +74,9 @@
 	import RangeCalendar from './RangeCalendar.svelte';
 	import QuotationList from './QuotationList.svelte';
 	import ServiceShell from './ServiceShell.svelte';
-	import { useUploadDocument } from '$features/documents/queries';
-	import type { DocumentType } from '$features/documents/api';
+	import { useUploadDocument, useDocuments } from '$features/documents/queries';
+	import { listDocuments } from '$features/documents/api';
+	import type { DocumentType, Document } from '$features/documents/api';
 
 	let {
 		queryId,
@@ -101,6 +102,24 @@
 	const setStatus = useSetQueryStatus();
 	const uploadDoc = untrack(() => useUploadDocument('query', queryId));
 
+	// Existing documents the staff can LINK as a service's proof instead of
+	// re-uploading (they may already be filed in the Documents section). Query
+	// docs are reactive; passenger-vault docs load once the passenger is known.
+	const queryDocs = untrack(() => useDocuments('query', queryId));
+	let passengerDocs = $state<Document[]>([]);
+	$effect(() => {
+		const pid = $queryDetail.data?.passenger_id;
+		if (!pid) {
+			passengerDocs = [];
+			return;
+		}
+		listDocuments('passenger', pid).then((d) => (passengerDocs = d));
+	});
+	const existingDocs = $derived([
+		...($queryDocs.data ?? []).map((d) => ({ id: d.id, label: `${d.document_type} · ${d.file_name}` })),
+		...passengerDocs.map((d) => ({ id: d.id, label: `${d.document_type} · ${d.file_name} (profile)` }))
+	]);
+
 	// In booking mode the builder edits one quotation in place — track its id so
 	// every save (incl. mark-booked) reuses it instead of minting a new version.
 	let savedId = $state(untrack(() => editId));
@@ -108,11 +127,12 @@
 	const booking = $derived(mode === 'booking');
 	const saving = $derived($createQuotation.isPending || $updateFull.isPending);
 	// Spread a form service's booked status into the calculator input.
-	const bk = (x: { booked: boolean; bookedAt: string; bookingRef: string; proof: boolean }) => ({
+	const bk = (x: { booked: boolean; bookedAt: string; bookingRef: string; proof: boolean; proofDocId: string }) => ({
 		booked: x.booked,
 		bookedAt: x.bookedAt || null,
 		bookingRef: x.bookingRef || null,
-		proof: x.proof
+		proof: x.proof,
+		proofDocId: x.proofDocId || null
 	});
 
 	const pool = $derived(latestRates($rates.data ?? []));
@@ -662,7 +682,7 @@
 	// --- Per-service booking (booking stage) --------------------------------
 	// Marking/unmarking/attaching a proof saves immediately so the booking,
 	// itinerary and invoice reflect it at once. Services stay fully editable.
-	type Svc = { booked: boolean; bookedAt: string; proof: boolean };
+	type Svc = { booked: boolean; bookedAt: string; proof: boolean; proofDocId: string };
 	async function markBooked(svc: Svc) {
 		svc.booked = true;
 		if (!svc.bookedAt) svc.bookedAt = new Date().toISOString();
@@ -672,18 +692,27 @@
 		svc.booked = false;
 		svc.bookedAt = '';
 		svc.proof = false;
+		svc.proofDocId = '';
 		await save(false);
 	}
 	function uploadProof(svc: Svc, file: File, docType: DocumentType) {
 		$uploadDoc.mutate(
 			{ file, entityType: 'query', entityId: queryId, documentType: docType },
 			{
-				onSuccess: () => {
+				onSuccess: (doc) => {
 					svc.proof = true;
+					svc.proofDocId = doc.id;
 					save(false);
 				}
 			}
 		);
+	}
+	// "Already uploaded" — attach an existing document as this service's proof.
+	function linkProof(svc: Svc, docId: string) {
+		if (!docId) return;
+		svc.proof = true;
+		svc.proofDocId = docId;
+		save(false);
 	}
 </script>
 
@@ -875,9 +904,11 @@
 					booked={slot.booked}
 					proof={slot.proof}
 					busy={saving}
+					{existingDocs}
 					onMarkBooked={() => markBooked(slot)}
 					onUnmark={() => unmarkBooked(slot)}
 					onUploadProof={(f, d) => uploadProof(slot, f, d)}
+					onLinkProof={(id) => linkProof(slot, id)}
 				>
 					{@render stayBody(slot, hi)}
 				</ServiceShell>
@@ -924,7 +955,7 @@
 				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Transfers</h2>
 				{@render transferPresets()}
 				{#each form.transfers as t, i (i)}
-					<ServiceShell accent="transfer" title={routeLabel(t)} subtitle={vehicleLabel(t)} booked={t.booked} proof={t.proof} busy={saving} onMarkBooked={() => markBooked(t)} onUnmark={() => unmarkBooked(t)} onUploadProof={(f, d) => uploadProof(t, f, d)}>
+					<ServiceShell accent="transfer" title={routeLabel(t)} subtitle={vehicleLabel(t)} booked={t.booked} proof={t.proof} busy={saving} {existingDocs} onMarkBooked={() => markBooked(t)} onUnmark={() => unmarkBooked(t)} onUploadProof={(f, d) => uploadProof(t, f, d)} onLinkProof={(id) => linkProof(t, id)}>
 						{@render transferBody(t, i)}
 					</ServiceShell>
 				{/each}
@@ -961,7 +992,7 @@
 			<div class="space-y-2">
 				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Visas</h2>
 				{#each form.visas as v, i (i)}
-					<ServiceShell accent="visa" title={`${v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah'} visa`} subtitle={num(v.persons) > 0 ? `${num(v.persons)} pax` : 'all pax'} booked={v.booked} proof={v.proof} busy={saving} onMarkBooked={() => markBooked(v)} onUnmark={() => unmarkBooked(v)} onUploadProof={(f, d) => uploadProof(v, f, d)}>
+					<ServiceShell accent="visa" title={`${v.type === 'Other' ? v.otherLabel || 'Other' : 'Umrah'} visa`} subtitle={num(v.persons) > 0 ? `${num(v.persons)} pax` : 'all pax'} booked={v.booked} proof={v.proof} busy={saving} {existingDocs} onMarkBooked={() => markBooked(v)} onUnmark={() => unmarkBooked(v)} onUploadProof={(f, d) => uploadProof(v, f, d)} onLinkProof={(id) => linkProof(v, id)}>
 						{@render visaBody(v, i)}
 					</ServiceShell>
 				{/each}
@@ -999,7 +1030,7 @@
 			<div class="space-y-2">
 				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-400">Other services</h2>
 				{#each form.otherServices as o, i (i)}
-					<ServiceShell accent="other" title={o.label || 'Service'} subtitle={num(o.qty) > 1 ? `×${num(o.qty)}` : ''} booked={o.booked} proof={o.proof} busy={saving} onMarkBooked={() => markBooked(o)} onUnmark={() => unmarkBooked(o)} onUploadProof={(f, d) => uploadProof(o, f, d)}>
+					<ServiceShell accent="other" title={o.label || 'Service'} subtitle={num(o.qty) > 1 ? `×${num(o.qty)}` : ''} booked={o.booked} proof={o.proof} busy={saving} {existingDocs} onMarkBooked={() => markBooked(o)} onUnmark={() => unmarkBooked(o)} onUploadProof={(f, d) => uploadProof(o, f, d)} onLinkProof={(id) => linkProof(o, id)}>
 						{@render otherBody(o, i)}
 					</ServiceShell>
 				{/each}
@@ -1059,7 +1090,7 @@
 		{/snippet}
 
 		{#if booking}
-			<ServiceShell accent="ticket" title="Air tickets" subtitle={form.airlineInclude ? form.airline.name || '' : 'not included'} booked={form.airline.booked} proof={form.airline.proof} busy={saving} onMarkBooked={() => markBooked(form.airline)} onUnmark={() => unmarkBooked(form.airline)} onUploadProof={(f, d) => uploadProof(form.airline, f, d)}>
+			<ServiceShell accent="ticket" title="Air tickets" subtitle={form.airlineInclude ? form.airline.name || '' : 'not included'} booked={form.airline.booked} proof={form.airline.proof} busy={saving} {existingDocs} onMarkBooked={() => markBooked(form.airline)} onUnmark={() => unmarkBooked(form.airline)} onUploadProof={(f, d) => uploadProof(form.airline, f, d)} onLinkProof={(id) => linkProof(form.airline, id)}>
 				{@render ticketsBody()}
 			</ServiceShell>
 		{:else}

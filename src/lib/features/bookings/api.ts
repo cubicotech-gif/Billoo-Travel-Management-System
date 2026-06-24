@@ -215,6 +215,19 @@ export async function deleteBookingItem(id: string, booking: Booking): Promise<v
 	await syncBookingTotals(booking.id, ratesOf(booking));
 }
 
+/** Set an order-level discount (PKR) on the booking — what the client owes drops by this. */
+export async function updateBookingDiscount(
+	bookingId: string,
+	discountPkr: number,
+	note: string | null
+): Promise<void> {
+	const { error } = await supabase
+		.from('bookings')
+		.update({ discount_pkr: discountPkr, discount_note: note })
+		.eq('id', bookingId);
+	if (error) throw new Error(error.message);
+}
+
 /** Change the booking's conversion rates and re-roll the PKR totals. */
 export async function updateBookingRates(booking: Booking, roe: number, usdRate: number): Promise<void> {
 	const { error } = await supabase

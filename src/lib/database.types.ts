@@ -10,12 +10,19 @@
 
 export type QueryStatus = 'New Query' | 'Working' | 'Quoted' | 'Booking' | 'Cancelled';
 
-// Payment + check-in status, only meaningful while a query is in the Booking stage.
+// Payment + check-in status, only meaningful while a query is in the Booking
+// stage. Driven by recorded payments vs the package total and the trip's final
+// date (see $features/bookings/lifecycle):
+//   Pending Payment              — still building the booking (pre "complete")
+//   Payment Done - Check-in Left — marked complete, paid in full, trip ahead
+//   Payment Pending - Check-in Left — marked complete, balance > 0, trip ahead
+//   Payment Pending - Travel Done   — trip over but still owed
+//   Completed                    — paid in full AND trip's final date passed
 export type BookingStatus =
 	| 'Pending Payment'
-	| 'Payment Done - Check-in Pending'
-	| 'Check-in Done - Payment Pending'
-	| 'Partial Payment'
+	| 'Payment Done - Check-in Left'
+	| 'Payment Pending - Check-in Left'
+	| 'Payment Pending - Travel Done'
 	| 'Completed';
 
 export type Currency = 'PKR' | 'SAR' | 'USD' | 'AED' | 'EUR' | 'GBP';
@@ -108,6 +115,7 @@ export interface Database {
 					infants: number;
 					status: QueryStatus;
 					booking_status: BookingStatus | null;
+					booking_status_locked: boolean;
 					assigned_to: string | null;
 					notes: string | null;
 					cost_price: number;
@@ -160,6 +168,7 @@ export interface Database {
 					infants?: number;
 					status?: QueryStatus;
 					booking_status?: BookingStatus | null;
+					booking_status_locked?: boolean;
 					assigned_to?: string | null;
 					notes?: string | null;
 					cost_price?: number;
@@ -595,6 +604,8 @@ export interface Database {
 					actual_cost_pkr: number;
 					actual_sell_pkr: number;
 					profit_pkr: number;
+					discount_pkr: number;
+					discount_note: string | null;
 					notes: string | null;
 					is_deleted: boolean;
 					created_at: string;
@@ -611,6 +622,8 @@ export interface Database {
 					actual_cost_pkr?: number;
 					actual_sell_pkr?: number;
 					profit_pkr?: number;
+					discount_pkr?: number;
+					discount_note?: string | null;
 					notes?: string | null;
 					is_deleted?: boolean;
 				};

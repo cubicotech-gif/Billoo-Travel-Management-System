@@ -40,7 +40,7 @@ describe('attention worklist', () => {
 			doc('query', 'q1', 'voucher')
 		]);
 		const items = attentionList(
-			[q({ booking_status: 'Payment Done - Check-in Pending' })],
+			[q({ booking_status: 'Payment Done - Check-in Left' })],
 			allDocs
 		);
 		expect(items).toHaveLength(1);
@@ -57,7 +57,7 @@ describe('attention worklist', () => {
 		]);
 		const items = attentionList(
 			[
-				q({ id: 'docs', booking_status: 'Payment Done - Check-in Pending', travel_date: null }), // checkin
+				q({ id: 'docs', booking_status: 'Payment Done - Check-in Left', travel_date: null }), // checkin
 				q({ id: 'pay', booking_status: 'Pending Payment', advance_payment_amount: 0 }) // payment
 			],
 			allButTicket // q1 missing ticket, but ids differ so docs apply per-id; fine for ordering

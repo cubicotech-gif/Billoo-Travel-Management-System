@@ -17,9 +17,11 @@
 		booked = false,
 		proof = false,
 		busy = false,
+		existingDocs = [],
 		onMarkBooked,
 		onUnmark,
 		onUploadProof,
+		onLinkProof,
 		children
 	}: {
 		title: string;
@@ -28,9 +30,12 @@
 		booked?: boolean;
 		proof?: boolean;
 		busy?: boolean;
+		/** Already-filed documents that can be linked as proof instead of uploading. */
+		existingDocs?: { id: string; label: string }[];
 		onMarkBooked: () => void;
 		onUnmark: () => void;
 		onUploadProof: (file: File, docType: DocumentType) => void;
+		onLinkProof?: (docId: string) => void;
 		children: Snippet;
 	} = $props();
 
@@ -51,6 +56,7 @@
 	let open = $state(false);
 	let docType = $state<DocumentType>('voucher');
 	let fileInput = $state<HTMLInputElement | null>(null);
+	let linkPick = $state('');
 
 	const missingProof = $derived(booked && !proof);
 
@@ -59,6 +65,11 @@
 		const file = input.files?.[0];
 		if (file) onUploadProof(file, docType);
 		input.value = '';
+	}
+	function onLinkPick(e: Event) {
+		const id = (e.target as HTMLSelectElement).value;
+		if (id) onLinkProof?.(id);
+		linkPick = '';
 	}
 </script>
 
@@ -91,7 +102,7 @@
 	{#if booked && missingProof}
 		<!-- Optional proof: never blocks "booked", just nudges until a doc is filed. -->
 		<div class="flex flex-wrap items-center gap-2 border-t border-amber-100 bg-amber-50/60 px-3 py-2">
-			<span class="text-xs text-amber-700">Upload the booking proof / voucher?</span>
+			<span class="text-xs text-amber-700">File the booking proof / voucher?</span>
 			<select bind:value={docType} class="rounded-md border border-amber-200 bg-white px-1.5 py-1 text-xs text-slate-600 focus:outline-none">
 				<option value="voucher">Voucher</option>
 				<option value="invoice">Invoice</option>
@@ -100,9 +111,24 @@
 				<option value="other">Other</option>
 			</select>
 			<Button size="sm" variant="secondary" onclick={() => fileInput?.click()} disabled={busy}>
-				<Upload class="h-3.5 w-3.5" /> Choose file
+				<Upload class="h-3.5 w-3.5" /> Upload
 			</Button>
 			<input bind:this={fileInput} type="file" class="hidden" onchange={onPick} />
+			{#if onLinkProof && existingDocs.length}
+				<span class="text-xs text-amber-600">or</span>
+				<select
+					value={linkPick}
+					onchange={onLinkPick}
+					disabled={busy}
+					class="max-w-[16rem] rounded-md border border-amber-200 bg-white px-1.5 py-1 text-xs text-slate-600 focus:outline-none"
+					title="Mark as uploaded — link a document already on file"
+				>
+					<option value="">Link existing doc…</option>
+					{#each existingDocs as d (d.id)}
+						<option value={d.id}>{d.label}</option>
+					{/each}
+				</select>
+			{/if}
 		</div>
 	{:else if booked && proof}
 		<div class="flex items-center gap-2 border-t border-green-100 bg-green-50/50 px-3 py-1.5">

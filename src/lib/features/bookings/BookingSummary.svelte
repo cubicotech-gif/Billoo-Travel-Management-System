@@ -2,8 +2,7 @@
 	import { untrack } from 'svelte';
 	import { Map, FileText, Receipt, RotateCcw, FolderOpen } from 'lucide-svelte';
 	import { Button } from '$ui';
-	import { useUpdateQuery } from '$features/queries/queries';
-	import { useBookingForQuery } from './queries';
+	import { useBookingForQuery, useReopenBooking } from './queries';
 	import { listBookingItems } from './api';
 	import type { BookingItem } from './types';
 
@@ -14,7 +13,7 @@
 	let { queryId }: { queryId: string } = $props();
 
 	const booking = untrack(() => useBookingForQuery(queryId));
-	const update = useUpdateQuery();
+	const reopenMut = untrack(() => useReopenBooking(queryId));
 
 	let rawItems = $state<BookingItem[]>([]);
 	let itemsLoading = $state(true);
@@ -45,7 +44,7 @@
 		return (i.meta as Record<string, unknown>)?.booked === true;
 	}
 	function reopen() {
-		$update.mutate({ id: queryId, patch: { booking_status: null, completed_date: null } });
+		$reopenMut.mutate();
 	}
 </script>
 
@@ -56,7 +55,7 @@
 			<Button size="sm" variant="secondary" href="/queries/{queryId}/itinerary"><Map class="h-4 w-4" /> Itinerary</Button>
 			<Button size="sm" variant="secondary" href="/queries/{queryId}/invoice"><Receipt class="h-4 w-4" /> Invoice</Button>
 			<Button size="sm" variant="secondary" href="/queries/{queryId}/voucher"><FileText class="h-4 w-4" /> Voucher</Button>
-			<Button size="sm" disabled={$update.isPending} onclick={reopen}><RotateCcw class="h-4 w-4" /> Reopen</Button>
+			<Button size="sm" disabled={$reopenMut.isPending} onclick={reopen}><RotateCcw class="h-4 w-4" /> Reopen</Button>
 		</div>
 	</div>
 

@@ -32,6 +32,8 @@ export interface BookedStatus {
 	bookedAt?: string | null;
 	bookingRef?: string | null;
 	proof?: boolean;
+	/** Id of the document linked as this service's proof (uploaded or existing). */
+	proofDocId?: string | null;
 }
 
 /** Normalise booked status into the flat keys carried on each line's meta. */
@@ -40,7 +42,8 @@ export function bookedMeta(s: BookedStatus): Record<string, unknown> {
 		booked: !!s.booked,
 		booked_at: s.bookedAt ?? null,
 		booking_ref: s.bookingRef || null,
-		proof: !!s.proof
+		proof: !!s.proof,
+		proof_doc_id: s.proofDocId || null
 	};
 }
 

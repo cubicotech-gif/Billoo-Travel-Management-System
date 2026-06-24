@@ -101,20 +101,38 @@ export function isStuck(status: QueryStatus, days: number): boolean {
 
 export interface BookingStatusMeta {
 	status: BookingStatus;
+	/** Short label for chips/columns. */
+	label: string;
 	tone: StageTone;
 }
 
 export const BOOKING_STATUSES: BookingStatusMeta[] = [
-	{ status: 'Pending Payment', tone: 'warning' },
-	{ status: 'Payment Done - Check-in Pending', tone: 'info' },
-	{ status: 'Check-in Done - Payment Pending', tone: 'warning' },
-	{ status: 'Partial Payment', tone: 'warning' },
-	{ status: 'Completed', tone: 'success' }
+	{ status: 'Pending Payment', label: 'Pending payment', tone: 'warning' },
+	{ status: 'Payment Done - Check-in Left', label: 'Paid · check-in left', tone: 'info' },
+	{ status: 'Payment Pending - Check-in Left', label: 'Unpaid · check-in left', tone: 'warning' },
+	{ status: 'Payment Pending - Travel Done', label: 'Trip over · unpaid', tone: 'danger' },
+	{ status: 'Completed', label: 'Completed', tone: 'success' }
 ];
 
 export const BOOKING_STATUS_TONE: Record<BookingStatus, StageTone> = Object.fromEntries(
 	BOOKING_STATUSES.map((b) => [b.status, b.tone])
 ) as Record<BookingStatus, StageTone>;
+
+export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = Object.fromEntries(
+	BOOKING_STATUSES.map((b) => [b.status, b.label])
+) as Record<BookingStatus, string>;
+
+/**
+ * The four post-"mark complete" lifecycle buckets (everything except the
+ * pre-complete 'Pending Payment' building state). The money/date auto-router
+ * only moves a booking between these.
+ */
+export const POST_COMPLETE_STATUSES: BookingStatus[] = [
+	'Payment Done - Check-in Left',
+	'Payment Pending - Check-in Left',
+	'Payment Pending - Travel Done',
+	'Completed'
+];
 
 /** A booking is settled/closed once it reaches Completed. */
 export function isSettled(status: QueryStatus, bookingStatus: BookingStatus | null): boolean {

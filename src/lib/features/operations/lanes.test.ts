@@ -22,9 +22,9 @@ describe('operations lanes', () => {
 
 	it('routes each booking status to the correct lane', () => {
 		expect(laneFor('Pending Payment')).toBe('payments');
-		expect(laneFor('Partial Payment')).toBe('payments');
-		expect(laneFor('Check-in Done - Payment Pending')).toBe('payments');
-		expect(laneFor('Payment Done - Check-in Pending')).toBe('checkins');
+		expect(laneFor('Payment Pending - Check-in Left')).toBe('payments');
+		expect(laneFor('Payment Pending - Travel Done')).toBe('payments');
+		expect(laneFor('Payment Done - Check-in Left')).toBe('checkins');
 		expect(laneFor('Completed')).toBe('completed');
 	});
 
@@ -38,8 +38,8 @@ describe('operations lanes', () => {
 		const lanes = groupIntoLanes([
 			q({ id: 'pay-new', booking_status: 'Pending Payment', stage_changed_at: '2026-06-10' }),
 			q({ id: 'pay-old', booking_status: 'Pending Payment', stage_changed_at: '2026-06-01' }),
-			q({ id: 'chk-late', booking_status: 'Payment Done - Check-in Pending', travel_date: '2026-07-20' }),
-			q({ id: 'chk-soon', booking_status: 'Payment Done - Check-in Pending', travel_date: '2026-06-20' })
+			q({ id: 'chk-late', booking_status: 'Payment Done - Check-in Left', travel_date: '2026-07-20' }),
+			q({ id: 'chk-soon', booking_status: 'Payment Done - Check-in Left', travel_date: '2026-06-20' })
 		]);
 		expect(lanes.payments.map((c) => c.query.id)).toEqual(['pay-old', 'pay-new']);
 		expect(lanes.checkins.map((c) => c.query.id)).toEqual(['chk-soon', 'chk-late']);
@@ -48,7 +48,7 @@ describe('operations lanes', () => {
 	it('groups only booked, non-deleted deals and tallies outstanding', () => {
 		const lanes = groupIntoLanes([
 			q({ booking_status: 'Pending Payment', selling_price: 100000, advance_payment_amount: 30000 }),
-			q({ booking_status: 'Payment Done - Check-in Pending' }),
+			q({ booking_status: 'Payment Done - Check-in Left' }),
 			q({ booking_status: 'Completed' }),
 			q({ status: 'Quoted' }), // not booked → excluded
 			q({ booking_status: 'Pending Payment', is_deleted: true }) // deleted → excluded
