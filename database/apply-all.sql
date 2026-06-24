@@ -653,11 +653,12 @@ DROP POLICY IF EXISTS dev_open_access ON public.hotels;
 CREATE POLICY dev_open_access ON public.hotels
 	FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
--- 3. Backfill — final approved canonical list (92). TRUNCATE first so the table
---    matches the file exactly (replaces the earlier 14-row seed; some canonical
---    names were renamed). Safe: nothing references hotels yet. `notes` from the
+-- 3. Backfill — final approved canonical list (92). Upsert by (lower(name),
+--    city) so this is safe to replay on a live DB: rate_cards / rate_observations
+--    now carry hotel_id FKs, so the original TRUNCATE here fails (and would also
+--    wipe referencing rows). ON CONFLICT DO NOTHING just ensures the canonical
+--    set exists without touching anything that points at it. `notes` from the
 --    CSV is intentionally not loaded (no notes column on this table).
-TRUNCATE public.hotels;
 INSERT INTO public.hotels (name, city, aliases) VALUES
 	('Grand Plaza Al Madinah',        'madinah', ARRAY['Grand Plaza Madinah','Grand Plaza']::text[]),
 	('Gulnar Taibah',                 'madinah', '{}'::text[]),
@@ -750,7 +751,8 @@ INSERT INTO public.hotels (name, city, aliases) VALUES
 	('Masarat Royal',                 'makkah',  '{}'::text[]),
 	('Masarat Rulyem',                'makkah',  '{}'::text[]),
 	('Nozol Sharoon',                 'makkah',  '{}'::text[]),
-	('Zem Al Muzalal',                'makkah',  '{}'::text[]);
+	('Zem Al Muzalal',                'makkah',  '{}'::text[])
+ON CONFLICT (lower(name), city) DO NOTHING;
 
 -- Verify: SELECT count(*) FROM public.hotels;  -- 92  (76 madinah, 16 makkah)
 
