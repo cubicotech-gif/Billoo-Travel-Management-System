@@ -74,3 +74,6 @@ temp/
 
 # MySQL
 *.sql.gz
+
+# Local DB backups (scripts/backup-db.sh)
+backups/
