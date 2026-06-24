@@ -23,7 +23,7 @@
 	import { usePayments } from '$features/payments/queries';
 	import { lifecycleSummary } from './lifecycle';
 
-	let { queryId }: { queryId: string } = $props();
+	let { queryId, embedded = false }: { queryId: string; embedded?: boolean } = $props();
 
 	const query = untrack(() => useQueryDetail(queryId));
 	const booking = untrack(() => useBookingForQuery(queryId));
@@ -98,9 +98,9 @@
 	}
 </script>
 
-<Card title="Payment & check-in">
+{#snippet body()}
 	{#if !$booking.data}
-		<p class="text-sm text-slate-400">Start the booking above to track payments and check-in.</p>
+		<p class="text-sm text-slate-400">No booking yet — start the booking to track payments and check-in.</p>
 	{:else}
 		<!-- Lifecycle status: where this booking sits, and why. -->
 		{#if finalized && current}
@@ -160,4 +160,12 @@
 		<!-- Payment records (record / edit / delete) — the single source for paid totals. -->
 		<PaymentSchedule {queryId} sellingPkr={summary?.owed ?? 0} />
 	{/if}
-</Card>
+{/snippet}
+
+{#if embedded}
+	{@render body()}
+{:else}
+	<Card title="Payment & check-in">
+		{@render body()}
+	</Card>
+{/if}
