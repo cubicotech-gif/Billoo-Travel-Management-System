@@ -1,5 +1,6 @@
 import { supabase } from '$lib/supabase';
 import { money, subtract, sum, toNumber } from '$lib/money';
+import { SETTLE_TOLERANCE_PKR } from '$features/bookings/lifecycle';
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
 	if (result.error) throw new Error(result.error.message);
@@ -82,6 +83,27 @@ export async function listClientReceivables(): Promise<ClientReceivable[]> {
 		})
 		.filter((r) => r.balance > 0)
 		.sort((a, b) => b.balance - a.balance);
+}
+
+export interface QueryFinance {
+	owed: number;
+	paid: number;
+	balance: number;
+	paidInFull: boolean;
+}
+
+/** Per-query money snapshot (owed/paid/balance), keyed by query id — for board
+ *  progress bars and column totals without a fetch per card. */
+export async function bookingFinanceByQuery(): Promise<Map<string, QueryFinance>> {
+	const [paid, owed] = await Promise.all([paidByQueryMap(), owedByQueryMap()]);
+	const out = new Map<string, QueryFinance>();
+	for (const id of new Set([...owed.keys(), ...paid.keys()])) {
+		const o = owed.get(id) ?? 0;
+		const p = paid.get(id) ?? 0;
+		const balance = toNumber(subtract(money(o, 'PKR'), money(p, 'PKR')));
+		out.set(id, { owed: o, paid: p, balance: Math.max(0, balance), paidInFull: balance <= SETTLE_TOLERANCE_PKR });
+	}
+	return out;
 }
 
 export interface Collection {

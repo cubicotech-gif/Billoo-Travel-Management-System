@@ -1526,6 +1526,30 @@ ALTER TABLE public.bookings
 
 
 -- ----------------------------------------------------------------
+-- migration: 20260630_retire_pending_payment.sql
+-- ----------------------------------------------------------------
+-- Drop the dead 'Pending Payment' booking status (the auto-router never sets it).
+
+ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_booking_status_check;
+
+UPDATE public.queries
+SET booking_status = CASE
+	WHEN completed_date IS NOT NULL THEN 'Payment Pending - Check-in Left'
+	ELSE NULL
+END
+WHERE booking_status = 'Pending Payment';
+
+ALTER TABLE public.queries ADD CONSTRAINT queries_booking_status_check CHECK (
+	booking_status IS NULL OR booking_status IN (
+		'Payment Done - Check-in Left',
+		'Payment Pending - Check-in Left',
+		'Payment Pending - Travel Done',
+		'Completed'
+	)
+);
+
+
+-- ----------------------------------------------------------------
 -- dev-open-access.sql (anon RLS for the build-out phase)
 -- ----------------------------------------------------------------
 -- =====================================================

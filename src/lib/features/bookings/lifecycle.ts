@@ -18,6 +18,13 @@ import type { Payment } from '$features/payments/api';
 import type { Query } from '$features/queries/types';
 import type { Booking, BookingItem } from './types';
 
+/**
+ * Round-off tolerance (PKR). Clients commonly pay the round figure and skip the
+ * last few rupees, so a balance at or below this counts as paid in full. The
+ * leftover can be written off (recorded as a tiny discount) to zero the books.
+ */
+export const SETTLE_TOLERANCE_PKR = 100;
+
 /** Today as a local 'YYYY-MM-DD' string (matches how service dates are stored). */
 export function todayISO(): string {
 	const d = new Date();
@@ -71,6 +78,8 @@ export interface LifecycleSummary {
 	/** Outstanding balance, floored at zero. */
 	balance: number;
 	paidInFull: boolean;
+	/** Small leftover (0 < balance ≤ tolerance) that can be written off; else 0. */
+	roundOff: number;
 	tripEndDate: string | null;
 	tripEnded: boolean;
 	/** The status the auto-router would set right now. */
@@ -87,7 +96,8 @@ export function lifecycleSummary(
 	const owed = owedTotal(booking);
 	const paid = paidTotal(payments);
 	const balance = toNumber(subtract(money(owed, 'PKR'), money(paid, 'PKR')));
-	const paidInFull = balance <= 0;
+	// Within the round-off tolerance counts as settled (clients skip the pennies).
+	const paidInFull = balance <= SETTLE_TOLERANCE_PKR;
 	const end = tripEndDate(items, query);
 	const tripEnded = end != null && end < today;
 	return {
@@ -95,6 +105,7 @@ export function lifecycleSummary(
 		paid,
 		balance: Math.max(0, balance),
 		paidInFull,
+		roundOff: paidInFull && balance > 0 ? balance : 0,
 		tripEndDate: end,
 		tripEnded,
 		computed: computeBookingStatus(paidInFull, tripEnded)

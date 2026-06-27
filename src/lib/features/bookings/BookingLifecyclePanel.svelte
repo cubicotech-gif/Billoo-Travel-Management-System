@@ -89,6 +89,17 @@
 		$saveDiscount.mutate({ bookingId, discountPkr: Number(discount) || 0, note: discountNote.trim() || null });
 	}
 
+	// Round-off write-off: fold the tiny leftover into the discount so the books
+	// hit exactly zero (the booking already counts as paid within tolerance).
+	function writeOffRoundOff() {
+		if (!bookingId || !summary || summary.roundOff <= 0) return;
+		const current = Number($booking.data?.discount_pkr) || 0;
+		const note = ($booking.data?.discount_note || '').trim() || 'Round-off';
+		discount = current + summary.roundOff;
+		discountNote = note;
+		$saveDiscount.mutate({ bookingId, discountPkr: current + summary.roundOff, note });
+	}
+
 	const overrideOptions = $derived(
 		POST_COMPLETE_STATUSES.map((s) => ({ value: s, label: BOOKING_STATUS_LABEL[s] }))
 	);
@@ -139,12 +150,22 @@
 
 		<!-- Money snapshot -->
 		{#if summary}
-			<div class="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+			<div class="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
 				<div><div class="text-xs text-slate-400">Package owed</div><div class="font-semibold text-slate-700">{formatAmount(summary.owed, 'PKR')}</div></div>
 				<div><div class="text-xs text-slate-400">Discount</div><div class="font-semibold text-slate-700">{formatAmount(Number($booking.data.discount_pkr) || 0, 'PKR')}</div></div>
 				<div><div class="text-xs text-slate-400">Paid</div><div class="font-semibold text-green-600">{formatAmount(summary.paid, 'PKR')}</div></div>
-				<div><div class="text-xs text-slate-400">Balance</div><div class="font-semibold {summary.balance > 0 ? 'text-amber-600' : 'text-green-600'}">{formatAmount(summary.balance, 'PKR')}</div></div>
+				<div><div class="text-xs text-slate-400">Balance</div><div class="font-semibold {summary.balance > 0 && !summary.paidInFull ? 'text-amber-600' : 'text-green-600'}">{formatAmount(summary.balance, 'PKR')}</div></div>
 			</div>
+
+			<!-- Round-off: counted as paid, with a one-click write-off to square the books. -->
+			{#if summary.roundOff > 0}
+				<div class="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-green-200 bg-green-50/70 px-3 py-2 text-sm">
+					<span class="text-green-700">Counted as fully paid — {formatAmount(summary.roundOff, 'PKR')} round-off remaining.</span>
+					<Button size="sm" variant="secondary" disabled={$saveDiscount.isPending} onclick={writeOffRoundOff}>
+						Write off {formatAmount(summary.roundOff, 'PKR')}
+					</Button>
+				</div>
+			{/if}
 		{/if}
 
 		<!-- Discount editor -->

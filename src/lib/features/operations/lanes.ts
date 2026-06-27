@@ -20,11 +20,7 @@ export const OPS_LANES: OpsLane[] = [
 		label: 'Payments Due',
 		hint: 'Balance outstanding — chase the payment.',
 		tone: 'warning',
-		statuses: [
-			'Pending Payment',
-			'Payment Pending - Check-in Left',
-			'Payment Pending - Travel Done'
-		]
+		statuses: ['Payment Pending - Check-in Left', 'Payment Pending - Travel Done']
 	},
 	{
 		id: 'checkins',
