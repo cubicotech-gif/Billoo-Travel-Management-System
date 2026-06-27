@@ -1550,6 +1550,17 @@ ALTER TABLE public.queries ADD CONSTRAINT queries_booking_status_check CHECK (
 
 
 -- ----------------------------------------------------------------
+-- migration: 20260631_vendor_payment_per_service.sql
+-- ----------------------------------------------------------------
+-- Attribute a vendor payment to a specific booked service (additive).
+
+ALTER TABLE public.vendor_payments
+	ADD COLUMN IF NOT EXISTS booking_item_id UUID REFERENCES public.booking_items(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_vendor_payments_item ON public.vendor_payments (booking_item_id);
+
+
+-- ----------------------------------------------------------------
 -- dev-open-access.sql (anon RLS for the build-out phase)
 -- ----------------------------------------------------------------
 -- =====================================================

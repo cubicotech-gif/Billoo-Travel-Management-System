@@ -1,5 +1,5 @@
 import { supabase } from '$lib/supabase';
-import type { Currency, Database } from '$lib/database.types';
+import type { Currency, Database, QuotationLineType } from '$lib/database.types';
 import { toNumber } from '$lib/money';
 import { toPkr, ratesOf } from '$features/bookings/totals';
 import type { Vendor } from './types';
@@ -22,9 +22,11 @@ export async function getVendor(id: string): Promise<Vendor> {
 export interface VendorCharge {
 	itemId: string;
 	label: string;
+	lineType: QuotationLineType;
 	currency: Currency;
 	actualCost: number;
 	owedPkr: number;
+	bookingId: string;
 	queryId: string | null;
 	queryNumber: string | null;
 	clientName: string | null;
@@ -33,6 +35,7 @@ export interface VendorCharge {
 interface ItemRow {
 	id: string;
 	label: string;
+	line_type: QuotationLineType;
 	currency: Currency;
 	actual_cost: number;
 	booking_id: string;
@@ -43,7 +46,7 @@ export async function listVendorCharges(vendorId: string): Promise<VendorCharge[
 	const items = unwrap<ItemRow[]>(
 		await supabase
 			.from('booking_items')
-			.select('id, label, currency, actual_cost, booking_id')
+			.select('id, label, line_type, currency, actual_cost, booking_id')
 			.eq('vendor_id', vendorId)
 	);
 	if (items.length === 0) return [];
@@ -69,9 +72,11 @@ export async function listVendorCharges(vendorId: string): Promise<VendorCharge[
 		return {
 			itemId: i.id,
 			label: i.label,
+			lineType: i.line_type,
 			currency: i.currency,
 			actualCost: Number(i.actual_cost),
 			owedPkr: toNumber(toPkr(Number(i.actual_cost), i.currency, rates)),
+			bookingId: i.booking_id,
 			queryId: b?.query_id ?? null,
 			queryNumber: q?.query_number ?? null,
 			clientName: q?.client_name ?? null
@@ -102,12 +107,20 @@ export async function deleteVendorPayment(id: string): Promise<void> {
 	if (error) throw new Error(error.message);
 }
 
+/** A charge enriched with what's been paid against that specific service. */
+export interface VendorServiceLine extends VendorCharge {
+	paidPkr: number;
+	balancePkr: number;
+}
+
 export interface VendorLedger {
-	charges: VendorCharge[];
+	services: VendorServiceLine[];
 	payments: VendorPayment[];
 	owed: number;
 	paid: number;
 	balance: number;
+	/** Payments not tied to any specific service (booking_item_id is null). */
+	unattributedPaid: number;
 }
 
 export async function getVendorLedger(vendorId: string): Promise<VendorLedger> {
@@ -115,9 +128,24 @@ export async function getVendorLedger(vendorId: string): Promise<VendorLedger> {
 		listVendorCharges(vendorId),
 		listVendorPayments(vendorId)
 	]);
+
+	// Split payments into per-service buckets vs general (unattributed).
+	const paidByItem = new Map<string, number>();
+	let unattributedPaid = 0;
+	for (const p of payments) {
+		const amt = Number(p.amount);
+		if (p.booking_item_id) paidByItem.set(p.booking_item_id, (paidByItem.get(p.booking_item_id) ?? 0) + amt);
+		else unattributedPaid += amt;
+	}
+
+	const services: VendorServiceLine[] = charges.map((c) => {
+		const paidPkr = paidByItem.get(c.itemId) ?? 0;
+		return { ...c, paidPkr, balancePkr: c.owedPkr - paidPkr };
+	});
+
 	const owed = charges.reduce((a, c) => a + c.owedPkr, 0);
 	const paid = payments.reduce((a, p) => a + Number(p.amount), 0);
-	return { charges, payments, owed, paid, balance: owed - paid };
+	return { services, payments, owed, paid, balance: owed - paid, unattributedPaid };
 }
 
 // --- Aggregate balances for the Finance overview -------------------------
