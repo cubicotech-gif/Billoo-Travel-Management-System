@@ -16,6 +16,7 @@ export interface ClientReceivable {
 	selling: number;
 	paid: number;
 	balance: number;
+	travelDate: string | null;
 }
 
 /** Sum the paid query_payments per query id (penny-accurate). */
@@ -57,11 +58,18 @@ async function owedByQueryMap(): Promise<Map<string, number>> {
 /** Queries with money still owed by the client (owed − payments received). */
 export async function listClientReceivables(): Promise<ClientReceivable[]> {
 	const queries = unwrap<
-		{ id: string; query_number: string; client_name: string; selling_price: number; status: string }[]
+		{
+			id: string;
+			query_number: string;
+			client_name: string;
+			selling_price: number;
+			status: string;
+			travel_date: string | null;
+		}[]
 	>(
 		await supabase
 			.from('queries')
-			.select('id, query_number, client_name, selling_price, status')
+			.select('id, query_number, client_name, selling_price, status, travel_date')
 			.neq('status', 'Cancelled')
 	);
 
@@ -78,10 +86,12 @@ export async function listClientReceivables(): Promise<ClientReceivable[]> {
 				clientName: q.client_name,
 				selling,
 				paid,
-				balance: toNumber(subtract(money(selling, 'PKR'), money(paid, 'PKR')))
+				balance: toNumber(subtract(money(selling, 'PKR'), money(paid, 'PKR'))),
+				travelDate: q.travel_date
 			};
 		})
-		.filter((r) => r.balance > 0)
+		// Within the round-off tolerance counts as settled — don't list pennies.
+		.filter((r) => r.balance > SETTLE_TOLERANCE_PKR)
 		.sort((a, b) => b.balance - a.balance);
 }
 

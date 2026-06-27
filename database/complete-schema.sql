@@ -1498,6 +1498,7 @@ CREATE TABLE IF NOT EXISTS public.vendor_payments (
 	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
 	vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
 	booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
+	booking_item_id UUID REFERENCES public.booking_items(id) ON DELETE SET NULL,
 	query_id UUID REFERENCES public.queries(id) ON DELETE SET NULL,
 	amount NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (amount >= 0), -- PKR
 	payment_date DATE DEFAULT CURRENT_DATE,

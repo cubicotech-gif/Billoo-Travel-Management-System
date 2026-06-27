@@ -310,6 +310,7 @@ export interface Database {
 					id: string;
 					vendor_id: string;
 					booking_id: string | null;
+					booking_item_id: string | null;
 					query_id: string | null;
 					amount: number;
 					payment_date: string | null;
@@ -322,6 +323,7 @@ export interface Database {
 					id?: string;
 					vendor_id: string;
 					booking_id?: string | null;
+					booking_item_id?: string | null;
 					query_id?: string | null;
 					amount?: number;
 					payment_date?: string | null;
