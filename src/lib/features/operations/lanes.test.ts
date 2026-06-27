@@ -5,7 +5,7 @@ import type { Query } from '$features/queries/types';
 function q(partial: Partial<Query>): Query {
 	return {
 		status: 'Booking',
-		booking_status: 'Pending Payment',
+		booking_status: 'Payment Pending - Check-in Left',
 		selling_price: 100000,
 		advance_payment_amount: 0,
 		is_deleted: false,
@@ -21,7 +21,7 @@ describe('operations lanes', () => {
 	});
 
 	it('routes each booking status to the correct lane', () => {
-		expect(laneFor('Pending Payment')).toBe('payments');
+		expect(laneFor('Payment Pending - Check-in Left')).toBe('payments');
 		expect(laneFor('Payment Pending - Check-in Left')).toBe('payments');
 		expect(laneFor('Payment Pending - Travel Done')).toBe('payments');
 		expect(laneFor('Payment Done - Check-in Left')).toBe('checkins');
@@ -36,8 +36,8 @@ describe('operations lanes', () => {
 
 	it('orders payments oldest-first and check-ins by soonest travel', () => {
 		const lanes = groupIntoLanes([
-			q({ id: 'pay-new', booking_status: 'Pending Payment', stage_changed_at: '2026-06-10' }),
-			q({ id: 'pay-old', booking_status: 'Pending Payment', stage_changed_at: '2026-06-01' }),
+			q({ id: 'pay-new', booking_status: 'Payment Pending - Check-in Left', stage_changed_at: '2026-06-10' }),
+			q({ id: 'pay-old', booking_status: 'Payment Pending - Check-in Left', stage_changed_at: '2026-06-01' }),
 			q({ id: 'chk-late', booking_status: 'Payment Done - Check-in Left', travel_date: '2026-07-20' }),
 			q({ id: 'chk-soon', booking_status: 'Payment Done - Check-in Left', travel_date: '2026-06-20' })
 		]);
@@ -47,11 +47,11 @@ describe('operations lanes', () => {
 
 	it('groups only booked, non-deleted deals and tallies outstanding', () => {
 		const lanes = groupIntoLanes([
-			q({ booking_status: 'Pending Payment', selling_price: 100000, advance_payment_amount: 30000 }),
+			q({ booking_status: 'Payment Pending - Check-in Left', selling_price: 100000, advance_payment_amount: 30000 }),
 			q({ booking_status: 'Payment Done - Check-in Left' }),
 			q({ booking_status: 'Completed' }),
 			q({ status: 'Quoted' }), // not booked → excluded
-			q({ booking_status: 'Pending Payment', is_deleted: true }) // deleted → excluded
+			q({ booking_status: 'Payment Pending - Check-in Left', is_deleted: true }) // deleted → excluded
 		]);
 		expect(lanes.payments).toHaveLength(1);
 		expect(lanes.checkins).toHaveLength(1);

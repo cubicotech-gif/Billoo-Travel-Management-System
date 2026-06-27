@@ -14,14 +14,31 @@
 		latest: Quotation | null;
 		dragging: boolean;
 		busy: boolean;
+		/** Booking-stage money snapshot for the progress bar (null on other stages). */
+		finance?: { owed: number; paid: number; balance: number; paidInFull: boolean } | null;
 		onDragStart: () => void;
 		onDragEnd: () => void;
 		onEdit: () => void;
 		onDelete: () => void;
 		onMove: (status: QueryStatus) => void;
 	}
-	let { query: q, tone, latest, dragging, busy, onDragStart, onDragEnd, onEdit, onDelete, onMove }: Props =
-		$props();
+	let {
+		query: q,
+		tone,
+		latest,
+		dragging,
+		busy,
+		finance = null,
+		onDragStart,
+		onDragEnd,
+		onEdit,
+		onDelete,
+		onMove
+	}: Props = $props();
+
+	const payPct = $derived(
+		finance ? (finance.owed > 0 ? Math.min(100, Math.round((finance.paid / finance.owed) * 100)) : finance.paidInFull ? 100 : 0) : 0
+	);
 
 	let expanded = $state(false);
 
@@ -79,6 +96,23 @@
 				{/if}
 			</div>
 		</div>
+
+		<!-- Booking-stage payment progress: paid vs owed, with the balance. -->
+		{#if finance}
+			<div class="mt-2">
+				<div class="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+					<div class="h-full rounded-full {finance.paidInFull ? 'bg-green-500' : 'bg-amber-400'}" style="width: {payPct}%"></div>
+				</div>
+				<div class="mt-1 flex items-center justify-between text-[10px]">
+					<span class="text-slate-400">{formatAmount(finance.paid)} / {formatAmount(finance.owed)}</span>
+					{#if finance.paidInFull}
+						<span class="font-medium text-green-600">Paid</span>
+					{:else}
+						<span class="font-medium text-amber-600">{formatAmount(finance.balance)} left</span>
+					{/if}
+				</div>
+			</div>
+		{/if}
 	</button>
 
 	{#if expanded}

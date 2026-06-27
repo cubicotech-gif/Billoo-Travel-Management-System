@@ -16,10 +16,13 @@
 	import { latestQuotationByQuery } from '$features/quotations/api';
 	import { isBooked } from '$features/operations/lanes';
 	import { daysSince, isStuck, POST_COMPLETE_STATUSES } from '$features/queries/workflow';
+	import { useBookingFinance } from '$features/finance/queries';
+	import { formatAmount } from '$lib/money';
 	import type { BookingStatus, PackageType, QueryStatus } from '$lib/database.types';
 	import type { Query } from '$features/queries/types';
 
 	const queries = useQueries();
+	const bookingFinance = useBookingFinance();
 	const setStatus = useSetQueryStatus();
 	const update = useUpdateQuery();
 	const deleted = useDeletedQueries();
@@ -105,7 +108,6 @@
 	// lifecycle bucket — so booked deals live in proper stages, not behind a badge.
 	const BOOKING_LANES: { id: string; label: string; tone: string; bookingStatus: BookingStatus | null }[] = [
 		{ id: 'Booking', label: 'Booking in progress', tone: 'success', bookingStatus: null },
-		{ id: 'bs-pending-payment', label: 'Pending payment', tone: 'warning', bookingStatus: 'Pending Payment' },
 		{ id: 'bs-unpaid-checkin', label: 'Unpaid · check-in left', tone: 'warning', bookingStatus: 'Payment Pending - Check-in Left' },
 		{ id: 'bs-paid-checkin', label: 'Paid · check-in left', tone: 'info', bookingStatus: 'Payment Done - Check-in Left' },
 		{ id: 'bs-travel-done', label: 'Trip over · unpaid', tone: 'danger', bookingStatus: 'Payment Pending - Travel Done' },
@@ -135,6 +137,15 @@
 			}))
 		];
 	});
+
+	const financeMap = $derived($bookingFinance.data ?? new Map());
+	const financeFor = (q: Query) =>
+		q.status === 'Booking' ? (financeMap.get(q.id) ?? null) : null;
+	/** Total outstanding balance across a booking column (0 for non-booking columns). */
+	function colOutstanding(col: BoardColumn): number {
+		if (col.status !== 'Booking') return 0;
+		return col.items.reduce((sum, q) => sum + (financeMap.get(q.id)?.balance ?? 0), 0);
+	}
 
 	const cancelledItems = $derived(($queries.data ?? []).filter((q) => q.status === 'Cancelled'));
 
@@ -264,6 +275,7 @@
 				latest={latestByQuery.get(q.id) ?? null}
 				dragging={draggingId === q.id}
 				busy={$setStatus.isPending}
+				finance={financeFor(q)}
 				onDragStart={() => (draggingId = q.id)}
 				onDragEnd={() => (draggingId = null)}
 				onEdit={() => openEdit(q)}
@@ -342,8 +354,13 @@
 							<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
 							{col.label}
 						</span>
-						<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
-							{col.items.length}
+						<span class="flex items-center gap-2">
+							{#if colOutstanding(col) > 0}
+								<span class="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-600">{formatAmount(colOutstanding(col))} due</span>
+							{/if}
+							<span class="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-slate-500 shadow-sm">
+								{col.items.length}
+							</span>
 						</span>
 					</button>
 					{#if open}

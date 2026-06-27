@@ -10,16 +10,15 @@
 
 export type QueryStatus = 'New Query' | 'Working' | 'Quoted' | 'Booking' | 'Cancelled';
 
-// Payment + check-in status, only meaningful while a query is in the Booking
-// stage. Driven by recorded payments vs the package total and the trip's final
-// date (see $features/bookings/lifecycle):
-//   Pending Payment              — still building the booking (pre "complete")
-//   Payment Done - Check-in Left — marked complete, paid in full, trip ahead
-//   Payment Pending - Check-in Left — marked complete, balance > 0, trip ahead
+// Payment + check-in status, only meaningful once a Booking-stage query is
+// marked complete. Driven by recorded payments vs the package total and the
+// trip's final date (see $features/bookings/lifecycle). While a booking is still
+// being built, booking_status is NULL.
+//   Payment Done - Check-in Left — paid in full, trip ahead
+//   Payment Pending - Check-in Left — balance > 0, trip ahead
 //   Payment Pending - Travel Done   — trip over but still owed
 //   Completed                    — paid in full AND trip's final date passed
 export type BookingStatus =
-	| 'Pending Payment'
 	| 'Payment Done - Check-in Left'
 	| 'Payment Pending - Check-in Left'
 	| 'Payment Pending - Travel Done'

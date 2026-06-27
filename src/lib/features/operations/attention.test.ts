@@ -9,7 +9,7 @@ function q(partial: Partial<Query>): Query {
 		id: 'q1',
 		passenger_id: 'p1',
 		status: 'Booking',
-		booking_status: 'Pending Payment',
+		booking_status: 'Payment Pending - Check-in Left',
 		selling_price: 100000,
 		advance_payment_amount: 0,
 		is_deleted: false,
@@ -58,7 +58,7 @@ describe('attention worklist', () => {
 		const items = attentionList(
 			[
 				q({ id: 'docs', booking_status: 'Payment Done - Check-in Left', travel_date: null }), // checkin
-				q({ id: 'pay', booking_status: 'Pending Payment', advance_payment_amount: 0 }) // payment
+				q({ id: 'pay', booking_status: 'Payment Pending - Check-in Left', advance_payment_amount: 0 }) // payment
 			],
 			allButTicket // q1 missing ticket, but ids differ so docs apply per-id; fine for ordering
 		);

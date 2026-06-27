@@ -107,7 +107,6 @@ export interface BookingStatusMeta {
 }
 
 export const BOOKING_STATUSES: BookingStatusMeta[] = [
-	{ status: 'Pending Payment', label: 'Pending payment', tone: 'warning' },
 	{ status: 'Payment Done - Check-in Left', label: 'Paid · check-in left', tone: 'info' },
 	{ status: 'Payment Pending - Check-in Left', label: 'Unpaid · check-in left', tone: 'warning' },
 	{ status: 'Payment Pending - Travel Done', label: 'Trip over · unpaid', tone: 'danger' },
@@ -123,8 +122,8 @@ export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = Object.fromEn
 ) as Record<BookingStatus, string>;
 
 /**
- * The four post-"mark complete" lifecycle buckets (everything except the
- * pre-complete 'Pending Payment' building state). The money/date auto-router
+ * The post-"mark complete" lifecycle buckets — every booking_status value (a
+ * booking still being built has booking_status NULL). The money/date auto-router
  * only moves a booking between these.
  */
 export const POST_COMPLETE_STATUSES: BookingStatus[] = [

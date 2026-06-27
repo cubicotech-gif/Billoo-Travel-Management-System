@@ -1,8 +1,17 @@
 import { createQuery } from '@tanstack/svelte-query';
-import { getProfitSummary, listClientReceivables, listCollections } from './api';
+import {
+	bookingFinanceByQuery,
+	getProfitSummary,
+	listClientReceivables,
+	listCollections
+} from './api';
 
 export function useClientReceivables() {
 	return createQuery({ queryKey: ['client-receivables'], queryFn: listClientReceivables });
+}
+
+export function useBookingFinance() {
+	return createQuery({ queryKey: ['booking-finance'], queryFn: bookingFinanceByQuery });
 }
 
 export function useCollections() {

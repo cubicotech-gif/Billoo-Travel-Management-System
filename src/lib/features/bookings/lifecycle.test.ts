@@ -99,4 +99,18 @@ describe('lifecycleSummary', () => {
 		);
 		expect(s.computed).toBe('Payment Pending - Travel Done');
 	});
+
+	it('treats a tiny round-off remainder as paid in full', () => {
+		// Client paid 499,950 of 500,000 — the 50 left over is within tolerance.
+		const s = lifecycleSummary(
+			booking,
+			items,
+			[{ status: 'paid', amount: 499950 }],
+			query,
+			'2026-05-01'
+		);
+		expect(s.paidInFull).toBe(true);
+		expect(s.roundOff).toBe(50);
+		expect(s.computed).toBe('Payment Done - Check-in Left');
+	});
 });

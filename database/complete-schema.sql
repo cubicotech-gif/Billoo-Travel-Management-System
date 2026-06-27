@@ -51,7 +51,6 @@ CREATE TABLE IF NOT EXISTS public.queries (
     'Cancelled'
   )),
   booking_status TEXT CHECK (booking_status IS NULL OR booking_status IN (
-    'Pending Payment',
     'Payment Done - Check-in Left',
     'Payment Pending - Check-in Left',
     'Payment Pending - Travel Done',
@@ -1287,7 +1286,6 @@ ALTER TABLE public.queries ADD CONSTRAINT queries_status_check CHECK (status IN 
 ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_booking_status_check;
 ALTER TABLE public.queries ADD CONSTRAINT queries_booking_status_check CHECK (
 	booking_status IS NULL OR booking_status IN (
-		'Pending Payment',
 		'Payment Done - Check-in Left',
 		'Payment Pending - Check-in Left',
 		'Payment Pending - Travel Done',
