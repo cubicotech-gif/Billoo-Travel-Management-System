@@ -512,6 +512,25 @@
 	// passengers. One all-in rate for everyone — no adult/child split.
 	const pp = $derived(perPerson(result.totalSellPkr, divisor));
 
+	// When a passenger type is split into fare tiers, the tier counts must total
+	// that type's passenger count. Blocks save (and disables the save buttons).
+	const fareTierError = $derived.by((): string | null => {
+		if (!form.airlineInclude) return null;
+		const checks: [FareTierRow[], number, string][] = [
+			[form.airline.adultFares, form.adults, 'adult'],
+			[form.airline.childFares, form.children, 'child'],
+			[form.airline.infantFares, form.infants, 'infant']
+		];
+		for (const [rows, total, label] of checks) {
+			if (rows.length <= 1) continue;
+			const tally = rows.reduce((a, r) => a + num(r.count), 0);
+			if (tally !== total) {
+				return `Air ticket ${label} fare groups total ${tally}, but there ${total === 1 ? 'is' : 'are'} ${total} ${label}${total === 1 ? '' : 's'}.`;
+			}
+		}
+		return null;
+	});
+
 	function hotelWa(h: HotelForm): WhatsAppHotel | null {
 		if (!h.name || num(h.nights) <= 0) return null;
 		return {
@@ -651,6 +670,10 @@
 		}
 		if (result.lines.some((l) => l.currency === 'USD') && num(form.usdValue) <= 0) {
 			alert('Some components are in USD — set the USD → PKR rate first.');
+			return;
+		}
+		if (fareTierError) {
+			alert(fareTierError);
 			return;
 		}
 		const args = {
@@ -1226,8 +1249,9 @@
 		{#if booking}
 			<Card title="Save booking">
 				<p class="text-xs text-slate-500">These are the final agreed amounts we'll pay/charge. Mark each service booked as you arrange it — the itinerary and invoice update automatically. Saving records the booking.</p>
+				{#if fareTierError}<p class="mt-2 text-xs font-medium text-amber-600">{fareTierError}</p>{/if}
 				<div class="mt-3 flex flex-wrap gap-2">
-					<Button size="sm" onclick={() => save(false)} disabled={saving}><Save class="h-4 w-4" /> Save booking</Button>
+					<Button size="sm" onclick={() => save(false)} disabled={saving || !!fareTierError}><Save class="h-4 w-4" /> Save booking</Button>
 					<Button variant="secondary" size="sm" href="/queries/{queryId}/invoice"><Copy class="h-4 w-4" /> Invoice</Button>
 				</div>
 			</Card>
@@ -1244,9 +1268,10 @@
 					<Button variant="secondary" size="sm" onclick={copyWa}>
 						{#if copied}<Check class="h-4 w-4" /> Copied{:else}<Copy class="h-4 w-4" /> Copy{/if}
 					</Button>
-					<Button size="sm" onclick={() => save(false)} disabled={saving}><Save class="h-4 w-4" /> Save</Button>
-					<Button variant="secondary" size="sm" onclick={() => save(true)} disabled={saving}><Plus class="h-4 w-4" /> Save & add another</Button>
+					<Button size="sm" onclick={() => save(false)} disabled={saving || !!fareTierError}><Save class="h-4 w-4" /> Save</Button>
+					<Button variant="secondary" size="sm" onclick={() => save(true)} disabled={saving || !!fareTierError}><Plus class="h-4 w-4" /> Save & add another</Button>
 				</div>
+				{#if fareTierError}<p class="mt-2 text-xs font-medium text-amber-600">{fareTierError}</p>{/if}
 			</Card>
 		{/if}
 	</div>
