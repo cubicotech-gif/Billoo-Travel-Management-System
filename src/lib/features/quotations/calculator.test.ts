@@ -289,6 +289,52 @@ describe('quotation calculator', () => {
 		expect(r.visaSellPkr).toBe(550 * 6 * 78);
 	});
 
+	it('splits one passenger type into multiple fare tiers and sums them', () => {
+		// 12 adults on the same flight: 1 @ 144000 + 11 @ 155000.
+		const r = calculateQuotation({
+			...base,
+			pax: { adults: 12, children: 0, infants: 0 },
+			hotels: [],
+			transfers: [],
+			visa: null,
+			tickets: {
+				airlineName: 'Saudia',
+				adultCost: 0,
+				adultSell: 0,
+				childCost: 0,
+				childSell: 0,
+				infantCost: 0,
+				infantSell: 0,
+				adultTiers: [
+					{ count: 1, cost: 140000, sell: 144000 },
+					{ count: 11, cost: 150000, sell: 155000 }
+				]
+			}
+		});
+		// One ticket line per tier.
+		const ticketLines = r.lines.filter((l) => l.line_type === 'ticket');
+		expect(ticketLines).toHaveLength(2);
+		expect(ticketLines.map((l) => l.quantity)).toEqual([1, 11]);
+		// sell: 1×144000 + 11×155000 = 1,849,000
+		expect(r.ticketsSellPkr).toBe(1 * 144000 + 11 * 155000);
+		expect(r.ticketsCostPkr).toBe(1 * 140000 + 11 * 150000);
+		expect(r.totalSellPkr).toBe(1 * 144000 + 11 * 155000);
+	});
+
+	it('falls back to the single fare × pax count when a type has no tiers', () => {
+		// Empty/absent tier arrays must behave exactly like the legacy single fare.
+		const withTiers = calculateQuotation({
+			...base,
+			pax: { adults: 4, children: 0, infants: 0 },
+			hotels: [],
+			transfers: [],
+			visa: null,
+			tickets: { airlineName: 'Saudia', adultCost: 150000, adultSell: 180000, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0, adultTiers: [] }
+		});
+		expect(withTiers.ticketsSellPkr).toBe(180000 * 4);
+		expect(withTiers.lines.filter((l) => l.line_type === 'ticket')).toHaveLength(1);
+	});
+
 	it('handles an empty quotation as zero', () => {
 		const r = calculateQuotation({
 			roe: 75,

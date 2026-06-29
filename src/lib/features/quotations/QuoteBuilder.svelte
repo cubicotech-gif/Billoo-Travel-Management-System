@@ -58,6 +58,7 @@
 		AIRLINE_ROUTES,
 		newRoom,
 		newTransfer,
+		newFareTier,
 		blankHotel,
 		blankVisa,
 		blankOtherService,
@@ -69,7 +70,8 @@
 		type HotelForm,
 		type TransferForm,
 		type VisaForm,
-		type OtherServiceForm
+		type OtherServiceForm,
+		type FareTierRow
 	} from './edit-map';
 	import RangeCalendar from './RangeCalendar.svelte';
 	import QuotationList from './QuotationList.svelte';
@@ -173,8 +175,34 @@
 		const r = rate(a.sel);
 		if (!r) return;
 		a.name = r.name;
-		a.adultCost = Number(r.cost_price);
-		a.adultSell = Number(r.selling_price);
+		const first = a.adultFares[0];
+		if (first) {
+			first.cost = Number(r.cost_price);
+			first.sell = Number(r.selling_price);
+		}
+	}
+
+	// Split a passenger type into another fare tier. Going from one tier to two
+	// makes the (previously implicit) full-type count explicit so the running
+	// total starts balanced; the new tier copies the first tier's fare.
+	function splitFare(rows: FareTierRow[], total: number) {
+		const first = rows[0];
+		if (rows.length === 1 && first) first.count = total;
+		rows.push(newFareTier(first?.cost ?? 0, first?.sell ?? 0, 0));
+	}
+	function removeFare(rows: FareTierRow[], i: number) {
+		rows.splice(i, 1);
+	}
+	// Map a type's tier rows to the calculator shape: a lone tier prices the whole
+	// type (single fare, count from pax); 2+ tiers pass explicit per-tier counts.
+	function fareGroups(rows: FareTierRow[]) {
+		const clean = rows.map((r) => ({ count: num(r.count), cost: num(r.cost), sell: num(r.sell) }));
+		const first = clean[0] ?? { count: 0, cost: 0, sell: 0 };
+		return {
+			cost: first.cost,
+			sell: first.sell,
+			tiers: clean.length > 1 ? clean : undefined
+		};
 	}
 
 	let form = $state(blankForm());
@@ -468,7 +496,12 @@
 			visas,
 			otherServices,
 			tickets: form.airlineInclude
-				? { ...bk(ai), airlineName: ai.name || 'Tickets', rateCardId: ai.sel === OTHER || !ai.sel ? null : ai.sel, route: ai.route || null, fareClass: ai.fareClass || null, pnr: ai.pnr || null, adultCost: num(ai.adultCost), adultSell: num(ai.adultSell), childCost: num(ai.childCost), childSell: num(ai.childSell), infantCost: num(ai.infantCost), infantSell: num(ai.infantSell) }
+				? (() => {
+						const a = fareGroups(ai.adultFares);
+						const c = fareGroups(ai.childFares);
+						const inf = fareGroups(ai.infantFares);
+						return { ...bk(ai), airlineName: ai.name || 'Tickets', rateCardId: ai.sel === OTHER || !ai.sel ? null : ai.sel, route: ai.route || null, fareClass: ai.fareClass || null, pnr: ai.pnr || null, adultCost: a.cost, adultSell: a.sell, childCost: c.cost, childSell: c.sell, infantCost: inf.cost, infantSell: inf.sell, adultTiers: a.tiers, childTiers: c.tiers, infantTiers: inf.tiers };
+					})()
 				: null
 		};
 	});
@@ -478,6 +511,25 @@
 	// Per person = the WHOLE package (every service, visa included) ÷ all
 	// passengers. One all-in rate for everyone — no adult/child split.
 	const pp = $derived(perPerson(result.totalSellPkr, divisor));
+
+	// When a passenger type is split into fare tiers, the tier counts must total
+	// that type's passenger count. Blocks save (and disables the save buttons).
+	const fareTierError = $derived.by((): string | null => {
+		if (!form.airlineInclude) return null;
+		const checks: [FareTierRow[], number, string][] = [
+			[form.airline.adultFares, form.adults, 'adult'],
+			[form.airline.childFares, form.children, 'child'],
+			[form.airline.infantFares, form.infants, 'infant']
+		];
+		for (const [rows, total, label] of checks) {
+			if (rows.length <= 1) continue;
+			const tally = rows.reduce((a, r) => a + num(r.count), 0);
+			if (tally !== total) {
+				return `Air ticket ${label} fare groups total ${tally}, but there ${total === 1 ? 'is' : 'are'} ${total} ${label}${total === 1 ? '' : 's'}.`;
+			}
+		}
+		return null;
+	});
 
 	function hotelWa(h: HotelForm): WhatsAppHotel | null {
 		if (!h.name || num(h.nights) <= 0) return null;
@@ -570,8 +622,8 @@
 				vendor_id: null,
 				currency: 'PKR',
 				unit: 'per adult',
-				cost_price: num(a.adultCost),
-				selling_price: num(a.adultSell)
+				cost_price: num(a.adultFares[0]?.cost ?? 0),
+				selling_price: num(a.adultFares[0]?.sell ?? 0)
 			});
 		}
 		for (const v of form.visas) {
@@ -618,6 +670,10 @@
 		}
 		if (result.lines.some((l) => l.currency === 'USD') && num(form.usdValue) <= 0) {
 			alert('Some components are in USD — set the USD → PKR rate first.');
+			return;
+		}
+		if (fareTierError) {
+			alert(fareTierError);
 			return;
 		}
 		const args = {
@@ -1051,6 +1107,37 @@
 			</Card>
 		{/if}
 
+		{#snippet fareTierRows(rows: FareTierRow[], total: number, typeLabel: string)}
+			{@const tally = rows.reduce((a, r) => a + num(r.count), 0)}
+			<div class="space-y-1.5">
+				<div class="flex items-center justify-between">
+					<span class="text-xs font-medium text-slate-500">{typeLabel} <span class="text-slate-400">({total})</span></span>
+					{#if rows.length > 1}
+						<span class="text-xs font-medium {tally === total ? 'text-emerald-600' : 'text-amber-600'}">
+							{tally === total ? `groups total ${tally} ✓` : `groups total ${tally} — need ${total}`}
+						</span>
+					{/if}
+				</div>
+				{#each rows as r, i (i)}
+					<div class="grid grid-cols-2 gap-2 {rows.length > 1 ? 'sm:grid-cols-4' : ''}">
+						{#if rows.length > 1}
+							<Input label={i === 0 ? 'Count' : ''} type="number" min="0" bind:value={r.count} />
+						{/if}
+						<Input label={i === 0 ? `${typeLabel} cost` : ''} type="number" min="0" bind:value={r.cost} />
+						<Input label={i === 0 ? `${typeLabel} sell` : ''} type="number" min="0" bind:value={r.sell} />
+						{#if rows.length > 1}
+							<button type="button" onclick={() => removeFare(rows, i)} class="flex items-center justify-center self-end rounded-lg px-2 py-2 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Remove fare group">
+								<Trash2 class="h-4 w-4" />
+							</button>
+						{/if}
+					</div>
+				{/each}
+				<button type="button" onclick={() => splitFare(rows, total)} class="inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-700">
+					<Plus class="h-3.5 w-3.5" /> Split fare
+				</button>
+			</div>
+		{/snippet}
+
 		{#snippet ticketsBody()}
 			<label class="mb-3 flex items-center gap-2 text-sm text-slate-600">
 				<input type="checkbox" bind:checked={form.airlineInclude} class="rounded border-slate-300" /> Include air tickets
@@ -1073,18 +1160,18 @@
 							</button>
 						{/each}
 					</div>
-					<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+					<div class="grid grid-cols-2 gap-2">
 						<Input label="Fare class" bind:value={form.airline.fareClass} placeholder="e.g. Economy" />
 						<Input label="PNR" bind:value={form.airline.pnr} />
-						<Input label="Adult cost" type="number" min="0" bind:value={form.airline.adultCost} />
-						<Input label="Adult sell" type="number" min="0" bind:value={form.airline.adultSell} />
 					</div>
-					<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-						<Input label="Child cost" type="number" min="0" bind:value={form.airline.childCost} />
-						<Input label="Child sell" type="number" min="0" bind:value={form.airline.childSell} />
-						<Input label="Infant cost" type="number" min="0" bind:value={form.airline.infantCost} />
-						<Input label="Infant sell" type="number" min="0" bind:value={form.airline.infantSell} />
-					</div>
+					<p class="text-xs text-slate-400">Same type at different fares? Use “Split fare” to add a group (e.g. 1 @ 144 + 11 @ 155) — counts must total that type's passengers.</p>
+					{@render fareTierRows(form.airline.adultFares, form.adults, 'Adult')}
+					{#if form.children > 0}
+						{@render fareTierRows(form.airline.childFares, form.children, 'Child')}
+					{/if}
+					{#if form.infants > 0}
+						{@render fareTierRows(form.airline.infantFares, form.infants, 'Infant')}
+					{/if}
 				</div>
 			{/if}
 		{/snippet}
@@ -1162,8 +1249,9 @@
 		{#if booking}
 			<Card title="Save booking">
 				<p class="text-xs text-slate-500">These are the final agreed amounts we'll pay/charge. Mark each service booked as you arrange it — the itinerary and invoice update automatically. Saving records the booking.</p>
+				{#if fareTierError}<p class="mt-2 text-xs font-medium text-amber-600">{fareTierError}</p>{/if}
 				<div class="mt-3 flex flex-wrap gap-2">
-					<Button size="sm" onclick={() => save(false)} disabled={saving}><Save class="h-4 w-4" /> Save booking</Button>
+					<Button size="sm" onclick={() => save(false)} disabled={saving || !!fareTierError}><Save class="h-4 w-4" /> Save booking</Button>
 					<Button variant="secondary" size="sm" href="/queries/{queryId}/invoice"><Copy class="h-4 w-4" /> Invoice</Button>
 				</div>
 			</Card>
@@ -1180,9 +1268,10 @@
 					<Button variant="secondary" size="sm" onclick={copyWa}>
 						{#if copied}<Check class="h-4 w-4" /> Copied{:else}<Copy class="h-4 w-4" /> Copy{/if}
 					</Button>
-					<Button size="sm" onclick={() => save(false)} disabled={saving}><Save class="h-4 w-4" /> Save</Button>
-					<Button variant="secondary" size="sm" onclick={() => save(true)} disabled={saving}><Plus class="h-4 w-4" /> Save & add another</Button>
+					<Button size="sm" onclick={() => save(false)} disabled={saving || !!fareTierError}><Save class="h-4 w-4" /> Save</Button>
+					<Button variant="secondary" size="sm" onclick={() => save(true)} disabled={saving || !!fareTierError}><Plus class="h-4 w-4" /> Save & add another</Button>
 				</div>
+				{#if fareTierError}<p class="mt-2 text-xs font-medium text-amber-600">{fareTierError}</p>{/if}
 			</Card>
 		{/if}
 	</div>

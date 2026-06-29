@@ -61,7 +61,22 @@ describe('quotationToForm (edit reopen)', () => {
 		expect(form.visas[0]).toMatchObject({ type: 'Umrah', sell: 220, currency: 'SAR' });
 		expect(form.airlineInclude).toBe(true);
 		expect(form.airline.name).toBe('Saudia');
-		expect(form.airline.adultSell).toBe(180000);
+		expect(form.airline.adultFares).toHaveLength(1);
+		expect(form.airline.adultFares[0]).toMatchObject({ cost: 150000, sell: 180000 });
+	});
+
+	it('reconstructs split adult fares (multiple tiers) back into the form', () => {
+		const lines: QuotationLine[] = [
+			line({ line_type: 'ticket', currency: 'PKR', unit_cost: 144000, unit_sell: 150000, quantity: 1, label: 'Saudia (adult ×1)', meta: { pax_type: 'adult', tier_index: 0 } }),
+			line({ line_type: 'ticket', currency: 'PKR', unit_cost: 155000, unit_sell: 160000, quantity: 11, label: 'Saudia (adult ×11)', meta: { pax_type: 'adult', tier_index: 1 } })
+		];
+		const form = quotationToForm({ ...quotation, adults: 12 } as unknown as Quotation, lines);
+		expect(form.airline.adultFares).toHaveLength(2);
+		expect(form.airline.adultFares[0]).toMatchObject({ count: 1, cost: 144000, sell: 150000 });
+		expect(form.airline.adultFares[1]).toMatchObject({ count: 11, cost: 155000, sell: 160000 });
+		// Types with no ticket lines still get a single blank tier.
+		expect(form.airline.childFares).toHaveLength(1);
+		expect(form.airline.infantFares).toHaveLength(1);
 	});
 
 	it('maps custom room type / route / Other visa', () => {
