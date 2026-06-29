@@ -38,8 +38,29 @@
 	.break-avoid {
 		break-inside: avoid;
 	}
+	/* Itinerary / voucher: compact the layout so a typical booking fits a single
+	   A4 page instead of spilling onto a second. Scoped to the print document so
+	   it never touches on-screen rendering or other print surfaces. */
+	.print-doc {
+		font-size: 11px;
+		line-height: 1.3;
+	}
+	.print-doc table {
+		font-size: 10px;
+	}
+	.print-doc th,
+	.print-doc td {
+		padding-top: 0.18rem !important;
+		padding-bottom: 0.18rem !important;
+	}
+	/* Each block stays whole; if one can't fit it moves down rather than splitting. */
+	.print-doc .doc-section {
+		break-inside: avoid;
+		margin-bottom: 0.55rem !important;
+	}
 	@page {
-		margin: 1.4cm;
+		size: A4;
+		margin: 1cm;
 	}
 }
 
