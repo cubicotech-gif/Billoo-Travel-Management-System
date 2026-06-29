@@ -6,7 +6,7 @@
 	import { getQuery } from '$features/queries/api';
 	import { getBookingForQuery, listBookingItems } from '$features/bookings/api';
 	import { ratesOf, toPkr, type Rates } from '$features/bookings/totals';
-	import { listQuotations, getQuotationLines } from '$features/quotations/api';
+	import { listQuotations, getQuotationLines, getQuotation } from '$features/quotations/api';
 	import type { Query } from '$features/queries/types';
 
 	// Client-facing invoice for the booking: the final agreed selling prices,
@@ -27,6 +27,9 @@
 	let rows = $state<Row[]>([]);
 	let totalPkr = $state(0);
 	let invoiceNo = $state('');
+	// Pax from the quotation/booking being invoiced, not the (possibly stale)
+	// query intake — the booking stage can change the counts.
+	let paxCounts = $state({ adults: 0, children: 0, infants: 0 });
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
 
@@ -38,6 +41,7 @@
 				query = await getQuery(queryId);
 				const booking = await getBookingForQuery(queryId);
 				const items = booking ? await listBookingItems(booking.id) : [];
+				let source = null;
 				if (booking && items.length > 0) {
 					const rates: Rates = ratesOf(booking);
 					rows = items.map((i) => ({
@@ -49,6 +53,7 @@
 					}));
 					totalPkr = Number(booking.actual_sell_pkr);
 					invoiceNo = `INV-${query?.query_number ?? booking.id.slice(0, 8)}`;
+					source = booking.quotation_id ? await getQuotation(booking.quotation_id) : null;
 				} else {
 					const quotes = await listQuotations(queryId);
 					const accepted = quotes.find((q) => q.status === 'accepted') ?? quotes[0];
@@ -64,8 +69,12 @@
 						}));
 						totalPkr = Number(accepted.total_sell_pkr);
 						invoiceNo = `INV-${query?.query_number ?? accepted.id.slice(0, 8)}`;
+						source = accepted;
 					}
 				}
+				paxCounts = source
+					? { adults: source.adults, children: source.children, infants: source.infants }
+					: { adults: query.adults, children: query.children, infants: query.infants };
 			} catch (e) {
 				error = e instanceof Error ? e.message : 'Failed to load';
 			}
@@ -110,7 +119,7 @@
 				<div class="text-xs uppercase tracking-wide text-slate-400">Package</div>
 				<div class="font-medium text-slate-800">{query.package_type ?? query.destination}</div>
 				<div class="text-slate-500">
-					{query.adults} adult{query.adults === 1 ? '' : 's'}{query.children ? `, ${query.children} child` : ''}{query.infants ? `, ${query.infants} infant` : ''}
+					{paxCounts.adults} adult{paxCounts.adults === 1 ? '' : 's'}{paxCounts.children ? `, ${paxCounts.children} child` : ''}{paxCounts.infants ? `, ${paxCounts.infants} infant` : ''}
 				</div>
 			</div>
 		</div>

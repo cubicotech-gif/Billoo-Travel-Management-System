@@ -6,7 +6,7 @@
 	import type { Currency, QuotationLineType } from '$lib/database.types';
 	import { getQuery } from '$features/queries/api';
 	import { getBookingForQuery, listBookingItems } from '$features/bookings/api';
-	import { listQuotations, getQuotationLines } from '$features/quotations/api';
+	import { listQuotations, getQuotationLines, getQuotation } from '$features/quotations/api';
 	import type { Query } from '$features/queries/types';
 
 	// Client confirmation document, styled after the agency's manual voucher:
@@ -28,6 +28,10 @@
 	let rows = $state<Row[]>([]);
 	let totalPkr = $state(0);
 	let ref = $state('');
+	// Passenger counts shown on the document. These come from the quotation/booking
+	// being rendered — NOT the original query intake, which can be stale once the
+	// booking pax are edited (e.g. query says 6 adults but the booking is 9+1).
+	let paxCounts = $state({ adults: 0, children: 0, infants: 0 });
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
 	// Show the agency logo from /static/logo.(png|svg) if present; fall back to the
@@ -42,6 +46,9 @@
 				query = await getQuery(queryId);
 				const booking = await getBookingForQuery(queryId);
 				const items = booking ? await listBookingItems(booking.id) : [];
+				// The quotation behind the document — its pax are the source of truth
+				// (the booking stage edits them; the query intake may be stale).
+				let source = null;
 				if (booking && items.length > 0) {
 					rows = items.map((i) => ({
 						lineType: i.line_type,
@@ -52,6 +59,7 @@
 					}));
 					totalPkr = Number(booking.actual_sell_pkr);
 					ref = booking.id.slice(0, 6).toUpperCase();
+					source = booking.quotation_id ? await getQuotation(booking.quotation_id) : null;
 				} else {
 					// No booking yet (or it has no items) — fall back to the latest
 					// quotation so the document is never blank when a quote exists.
@@ -68,8 +76,12 @@
 						}));
 						totalPkr = Number(accepted.total_sell_pkr);
 						ref = (booking?.id ?? accepted.id).slice(0, 6).toUpperCase();
+						source = accepted;
 					}
 				}
+				paxCounts = source
+					? { adults: source.adults, children: source.children, infants: source.infants }
+					: { adults: query.adults, children: query.children, infants: query.infants };
 			} catch (e) {
 				error = e instanceof Error ? e.message : 'Failed to load';
 			}
@@ -106,10 +118,10 @@
 		return { from: parts[0] ?? route, to: parts[1] ?? '' };
 	}
 	function pax(): string {
-		if (!query) return '';
-		const bits = [`${query.adults} Adult${query.adults === 1 ? '' : 's'}`];
-		if (query.children) bits.push(`${query.children} Child`);
-		if (query.infants) bits.push(`${query.infants} Infant`);
+		const { adults, children, infants } = paxCounts;
+		const bits = [`${adults} Adult${adults === 1 ? '' : 's'}`];
+		if (children) bits.push(`${children} Child`);
+		if (infants) bits.push(`${infants} Infant`);
 		return bits.join(' · ');
 	}
 </script>
@@ -173,11 +185,11 @@
 						{#each visas as v, i (i)}
 							<tr>
 								<td class="px-3 py-2 font-medium text-slate-700">
-									{(str(v.meta, 'visa_type') || 'Umrah').toUpperCase()} VISA FOR {str(v.meta, 'persons') || (query.adults + query.children + query.infants)} PERSON(S)
+									{(str(v.meta, 'visa_type') || 'Umrah').toUpperCase()} VISA FOR {str(v.meta, 'persons') || (paxCounts.adults + paxCounts.children + paxCounts.infants)} PERSON(S)
 								</td>
-								<td class="px-3 py-2 text-center">{query.adults}</td>
-								<td class="px-3 py-2 text-center">{query.children}</td>
-								<td class="px-3 py-2 text-center">{query.infants}</td>
+								<td class="px-3 py-2 text-center">{paxCounts.adults}</td>
+								<td class="px-3 py-2 text-center">{paxCounts.children}</td>
+								<td class="px-3 py-2 text-center">{paxCounts.infants}</td>
 							</tr>
 						{/each}
 						{#each tickets as t, i (i)}
