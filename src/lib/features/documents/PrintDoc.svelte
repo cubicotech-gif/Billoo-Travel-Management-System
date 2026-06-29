@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ArrowLeft, Printer } from 'lucide-svelte';
+	import { base } from '$app/paths';
 	import { Button } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import type { Currency, QuotationLineType } from '$lib/database.types';
@@ -29,6 +30,9 @@
 	let ref = $state('');
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
+	// Show the agency logo from /static/logo.(png|svg) if present; fall back to the
+	// text wordmark when the file is missing so the header is never broken.
+	let logoOk = $state(true);
 
 	$effect(() => {
 		if (loaded) return;
@@ -84,11 +88,13 @@
 		const v = meta[key];
 		return v == null ? '' : String(v);
 	}
+	// Compact date (e.g. "03 Mar 2026") — keeps the accommodation/transfer tables
+	// narrow enough to fit A4 without wrapping onto a second page.
 	function fmtDate(value: string): string {
 		if (!value) return '';
 		const d = new Date(value);
 		if (Number.isNaN(d.getTime())) return value;
-		return d.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+		return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 	}
 	const MEALS: Record<string, string> = { RO: 'R/O', BB: 'B/B', HB: 'H/B', FB: 'F/B' };
 	function meal(m: string): string {
@@ -120,12 +126,17 @@
 {:else if !query}
 	<p class="text-slate-400">Loading…</p>
 {:else}
-	<div class="mx-auto max-w-3xl bg-white p-8 text-slate-800 shadow-sm print:shadow-none">
+	<div class="print-card print-doc mx-auto max-w-3xl bg-white p-8 text-slate-800 shadow-sm print:shadow-none">
 		<!-- Letterhead -->
-		<div class="mb-4 flex items-start justify-between gap-4 border-b-2 border-brand-600 pb-4">
-			<div>
-				<div class="text-2xl font-extrabold tracking-tight text-brand-700">Billoo<span class="font-light text-slate-500"> Travels</span></div>
-				<div class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Since 1969 · Umrah & Travel</div>
+		<div class="doc-section mb-4 flex items-start justify-between gap-4 border-b-2 border-brand-600 pb-4">
+			<div class="flex items-center gap-3">
+				{#if logoOk}
+					<img src="{base}/logo.png" alt="Billoo Travels" class="h-14 w-auto object-contain" onerror={() => (logoOk = false)} />
+				{/if}
+				<div>
+					<div class="text-2xl font-extrabold tracking-tight text-brand-700">Billoo<span class="font-light text-slate-500"> Travels</span></div>
+					<div class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Since 1969 · Umrah & Travel</div>
+				</div>
 			</div>
 			<div class="text-right" dir="rtl">
 				<div class="text-base font-semibold text-emerald-700">اللّٰهُمَّ اجعل هذه العُمرة مبرورة</div>
@@ -134,7 +145,7 @@
 		</div>
 
 		<!-- Confirmation banner -->
-		<div class="mb-5 text-center">
+		<div class="doc-section mb-5 text-center">
 			<div class="text-sm font-semibold italic text-brand-700">
 				{isVoucher ? 'We are Pleased To Confirm your Booking' : 'Your Travel Itinerary'}
 			</div>
@@ -147,7 +158,7 @@
 
 		<!-- Passenger / Visa details -->
 		{#if visas.length || tickets.length}
-			<div class="mb-4 overflow-hidden rounded border border-slate-200">
+			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
 				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Passenger Details</div>
 				<table class="w-full text-xs">
 					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
@@ -184,7 +195,7 @@
 
 		<!-- Transfer details -->
 		{#if transfers.length}
-			<div class="mb-4 overflow-hidden rounded border border-slate-200">
+			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
 				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Transfer Details</div>
 				<table class="w-full text-xs">
 					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
@@ -212,7 +223,7 @@
 
 		<!-- Accommodation details -->
 		{#if stays.length}
-			<div class="mb-4 overflow-hidden rounded border border-slate-200">
+			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
 				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Accommodation Details</div>
 				<table class="w-full text-xs">
 					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
@@ -225,6 +236,7 @@
 							<th class="px-2 py-1.5 font-semibold">Room Type</th>
 							<th class="px-2 py-1.5 text-center font-semibold">Rooms</th>
 							<th class="px-2 py-1.5 text-center font-semibold">Meal</th>
+							<th class="px-2 py-1.5 font-semibold">HCN / Ref</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-100">
@@ -238,6 +250,7 @@
 								<td class="px-2 py-2 text-slate-700">{str(h.meta, 'room_type') || 'Room'}</td>
 								<td class="px-2 py-2 text-center text-slate-700">{str(h.meta, 'qty') || 1}</td>
 								<td class="px-2 py-2 text-center text-slate-700">{meal(str(h.meta, 'meal_plan'))}</td>
+								<td class="px-2 py-2 font-mono text-slate-700">{str(h.meta, 'booking_ref') || '—'}</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -253,7 +266,7 @@
 
 		<!-- Charges (voucher only) -->
 		{#if isVoucher && rows.length}
-			<div class="mb-4 overflow-hidden rounded border border-slate-200">
+			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
 				<div class="bg-slate-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Charges</div>
 				<table class="w-full text-xs">
 					<tbody class="divide-y divide-slate-100">
@@ -273,7 +286,7 @@
 		{/if}
 
 		<!-- Policy note -->
-		<div class="mb-3 rounded border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
+		<div class="doc-section mb-3 rounded border border-slate-200 bg-slate-50 p-3 text-[11px] leading-relaxed text-slate-600">
 			<div class="mb-1 font-bold uppercase text-slate-700">Note: Check-in / Check-out Timings & Policies</div>
 			<p class="mb-1">The usual check-in time is 4:00 PM. Rooms may not be available for early check-in unless specifically requested in advance. Luggage may be deposited at the hotel reception and collected once the room is allotted.</p>
 			<p>Official check-out time is 12:00 noon. Any late check-out may involve additional charges — please check with the hotel reception in advance.</p>

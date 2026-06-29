@@ -855,6 +855,9 @@
 								<Select label="Meal plan" bind:value={slot.mealPlan} options={MEAL_PLANS} />
 							</div>
 							<VendorPicker service="Hotel" bind:value={slot.vendorId} />
+							{#if booking}
+								<Input label="HCN / Booking ref" bind:value={slot.bookingRef} placeholder="Hotel confirmation no. (shows on itinerary)" />
+							{/if}
 							{#if age !== null && age >= 3}
 								<p class="rounded bg-amber-50 px-2 py-1 text-xs text-amber-700">Saved rate is {age} days old — please update.</p>
 							{/if}
