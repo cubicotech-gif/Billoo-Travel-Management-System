@@ -1454,7 +1454,7 @@ CREATE TRIGGER update_query_payments_updated_at BEFORE UPDATE ON public.query_pa
 
 ALTER TABLE public.queries DROP CONSTRAINT IF EXISTS queries_package_type_check;
 ALTER TABLE public.queries ADD CONSTRAINT queries_package_type_check CHECK (
-	package_type IS NULL OR package_type IN ('Umrah', 'Umrah Plus', 'Tour', 'Leisure')
+	package_type IS NULL OR package_type IN ('Umrah', 'Umrah Plus', 'Hajj', 'Tour', 'Leisure')
 );
 
 -- Repeatable city blocks (Umrah cities, Umrah-Plus extra city, multi-city tours).
@@ -1509,3 +1509,28 @@ CREATE TABLE IF NOT EXISTS public.vendor_payments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_vendor_payments_vendor ON public.vendor_payments (vendor_id);
+CREATE INDEX IF NOT EXISTS idx_vendor_payments_item ON public.vendor_payments (booking_item_id);
+
+
+-- =====================================================
+-- Organisation settings (branding for documents)
+-- =====================================================
+
+CREATE TABLE IF NOT EXISTS public.org_settings (
+	id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+	company_name TEXT NOT NULL DEFAULT 'Billoo Travels',
+	tagline TEXT DEFAULT 'Since 1969 · Umrah & Travel',
+	logo_url TEXT,
+	logo_height INTEGER NOT NULL DEFAULT 80 CHECK (logo_height BETWEEN 24 AND 240),
+	address TEXT DEFAULT 'M-2 Mezzanine Floor, Plot No 41-C, 27th Commercial Street, Phase-V, Tauheed Commercial, DHA Karachi',
+	phone TEXT DEFAULT '021 35876791 / 92 / 93',
+	email TEXT DEFAULT 'Billootravels@gmail.com',
+	website TEXT DEFAULT 'www.Billootravels.com',
+	updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO public.org_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+DROP TRIGGER IF EXISTS update_org_settings_updated_at ON public.org_settings;
+CREATE TRIGGER update_org_settings_updated_at BEFORE UPDATE ON public.org_settings
+	FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

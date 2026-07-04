@@ -28,7 +28,7 @@ export type Currency = 'PKR' | 'SAR' | 'USD' | 'AED' | 'EUR' | 'GBP';
 
 export type UserRole = 'admin' | 'manager' | 'agent' | 'finance' | 'viewer';
 
-export type PackageType = 'Umrah' | 'Umrah Plus' | 'Tour' | 'Leisure';
+export type PackageType = 'Umrah' | 'Umrah Plus' | 'Hajj' | 'Tour' | 'Leisure';
 
 export interface CityBlock {
 	city: string;
@@ -332,6 +332,33 @@ export interface Database {
 					notes?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['vendor_payments']['Insert']>;
+				Relationships: [];
+			};
+			org_settings: {
+				Row: {
+					id: number;
+					company_name: string;
+					tagline: string | null;
+					logo_url: string | null;
+					logo_height: number;
+					address: string | null;
+					phone: string | null;
+					email: string | null;
+					website: string | null;
+					updated_at: string;
+				};
+				Insert: {
+					id?: number;
+					company_name?: string;
+					tagline?: string | null;
+					logo_url?: string | null;
+					logo_height?: number;
+					address?: string | null;
+					phone?: string | null;
+					email?: string | null;
+					website?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['org_settings']['Insert']>;
 				Relationships: [];
 			};
 			query_payments: {
