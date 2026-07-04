@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Card, Button, Badge } from '$ui';
-	import { Download, LayoutGrid, ArrowDownCircle, ArrowUpCircle, TrendingUp, Users, Boxes } from 'lucide-svelte';
+	import { Download, LayoutGrid, ArrowDownCircle, ArrowUpCircle, TrendingUp, Users, Boxes, Eye, EyeOff, ChevronRight, ChevronDown } from 'lucide-svelte';
+	import { browser } from '$app/environment';
 	import { formatAmount } from '$lib/money';
 	import type { QuotationLineType } from '$lib/database.types';
 	import { useVendorBalances } from '$features/vendors/queries';
@@ -59,6 +60,25 @@
 	const shownPassengers = $derived(
 		($passengers.data ?? []).filter((p) => (paxBalanceOnly ? p.balance > 0 : true))
 	);
+
+	// Profit is sensitive — hidden by default, revealed with the eye toggle
+	// (remembered per browser). Masks profit, service cost/margin, and the
+	// Net-profit figures.
+	let revealProfit = $state(browser ? localStorage.getItem('finance:revealProfit') === '1' : false);
+	$effect(() => {
+		if (browser) localStorage.setItem('finance:revealProfit', revealProfit ? '1' : '0');
+	});
+	const mask = (v: number) => (revealProfit ? formatAmount(v, 'PKR') : '••••••');
+
+	// Click-to-expand breakups.
+	let expandedPax = $state<Set<string>>(new Set());
+	let expandedSvc = $state<Set<string>>(new Set());
+	function toggle(set: Set<string>, key: string): Set<string> {
+		const n = new Set(set);
+		if (n.has(key)) n.delete(key);
+		else n.add(key);
+		return n;
+	}
 
 	// Collections date filter.
 	type Range = 'month' | '30d' | 'all';
@@ -136,18 +156,28 @@
 	}
 </script>
 
-<div class="mb-5">
-	<h1 class="text-2xl font-bold text-slate-800">Finance</h1>
-	<p class="text-sm text-slate-500">The money hub — collections, receivables, vendor payables and profit across all bookings.</p>
+<div class="mb-5 flex flex-wrap items-start justify-between gap-3">
+	<div>
+		<h1 class="text-2xl font-bold text-slate-800">Finance</h1>
+		<p class="text-sm text-slate-500">The money hub — collections, receivables, vendor payables and profit across all bookings.</p>
+	</div>
+	<button
+		type="button"
+		onclick={() => (revealProfit = !revealProfit)}
+		class="inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium {revealProfit ? 'border-amber-300 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}"
+		title="Profit figures are hidden by default"
+	>
+		{#if revealProfit}<EyeOff class="h-4 w-4" /> Hide profit{:else}<Eye class="h-4 w-4" /> Reveal profit{/if}
+	</button>
 </div>
 
-<!-- KPI cards (always visible) -->
+<!-- KPI cards (always visible; profit masked until revealed) -->
 <div class="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-5">
 	<Card><div class="text-xs uppercase tracking-wide text-slate-400">Collected</div><div class="mt-1 text-2xl font-bold text-green-600">{formatAmount(totalCollected, 'PKR')}</div></Card>
 	<Card><div class="text-xs uppercase tracking-wide text-slate-400">Receivable</div><div class="mt-1 text-2xl font-bold text-brand-700">{formatAmount(totalReceivable, 'PKR')}</div></Card>
 	<Card><div class="text-xs uppercase tracking-wide text-slate-400">Payable</div><div class="mt-1 text-2xl font-bold text-amber-600">{formatAmount(totalPayable, 'PKR')}</div></Card>
 	<Card><div class="text-xs uppercase tracking-wide text-slate-400">Net position</div><div class="mt-1 text-2xl font-bold text-slate-800">{formatAmount(totalReceivable - totalPayable, 'PKR')}</div></Card>
-	<Card><div class="text-xs uppercase tracking-wide text-slate-400">Net profit</div><div class="mt-1 text-2xl font-bold {($profit.data?.netProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}">{formatAmount($profit.data?.netProfit ?? 0, 'PKR')}</div></Card>
+	<Card><div class="text-xs uppercase tracking-wide text-slate-400">Net profit</div><div class="mt-1 text-2xl font-bold {($profit.data?.netProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}">{mask($profit.data?.netProfit ?? 0)}</div></Card>
 </div>
 
 <!-- Tab bar -->
@@ -191,20 +221,45 @@
 		<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
 			<table class="w-full text-sm">
 				<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
-					<tr><th class="px-4 py-2 font-medium">Passenger</th><th class="px-4 py-2 text-center font-medium">Trips</th><th class="px-4 py-2 text-right font-medium">Billed</th><th class="px-4 py-2 text-right font-medium">Paid</th><th class="px-4 py-2 text-right font-medium">Balance</th><th class="px-4 py-2 text-right font-medium">Profit</th></tr>
+					<tr><th class="w-6 px-2 py-2"></th><th class="px-4 py-2 font-medium">Passenger</th><th class="px-4 py-2 text-center font-medium">Trips</th><th class="px-4 py-2 text-right font-medium">Billed</th><th class="px-4 py-2 text-right font-medium">Paid</th><th class="px-4 py-2 text-right font-medium">Balance</th><th class="px-4 py-2 text-right font-medium">Profit</th></tr>
 				</thead>
 				<tbody class="divide-y divide-slate-50">
 					{#each shownPassengers as p (p.key)}
-						<tr class="hover:bg-slate-50">
+						{@const open = expandedPax.has(p.key)}
+						<tr class="cursor-pointer hover:bg-slate-50" onclick={() => (expandedPax = toggle(expandedPax, p.key))}>
+							<td class="px-2 py-2 text-slate-400">
+								{#if open}<ChevronDown class="h-4 w-4" />{:else}<ChevronRight class="h-4 w-4" />{/if}
+							</td>
 							<td class="px-4 py-2 font-medium text-slate-700">
-								{#if p.passengerId}<a href="/passengers/{p.passengerId}" class="hover:text-brand-600">{p.name}</a>{:else}{p.name}{/if}
+								{#if p.passengerId}<a href="/passengers/{p.passengerId}" class="hover:text-brand-600" onclick={(e) => e.stopPropagation()}>{p.name}</a>{:else}{p.name}{/if}
 							</td>
 							<td class="px-4 py-2 text-center text-slate-500">{p.trips}</td>
 							<td class="px-4 py-2 text-right text-slate-600">{formatAmount(p.billed, 'PKR')}</td>
 							<td class="px-4 py-2 text-right text-green-600">{formatAmount(p.paid, 'PKR')}</td>
 							<td class="px-4 py-2 text-right font-medium {p.balance > 0 ? 'text-amber-600' : 'text-green-600'}">{formatAmount(p.balance, 'PKR')}</td>
-							<td class="px-4 py-2 text-right font-medium {p.profit >= 0 ? 'text-slate-700' : 'text-red-600'}">{formatAmount(p.profit, 'PKR')}</td>
+							<td class="px-4 py-2 text-right font-medium {p.profit >= 0 ? 'text-slate-700' : 'text-red-600'}">{mask(p.profit)}</td>
 						</tr>
+						{#if open}
+							<tr class="bg-slate-50/60">
+								<td></td>
+								<td colspan="6" class="px-4 py-2">
+									<div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Trips</div>
+									<table class="mt-1 w-full text-xs">
+										<tbody>
+											{#each p.tripList as t (t.queryId)}
+												<tr>
+													<td class="py-1"><a href="/queries/{t.queryId}" class="font-mono text-brand-600 hover:underline">{t.queryNumber}</a></td>
+													<td class="py-1 text-right text-slate-600">billed {formatAmount(t.billed, 'PKR')}</td>
+													<td class="py-1 text-right text-green-600">paid {formatAmount(t.paid, 'PKR')}</td>
+													<td class="py-1 text-right {t.balance > 0 ? 'text-amber-600' : 'text-slate-400'}">bal {formatAmount(t.balance, 'PKR')}</td>
+													<td class="py-1 text-right text-slate-500">profit {mask(t.profit)}</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</td>
+							</tr>
+						{/if}
 					{/each}
 				</tbody>
 			</table>
@@ -230,6 +285,7 @@
 			<table class="w-full text-sm">
 				<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
 					<tr>
+						<th class="w-6 px-2 py-2"></th>
 						<th class="px-3 py-2 font-medium">Service</th>
 						<th class="px-3 py-2 font-medium">Passenger</th>
 						<th class="px-3 py-2 font-medium">Vendor</th>
@@ -241,22 +297,56 @@
 				</thead>
 				<tbody class="divide-y divide-slate-50">
 					{#each shownServices as s (s.itemId)}
-						<tr class="hover:bg-slate-50">
+						{@const open = expandedSvc.has(s.itemId)}
+						<tr class="cursor-pointer hover:bg-slate-50" onclick={() => (expandedSvc = toggle(expandedSvc, s.itemId))}>
+							<td class="px-2 py-2 text-slate-400">
+								{#if open}<ChevronDown class="h-4 w-4" />{:else}<ChevronRight class="h-4 w-4" />{/if}
+							</td>
 							<td class="px-3 py-2">
 								<div class="font-medium text-slate-700">{s.label}</div>
 								<span class="text-[10px] uppercase text-slate-400">{TYPE_LABEL[s.lineType]}</span>
 							</td>
 							<td class="px-3 py-2">
-								{#if s.queryId}<a href="/queries/{s.queryId}" class="text-brand-600 hover:underline">{s.clientName}</a>{:else}{s.clientName}{/if}
+								{#if s.queryId}<a href="/queries/{s.queryId}" class="text-brand-600 hover:underline" onclick={(e) => e.stopPropagation()}>{s.clientName}</a>{:else}{s.clientName}{/if}
 							</td>
 							<td class="px-3 py-2 text-slate-600">
-								{#if s.vendorId}<a href="/vendors/{s.vendorId}" class="hover:text-brand-600">{s.vendorName}</a>{:else}<span class="text-slate-400">—</span>{/if}
+								{#if s.vendorId}<a href="/vendors/{s.vendorId}" class="hover:text-brand-600" onclick={(e) => e.stopPropagation()}>{s.vendorName}</a>{:else}<span class="text-slate-400">—</span>{/if}
 							</td>
 							<td class="px-3 py-2 text-right text-slate-700">{formatAmount(s.sellPkr, 'PKR')}</td>
-							<td class="px-3 py-2 text-right text-slate-500">{formatAmount(s.costPkr, 'PKR')}</td>
-							<td class="px-3 py-2 text-right font-medium {s.marginPkr >= 0 ? 'text-green-600' : 'text-red-600'}">{formatAmount(s.marginPkr, 'PKR')}</td>
+							<td class="px-3 py-2 text-right text-slate-500">{mask(s.costPkr)}</td>
+							<td class="px-3 py-2 text-right font-medium {s.marginPkr >= 0 ? 'text-green-600' : 'text-red-600'}">{mask(s.marginPkr)}</td>
 							<td class="px-3 py-2 text-right font-medium {s.vendorBalance > 0 ? 'text-amber-600' : 'text-green-600'}">{formatAmount(s.vendorBalance, 'PKR')}</td>
 						</tr>
+						{#if open}
+							<tr class="bg-slate-50/60">
+								<td></td>
+								<td colspan="7" class="px-3 py-2">
+									<div class="grid gap-3 sm:grid-cols-2">
+										<div>
+											<div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Amounts</div>
+											<div class="mt-1 space-y-0.5 text-xs text-slate-600">
+												<div class="flex justify-between"><span>Sell</span><span>{formatAmount(s.sellPkr, 'PKR')}</span></div>
+												<div class="flex justify-between"><span>Cost</span><span>{mask(s.costPkr)}</span></div>
+												<div class="flex justify-between font-medium"><span>Margin</span><span class={s.marginPkr >= 0 ? 'text-green-600' : 'text-red-600'}>{mask(s.marginPkr)}</span></div>
+											</div>
+										</div>
+										<div>
+											<div class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Vendor payments</div>
+											{#if s.payments.length === 0}
+												<p class="mt-1 text-xs text-slate-400">None yet · {formatAmount(s.vendorBalance, 'PKR')} owed.</p>
+											{:else}
+												<div class="mt-1 space-y-0.5 text-xs">
+													{#each s.payments as pay (pay.id)}
+														<div class="flex justify-between text-slate-600"><span>{pay.date ?? '—'}{pay.method ? ` · ${pay.method}` : ''}</span><span class="text-green-600">{formatAmount(pay.amount, 'PKR')}</span></div>
+													{/each}
+													<div class="flex justify-between border-t border-slate-200 pt-0.5 font-medium text-slate-700"><span>Balance</span><span class={s.vendorBalance > 0 ? 'text-amber-600' : 'text-green-600'}>{formatAmount(s.vendorBalance, 'PKR')}</span></div>
+												</div>
+											{/if}
+										</div>
+									</div>
+								</td>
+							</tr>
+						{/if}
 					{/each}
 				</tbody>
 			</table>
@@ -356,10 +446,10 @@
 	{@const pf = $profit.data}
 	<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
 		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Revenue (sell)</div><div class="mt-1 text-xl font-bold text-slate-800">{formatAmount(pf?.revenue ?? 0, 'PKR')}</div></Card>
-		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Cost</div><div class="mt-1 text-xl font-bold text-slate-800">{formatAmount(pf?.cost ?? 0, 'PKR')}</div></Card>
+		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Cost</div><div class="mt-1 text-xl font-bold text-slate-800">{mask(pf?.cost ?? 0)}</div></Card>
 		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Discounts</div><div class="mt-1 text-xl font-bold text-slate-800">{formatAmount(pf?.discount ?? 0, 'PKR')}</div></Card>
-		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Net profit</div><div class="mt-1 text-xl font-bold {(pf?.netProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}">{formatAmount(pf?.netProfit ?? 0, 'PKR')}</div></Card>
-		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Margin</div><div class="mt-1 text-xl font-bold {(pf?.marginPct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}">{(pf?.marginPct ?? 0).toFixed(1)}%</div></Card>
+		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Net profit</div><div class="mt-1 text-xl font-bold {(pf?.netProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}">{mask(pf?.netProfit ?? 0)}</div></Card>
+		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Margin</div><div class="mt-1 text-xl font-bold {(pf?.marginPct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}">{revealProfit ? `${(pf?.marginPct ?? 0).toFixed(1)}%` : '••••'}</div></Card>
 	</div>
 	<p class="mt-3 text-xs text-slate-400">Expected profit = revenue − cost − discounts, across all non-deleted bookings (billed, not yet adjusted for what's collected).</p>
 {/if}
