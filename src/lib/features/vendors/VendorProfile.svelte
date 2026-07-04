@@ -87,6 +87,26 @@
 		</div>
 	</div>
 
+	<div class="mb-6">
+		<Card title="Vendor details">
+			<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm lg:grid-cols-3">
+				<div><dt class="text-xs uppercase tracking-wide text-slate-400">Type</dt><dd class="mt-0.5 font-medium text-slate-700">{v.type}</dd></div>
+				<div><dt class="text-xs uppercase tracking-wide text-slate-400">Contact person</dt><dd class="mt-0.5 font-medium text-slate-700">{v.contact_person ?? '—'}</dd></div>
+				<div><dt class="text-xs uppercase tracking-wide text-slate-400">Phone</dt><dd class="mt-0.5 font-medium text-slate-700">{v.phone ?? '—'}</dd></div>
+				<div><dt class="text-xs uppercase tracking-wide text-slate-400">WhatsApp</dt><dd class="mt-0.5 font-medium text-slate-700">{v.whatsapp_number ?? '—'}</dd></div>
+				<div><dt class="text-xs uppercase tracking-wide text-slate-400">Email</dt><dd class="mt-0.5 truncate font-medium text-slate-700">{v.email ?? '—'}</dd></div>
+				<div><dt class="text-xs uppercase tracking-wide text-slate-400">Location</dt><dd class="mt-0.5 font-medium text-slate-700">{v.location ?? '—'}{v.country ? `, ${v.country}` : ''}</dd></div>
+				{#if v.address}<div class="col-span-2 lg:col-span-3"><dt class="text-xs uppercase tracking-wide text-slate-400">Address</dt><dd class="mt-0.5 font-medium text-slate-700">{v.address}</dd></div>{/if}
+			</dl>
+			{#if (v.tags ?? []).length || v.notes}
+				<div class="mt-3 border-t border-slate-100 pt-3">
+					{#if (v.tags ?? []).length}<div class="mb-2 flex flex-wrap gap-1.5">{#each v.tags ?? [] as t (t)}<Badge tone="info">{t}</Badge>{/each}</div>{/if}
+					{#if v.notes}<p class="whitespace-pre-line text-sm text-slate-600">{v.notes}</p>{/if}
+				</div>
+			{/if}
+		</Card>
+	</div>
+
 	{#if $ledger.data}
 		{@const l = $ledger.data}
 		<div class="mb-6 grid grid-cols-3 gap-4">

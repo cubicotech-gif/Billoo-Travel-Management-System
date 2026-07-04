@@ -125,12 +125,42 @@
 			<Card><div class="text-xs uppercase tracking-wide text-slate-400">Paid</div><div class="mt-1 text-2xl font-bold text-green-600">{formatAmount(totalPaid, 'PKR')}</div></Card>
 			<Card><div class="text-xs uppercase tracking-wide text-slate-400">Outstanding</div><div class="mt-1 text-2xl font-bold {outstanding > 0 ? 'text-amber-600' : 'text-green-600'}">{formatAmount(outstanding, 'PKR')}</div></Card>
 		</div>
-		<div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-			<Card><div class="text-xs font-medium uppercase tracking-wide text-slate-400">CNIC</div><div class="mt-1 text-sm font-semibold text-slate-700">{p.cnic ?? '—'}</div></Card>
-			<Card><div class="text-xs font-medium uppercase tracking-wide text-slate-400">Passport</div><div class="mt-1 text-sm font-semibold text-slate-700">{p.passport_number ?? '—'}</div></Card>
-			<Card><div class="text-xs font-medium uppercase tracking-wide text-slate-400">Passport expiry</div><div class="mt-1 text-sm font-semibold text-slate-700">{fmtDate(p.passport_expiry)}</div></Card>
-			<Card><div class="text-xs font-medium uppercase tracking-wide text-slate-400">WhatsApp</div><div class="mt-1 text-sm font-semibold text-slate-700">{p.whatsapp ?? '—'}</div></Card>
+
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+			<Card title="Identity">
+				<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">CNIC</dt><dd class="mt-0.5 font-medium text-slate-700">{p.cnic ?? '—'}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">Passport no.</dt><dd class="mt-0.5 font-medium text-slate-700">{p.passport_number ?? '—'}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">Passport expiry</dt><dd class="mt-0.5 font-medium text-slate-700">{fmtDate(p.passport_expiry)}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">Date of birth</dt><dd class="mt-0.5 font-medium text-slate-700">{fmtDate(p.date_of_birth)}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">Gender</dt><dd class="mt-0.5 font-medium capitalize text-slate-700">{p.gender ?? '—'}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">Nationality</dt><dd class="mt-0.5 font-medium text-slate-700">{p.nationality ?? '—'}</dd></div>
+				</dl>
+			</Card>
+			<Card title="Contact">
+				<dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">Phone</dt><dd class="mt-0.5 font-medium text-slate-700">{p.phone ?? '—'}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">WhatsApp</dt><dd class="mt-0.5 font-medium text-slate-700">{p.whatsapp ?? '—'}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">Email</dt><dd class="mt-0.5 truncate font-medium text-slate-700">{p.email ?? '—'}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">City</dt><dd class="mt-0.5 font-medium text-slate-700">{p.city ?? '—'}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">Country</dt><dd class="mt-0.5 font-medium text-slate-700">{p.country ?? '—'}</dd></div>
+					<div><dt class="text-xs uppercase tracking-wide text-slate-400">Status</dt><dd class="mt-0.5"><Badge tone={p.status === 'active' ? 'success' : 'neutral'}>{p.status}</Badge></dd></div>
+				</dl>
+			</Card>
 		</div>
+
+		{#if (p.tags ?? []).length || p.notes}
+			<div class="mt-4">
+				<Card title="Notes & tags">
+					{#if (p.tags ?? []).length}
+						<div class="mb-2 flex flex-wrap gap-1.5">
+							{#each p.tags ?? [] as t (t)}<Badge tone="info">{t}</Badge>{/each}
+						</div>
+					{/if}
+					<p class="whitespace-pre-line text-sm text-slate-600">{p.notes || 'No notes.'}</p>
+				</Card>
+			</div>
+		{/if}
 	{:else if tab === 'trips'}
 		{#if trips.length === 0}
 			<div class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-400">No booked trips yet.</div>

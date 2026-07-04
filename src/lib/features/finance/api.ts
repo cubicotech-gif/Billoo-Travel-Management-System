@@ -1,18 +1,17 @@
 import { supabase } from '$lib/supabase';
-import { add, money, subtract, sum, toNumber } from '$lib/money';
+import { money, subtract, sum, toNumber } from '$lib/money';
 import type { Currency, QuotationLineType } from '$lib/database.types';
 import { ratesOf, toPkr } from '$features/bookings/totals';
 import { SETTLE_TOLERANCE_PKR } from '$features/bookings/lifecycle';
+import { addN, subN, aggregatePassengers, type PassengerFinanceRow, type RawBooking } from './calc';
+
+export type { PassengerFinanceRow, TripFinance } from './calc';
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
 	if (result.error) throw new Error(result.error.message);
 	if (result.data === null) throw new Error('No data returned');
 	return result.data;
 }
-
-/** Penny-safe add of two PKR amounts (never raw + on money). */
-const addN = (a: number, b: number) => toNumber(add(money(a, 'PKR'), money(b, 'PKR')));
-const subN = (a: number, b: number) => toNumber(subtract(money(a, 'PKR'), money(b, 'PKR')));
 
 export interface ClientReceivable {
 	queryId: string;
@@ -200,26 +199,16 @@ export async function getProfitSummary(): Promise<ProfitSummary> {
 
 // --- Per-passenger financials --------------------------------------------
 
-export interface PassengerFinanceRow {
-	key: string;
-	passengerId: string | null;
-	name: string;
-	trips: number;
-	billed: number;
-	paid: number;
-	balance: number;
-	profit: number;
-}
-
 /** Every passenger with billed / paid / balance / profit rolled up across their
- *  (non-cancelled) queries. Queries without a passenger link stand on their own. */
+ *  (non-cancelled) queries, each with a per-trip breakup. The aggregation is a
+ *  pure, unit-tested function (see calc.ts). */
 export async function listPassengerFinance(): Promise<PassengerFinanceRow[]> {
 	const queries = unwrap<
-		{ id: string; passenger_id: string | null; client_name: string; selling_price: number }[]
+		{ id: string; passenger_id: string | null; client_name: string; query_number: string; selling_price: number }[]
 	>(
 		await supabase
 			.from('queries')
-			.select('id, passenger_id, client_name, selling_price')
+			.select('id, passenger_id, client_name, query_number, selling_price')
 			.neq('status', 'Cancelled')
 	);
 	const bookings = unwrap<
@@ -230,35 +219,35 @@ export async function listPassengerFinance(): Promise<PassengerFinanceRow[]> {
 			.select('query_id, actual_sell_pkr, actual_cost_pkr, discount_pkr')
 			.eq('is_deleted', false)
 	);
-	const bookingByQuery = new Map(bookings.map((b) => [b.query_id, b]));
+	const bookingByQuery = new Map<string, RawBooking>(
+		bookings.map((b) => [
+			b.query_id,
+			{ actualSellPkr: b.actual_sell_pkr, actualCostPkr: b.actual_cost_pkr, discountPkr: b.discount_pkr }
+		])
+	);
 	const paidByQuery = await paidByQueryMap();
 
-	const groups = new Map<string, PassengerFinanceRow>();
-	for (const q of queries) {
-		const key = q.passenger_id ?? `q:${q.id}`; // unlinked queries stand alone
-		const b = bookingByQuery.get(q.id);
-		const owed = b
-			? Math.max(0, subN(Number(b.actual_sell_pkr) || 0, Number(b.discount_pkr) || 0))
-			: Number(q.selling_price) || 0;
-		const paid = paidByQuery.get(q.id) ?? 0;
-		const profit = b
-			? subN(subN(Number(b.actual_sell_pkr) || 0, Number(b.actual_cost_pkr) || 0), Number(b.discount_pkr) || 0)
-			: 0;
-		const g =
-			groups.get(key) ??
-			{ key, passengerId: q.passenger_id, name: q.client_name, trips: 0, billed: 0, paid: 0, balance: 0, profit: 0 };
-		g.trips += 1;
-		g.billed = addN(g.billed, owed);
-		g.paid = addN(g.paid, paid);
-		g.profit = addN(g.profit, profit);
-		groups.set(key, g);
-	}
-	return [...groups.values()]
-		.map((g) => ({ ...g, balance: Math.max(0, subN(g.billed, g.paid)) }))
-		.sort((a, b) => b.billed - a.billed);
+	return aggregatePassengers(
+		queries.map((q) => ({
+			id: q.id,
+			passengerId: q.passenger_id,
+			clientName: q.client_name,
+			queryNumber: q.query_number,
+			sellingPrice: Number(q.selling_price) || 0
+		})),
+		bookingByQuery,
+		paidByQuery
+	);
 }
 
 // --- Per-service financials ----------------------------------------------
+
+export interface ServiceVendorPayment {
+	id: string;
+	date: string | null;
+	amount: number;
+	method: string | null;
+}
 
 export interface ServiceFinanceRow {
 	itemId: string;
@@ -273,6 +262,8 @@ export interface ServiceFinanceRow {
 	marginPkr: number;
 	vendorPaid: number;
 	vendorBalance: number;
+	/** The vendor payments made against this service (drill-down). */
+	payments: ServiceVendorPayment[];
 }
 
 /** Every booked service across all bookings, in PKR: sell, cost, margin, vendor,
@@ -313,12 +304,19 @@ export async function listServiceFinance(): Promise<ServiceFinanceRow[]> {
 	const vendors = unwrap<{ id: string; name: string }[]>(await supabase.from('vendors').select('id, name'));
 	const vendorName = new Map(vendors.map((v) => [v.id, v.name]));
 
-	const vpays = unwrap<{ booking_item_id: string | null; amount: number }[]>(
-		await supabase.from('vendor_payments').select('booking_item_id, amount')
+	const vpays = unwrap<
+		{ id: string; booking_item_id: string | null; amount: number; payment_date: string | null; method: string | null }[]
+	>(
+		await supabase.from('vendor_payments').select('id, booking_item_id, amount, payment_date, method')
 	);
 	const paidByItem = new Map<string, number>();
+	const paymentsByItem = new Map<string, ServiceVendorPayment[]>();
 	for (const p of vpays) {
-		if (p.booking_item_id) paidByItem.set(p.booking_item_id, addN(paidByItem.get(p.booking_item_id) ?? 0, Number(p.amount)));
+		if (!p.booking_item_id) continue;
+		paidByItem.set(p.booking_item_id, addN(paidByItem.get(p.booking_item_id) ?? 0, Number(p.amount)));
+		const arr = paymentsByItem.get(p.booking_item_id) ?? [];
+		arr.push({ id: p.id, date: p.payment_date, amount: Number(p.amount), method: p.method });
+		paymentsByItem.set(p.booking_item_id, arr);
 	}
 
 	return items
@@ -340,7 +338,8 @@ export async function listServiceFinance(): Promise<ServiceFinanceRow[]> {
 				costPkr,
 				marginPkr: subN(sellPkr, costPkr),
 				vendorPaid,
-				vendorBalance: Math.max(0, subN(costPkr, vendorPaid))
+				vendorBalance: Math.max(0, subN(costPkr, vendorPaid)),
+				payments: paymentsByItem.get(i.id) ?? []
 			};
 		})
 		.sort((a, b) => b.sellPkr - a.sellPkr);
