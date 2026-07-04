@@ -164,18 +164,26 @@ export interface OtherServiceForm extends BookedFields {
 	sell: number;
 	qty: number;
 }
+/**
+ * One fare tier within a passenger type: `count` of them booked at `cost`/`sell`.
+ * A type with a single tier prices the whole type at that fare (count ignored —
+ * the calculator uses the pax total); two or more tiers split the type, and the
+ * builder validates their counts sum to the pax total.
+ */
+export interface FareTierRow {
+	count: number;
+	cost: number;
+	sell: number;
+}
 export interface AirlineForm extends BookedFields {
 	sel: string;
 	name: string;
 	route: string;
 	fareClass: string;
 	pnr: string;
-	adultCost: number;
-	adultSell: number;
-	childCost: number;
-	childSell: number;
-	infantCost: number;
-	infantSell: number;
+	adultFares: FareTierRow[];
+	childFares: FareTierRow[];
+	infantFares: FareTierRow[];
 }
 export interface BuilderForm {
 	roeValue: number;
@@ -201,7 +209,8 @@ export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', c
 export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Jeddah Airport → Makkah', customRoute: '', date: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, vehicles: 1, ...blankBooked() });
 export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, persons: 0, ...blankBooked() });
 export const blankOtherService = (): OtherServiceForm => ({ label: '', currency: 'PKR', vendorId: '', cost: 0, sell: 0, qty: 1, ...blankBooked() });
-export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultCost: 0, adultSell: 0, childCost: 0, childSell: 0, infantCost: 0, infantSell: 0, ...blankBooked() });
+export const newFareTier = (cost = 0, sell = 0, count = 0): FareTierRow => ({ count, cost, sell });
+export const blankAirline = (): AirlineForm => ({ sel: '', name: '', route: '', fareClass: '', pnr: '', adultFares: [newFareTier()], childFares: [newFareTier()], infantFares: [newFareTier()], ...blankBooked() });
 
 export function blankForm(): BuilderForm {
 	return {
@@ -351,20 +360,27 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				form.airline.fareClass = s(meta, 'fare_class');
 				form.airline.pnr = s(meta, 'pnr');
 				Object.assign(form.airline, readBooked(meta));
+				// Drop the default blank tiers; real ones (one per saved line) follow.
+				form.airline.adultFares = [];
+				form.airline.childFares = [];
+				form.airline.infantFares = [];
 				airlineSet = true;
 			}
+			const row = newFareTier(Number(l.unit_cost), Number(l.unit_sell), l.quantity || 0);
 			const t = s(meta, 'pax_type');
-			if (t === 'adult') {
-				form.airline.adultCost = Number(l.unit_cost);
-				form.airline.adultSell = Number(l.unit_sell);
-			} else if (t === 'child') {
-				form.airline.childCost = Number(l.unit_cost);
-				form.airline.childSell = Number(l.unit_sell);
-			} else if (t === 'infant') {
-				form.airline.infantCost = Number(l.unit_cost);
-				form.airline.infantSell = Number(l.unit_sell);
-			}
+			if (t === 'adult') form.airline.adultFares.push(row);
+			else if (t === 'child') form.airline.childFares.push(row);
+			else if (t === 'infant') form.airline.infantFares.push(row);
 		}
+	}
+
+	// Any passenger type with no saved ticket line still needs one blank tier so
+	// the builder can render it (and so a lone tier prices the whole type).
+	if (form.airlineInclude) {
+		const ensure = (a: FareTierRow[]) => (a.length ? a : [newFareTier()]);
+		form.airline.adultFares = ensure(form.airline.adultFares);
+		form.airline.childFares = ensure(form.airline.childFares);
+		form.airline.infantFares = ensure(form.airline.infantFares);
 	}
 
 	if (staySlots.size) form.hotels = stayOrder.map((k) => staySlots.get(k)!);

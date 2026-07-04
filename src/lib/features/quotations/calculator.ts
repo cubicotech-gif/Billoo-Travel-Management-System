@@ -128,6 +128,17 @@ export interface OtherServiceInput extends BookedStatus {
 	qty: number;
 }
 
+/**
+ * A fare tier: a sub-group of one passenger type booked at its own fare. Same
+ * airline/flight, different price — e.g. of 12 adults, 1 @ 144 and 11 @ 155.
+ * The UI validates that a type's tier counts sum to that type's passenger total.
+ */
+export interface FareTier {
+	count: number;
+	cost: number;
+	sell: number;
+}
+
 export interface TicketsInput extends BookedStatus {
 	airlineName: string;
 	rateCardId?: string | null;
@@ -135,12 +146,20 @@ export interface TicketsInput extends BookedStatus {
 	route?: string | null;
 	fareClass?: string | null;
 	pnr?: string | null;
+	// Single fare per passenger type — used when that type isn't split into
+	// tiers. (`adultCost` also feeds the airline rate auto-save.)
 	adultCost: number;
 	adultSell: number;
 	childCost: number;
 	childSell: number;
 	infantCost: number;
 	infantSell: number;
+	// Optional fare tiers per passenger type. When a type's array is present and
+	// non-empty, the calculator prices each tier as its own line (tier.count ×
+	// fare) instead of the single fare × pax count above.
+	adultTiers?: FareTier[];
+	childTiers?: FareTier[];
+	infantTiers?: FareTier[];
 }
 
 export interface QuotationInput {
@@ -404,34 +423,44 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 	if (input.tickets) {
 		const t = input.tickets;
 		const types = [
-			{ key: 'adult', count: input.pax.adults, cost: t.adultCost, sell: t.adultSell },
-			{ key: 'child', count: input.pax.children, cost: t.childCost, sell: t.childSell },
-			{ key: 'infant', count: input.pax.infants, cost: t.infantCost, sell: t.infantSell }
+			{ key: 'adult', count: input.pax.adults, cost: t.adultCost, sell: t.adultSell, tiers: t.adultTiers },
+			{ key: 'child', count: input.pax.children, cost: t.childCost, sell: t.childSell, tiers: t.childTiers },
+			{ key: 'infant', count: input.pax.infants, cost: t.infantCost, sell: t.infantSell, tiers: t.infantTiers }
 		];
 		for (const ty of types) {
-			if (ty.count <= 0) continue;
-			const lineCost = multiply(money(ty.cost, 'PKR'), ty.count);
-			const lineSell = multiply(money(ty.sell, 'PKR'), ty.count);
-			ticketsCost.push(lineCost);
-			ticketsSell.push(lineSell);
-			lines.push({
-				line_type: 'ticket',
-				label: `${t.airlineName} (${ty.key} ×${ty.count})`,
-				rateCardId: t.rateCardId ?? null,
-				vendorId: null, // in-house ticketing
-				currency: 'PKR',
-				unitCost: ty.cost,
-				unitSell: ty.sell,
-				quantity: ty.count,
-				lineCost: toNumber(lineCost),
-				lineSell: toNumber(lineSell),
-				meta: {
-					pax_type: ty.key,
-					route: t.route ?? null,
-					fare_class: t.fareClass ?? null,
-					pnr: t.pnr ?? null,
-					...bookedMeta(t)
-				}
+			// A type is either one fare for everyone (count from pax) or split into
+			// fare tiers with explicit per-tier counts (validated in the UI to sum
+			// to the pax total). Each priced group becomes its own ticket line.
+			const groups: FareTier[] =
+				ty.tiers && ty.tiers.length > 0
+					? ty.tiers
+					: [{ count: ty.count, cost: ty.cost, sell: ty.sell }];
+			groups.forEach((g, gi) => {
+				if (g.count <= 0) return;
+				const lineCost = multiply(money(g.cost, 'PKR'), g.count);
+				const lineSell = multiply(money(g.sell, 'PKR'), g.count);
+				ticketsCost.push(lineCost);
+				ticketsSell.push(lineSell);
+				lines.push({
+					line_type: 'ticket',
+					label: `${t.airlineName} (${ty.key} ×${g.count})`,
+					rateCardId: t.rateCardId ?? null,
+					vendorId: null, // in-house ticketing
+					currency: 'PKR',
+					unitCost: g.cost,
+					unitSell: g.sell,
+					quantity: g.count,
+					lineCost: toNumber(lineCost),
+					lineSell: toNumber(lineSell),
+					meta: {
+						pax_type: ty.key,
+						tier_index: gi,
+						route: t.route ?? null,
+						fare_class: t.fareClass ?? null,
+						pnr: t.pnr ?? null,
+						...bookedMeta(t)
+					}
+				});
 			});
 		}
 	}
