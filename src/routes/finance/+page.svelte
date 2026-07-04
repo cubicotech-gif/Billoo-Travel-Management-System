@@ -1,18 +1,23 @@
 <script lang="ts">
 	import { Card, Button, Badge } from '$ui';
-	import { Download, LayoutGrid, ArrowDownCircle, ArrowUpCircle, TrendingUp } from 'lucide-svelte';
+	import { Download, LayoutGrid, ArrowDownCircle, ArrowUpCircle, TrendingUp, Users, Boxes } from 'lucide-svelte';
 	import { formatAmount } from '$lib/money';
+	import type { QuotationLineType } from '$lib/database.types';
 	import { useVendorBalances } from '$features/vendors/queries';
 	import {
 		useClientReceivables,
 		useCollections,
-		useProfitSummary
+		useProfitSummary,
+		usePassengerFinance,
+		useServiceFinance
 	} from '$features/finance/queries';
 
 	const balances = useVendorBalances();
 	const receivables = useClientReceivables();
 	const collections = useCollections();
 	const profit = useProfitSummary();
+	const passengers = usePassengerFinance();
+	const services = useServiceFinance();
 
 	const totalPayable = $derived(($balances.data ?? []).reduce((a, b) => a + Math.max(0, b.balance), 0));
 	const totalReceivable = $derived(($receivables.data ?? []).reduce((a, r) => a + r.balance, 0));
@@ -21,15 +26,39 @@
 	const billed = $derived(totalCollected + totalReceivable);
 	const collectedPct = $derived(billed > 0 ? Math.min(100, Math.round((totalCollected / billed) * 100)) : 0);
 
-	type Tab = 'overview' | 'collections' | 'receivables' | 'payables' | 'profit';
+	type Tab = 'overview' | 'passengers' | 'services' | 'collections' | 'receivables' | 'payables' | 'profit';
 	let tab = $state<Tab>('overview');
 	const TABS: { id: Tab; label: string; icon: typeof LayoutGrid }[] = [
 		{ id: 'overview', label: 'Overview', icon: LayoutGrid },
+		{ id: 'passengers', label: 'Passengers', icon: Users },
+		{ id: 'services', label: 'Services', icon: Boxes },
 		{ id: 'collections', label: 'Collections', icon: ArrowDownCircle },
 		{ id: 'receivables', label: 'Receivables', icon: ArrowDownCircle },
 		{ id: 'payables', label: 'Payables', icon: ArrowUpCircle },
 		{ id: 'profit', label: 'Profit', icon: TrendingUp }
 	];
+
+	// Services tab: filter by type + only-unpaid-to-vendor, with CSV.
+	const SERVICE_TYPES: QuotationLineType[] = ['hotel', 'transfer', 'visa', 'ticket', 'other'];
+	const TYPE_LABEL: Record<QuotationLineType, string> = {
+		hotel: 'Hotel',
+		transfer: 'Transfer',
+		visa: 'Visa',
+		ticket: 'Ticket',
+		other: 'Other'
+	};
+	let svcType = $state<QuotationLineType | 'all'>('all');
+	let svcUnpaidOnly = $state(false);
+	const shownServices = $derived(
+		($services.data ?? []).filter(
+			(s) => (svcType === 'all' || s.lineType === svcType) && (!svcUnpaidOnly || s.vendorBalance > 0)
+		)
+	);
+	// Passengers tab: only-with-balance filter.
+	let paxBalanceOnly = $state(false);
+	const shownPassengers = $derived(
+		($passengers.data ?? []).filter((p) => (paxBalanceOnly ? p.balance > 0 : true))
+	);
 
 	// Collections date filter.
 	type Range = 'month' | '30d' | 'all';
@@ -91,6 +120,20 @@
 			($receivables.data ?? []).map((r) => [r.clientName, r.queryNumber, fmtDate(r.travelDate), r.selling, r.paid, r.balance])
 		);
 	}
+	function exportPassengers() {
+		exportCsv(
+			'passengers.csv',
+			['Passenger', 'Trips', 'Billed (PKR)', 'Paid (PKR)', 'Balance (PKR)', 'Profit (PKR)'],
+			shownPassengers.map((p) => [p.name, p.trips, p.billed, p.paid, p.balance, p.profit])
+		);
+	}
+	function exportServices() {
+		exportCsv(
+			'services.csv',
+			['Service', 'Type', 'Passenger', 'Vendor', 'Sell (PKR)', 'Cost (PKR)', 'Margin (PKR)', 'Vendor paid (PKR)', 'Vendor balance (PKR)'],
+			shownServices.map((s) => [s.label, s.lineType, s.clientName, s.vendorName ?? '', s.sellPkr, s.costPkr, s.marginPkr, s.vendorPaid, s.vendorBalance])
+		);
+	}
 </script>
 
 <div class="mb-5">
@@ -135,6 +178,90 @@
 		</div>
 		<p class="mt-2 text-xs text-slate-400">{formatAmount(totalReceivable, 'PKR')} still to collect from clients.</p>
 	</Card>
+{:else if tab === 'passengers'}
+	<div class="mb-3 flex items-center justify-between gap-2">
+		<button type="button" onclick={() => (paxBalanceOnly = !paxBalanceOnly)} class="rounded-full border px-3 py-1 text-xs font-medium {paxBalanceOnly ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}">With balance only</button>
+		<Button size="sm" variant="secondary" onclick={exportPassengers} disabled={shownPassengers.length === 0}><Download class="h-4 w-4" /> CSV</Button>
+	</div>
+	{#if $passengers.isLoading}
+		<p class="text-slate-400">Loading…</p>
+	{:else if shownPassengers.length === 0}
+		<div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">No passenger financials yet.</div>
+	{:else}
+		<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+			<table class="w-full text-sm">
+				<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+					<tr><th class="px-4 py-2 font-medium">Passenger</th><th class="px-4 py-2 text-center font-medium">Trips</th><th class="px-4 py-2 text-right font-medium">Billed</th><th class="px-4 py-2 text-right font-medium">Paid</th><th class="px-4 py-2 text-right font-medium">Balance</th><th class="px-4 py-2 text-right font-medium">Profit</th></tr>
+				</thead>
+				<tbody class="divide-y divide-slate-50">
+					{#each shownPassengers as p (p.key)}
+						<tr class="hover:bg-slate-50">
+							<td class="px-4 py-2 font-medium text-slate-700">
+								{#if p.passengerId}<a href="/passengers/{p.passengerId}" class="hover:text-brand-600">{p.name}</a>{:else}{p.name}{/if}
+							</td>
+							<td class="px-4 py-2 text-center text-slate-500">{p.trips}</td>
+							<td class="px-4 py-2 text-right text-slate-600">{formatAmount(p.billed, 'PKR')}</td>
+							<td class="px-4 py-2 text-right text-green-600">{formatAmount(p.paid, 'PKR')}</td>
+							<td class="px-4 py-2 text-right font-medium {p.balance > 0 ? 'text-amber-600' : 'text-green-600'}">{formatAmount(p.balance, 'PKR')}</td>
+							<td class="px-4 py-2 text-right font-medium {p.profit >= 0 ? 'text-slate-700' : 'text-red-600'}">{formatAmount(p.profit, 'PKR')}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{/if}
+{:else if tab === 'services'}
+	<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+		<div class="flex flex-wrap items-center gap-1.5">
+			<button type="button" onclick={() => (svcType = 'all')} class="rounded-full border px-2.5 py-0.5 text-xs font-medium {svcType === 'all' ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}">All</button>
+			{#each SERVICE_TYPES as t (t)}
+				<button type="button" onclick={() => (svcType = t)} class="rounded-full border px-2.5 py-0.5 text-xs font-medium {svcType === t ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}">{TYPE_LABEL[t]}</button>
+			{/each}
+			<button type="button" onclick={() => (svcUnpaidOnly = !svcUnpaidOnly)} class="ml-1 rounded-full border px-2.5 py-0.5 text-xs font-medium {svcUnpaidOnly ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 text-slate-500 hover:bg-slate-50'}">Vendor unpaid</button>
+		</div>
+		<Button size="sm" variant="secondary" onclick={exportServices} disabled={shownServices.length === 0}><Download class="h-4 w-4" /> CSV</Button>
+	</div>
+	{#if $services.isLoading}
+		<p class="text-slate-400">Loading…</p>
+	{:else if shownServices.length === 0}
+		<div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">No services match.</div>
+	{:else}
+		<div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+			<table class="w-full text-sm">
+				<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+					<tr>
+						<th class="px-3 py-2 font-medium">Service</th>
+						<th class="px-3 py-2 font-medium">Passenger</th>
+						<th class="px-3 py-2 font-medium">Vendor</th>
+						<th class="px-3 py-2 text-right font-medium">Sell</th>
+						<th class="px-3 py-2 text-right font-medium">Cost</th>
+						<th class="px-3 py-2 text-right font-medium">Margin</th>
+						<th class="px-3 py-2 text-right font-medium">Vendor bal.</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y divide-slate-50">
+					{#each shownServices as s (s.itemId)}
+						<tr class="hover:bg-slate-50">
+							<td class="px-3 py-2">
+								<div class="font-medium text-slate-700">{s.label}</div>
+								<span class="text-[10px] uppercase text-slate-400">{TYPE_LABEL[s.lineType]}</span>
+							</td>
+							<td class="px-3 py-2">
+								{#if s.queryId}<a href="/queries/{s.queryId}" class="text-brand-600 hover:underline">{s.clientName}</a>{:else}{s.clientName}{/if}
+							</td>
+							<td class="px-3 py-2 text-slate-600">
+								{#if s.vendorId}<a href="/vendors/{s.vendorId}" class="hover:text-brand-600">{s.vendorName}</a>{:else}<span class="text-slate-400">—</span>{/if}
+							</td>
+							<td class="px-3 py-2 text-right text-slate-700">{formatAmount(s.sellPkr, 'PKR')}</td>
+							<td class="px-3 py-2 text-right text-slate-500">{formatAmount(s.costPkr, 'PKR')}</td>
+							<td class="px-3 py-2 text-right font-medium {s.marginPkr >= 0 ? 'text-green-600' : 'text-red-600'}">{formatAmount(s.marginPkr, 'PKR')}</td>
+							<td class="px-3 py-2 text-right font-medium {s.vendorBalance > 0 ? 'text-amber-600' : 'text-green-600'}">{formatAmount(s.vendorBalance, 'PKR')}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{/if}
 {:else if tab === 'collections'}
 	<div class="mb-3 flex flex-wrap items-center justify-between gap-2">
 		<div class="flex items-center gap-1.5">
@@ -232,6 +359,7 @@
 		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Cost</div><div class="mt-1 text-xl font-bold text-slate-800">{formatAmount(pf?.cost ?? 0, 'PKR')}</div></Card>
 		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Discounts</div><div class="mt-1 text-xl font-bold text-slate-800">{formatAmount(pf?.discount ?? 0, 'PKR')}</div></Card>
 		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Net profit</div><div class="mt-1 text-xl font-bold {(pf?.netProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}">{formatAmount(pf?.netProfit ?? 0, 'PKR')}</div></Card>
+		<Card><div class="text-xs uppercase tracking-wide text-slate-400">Margin</div><div class="mt-1 text-xl font-bold {(pf?.marginPct ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'}">{(pf?.marginPct ?? 0).toFixed(1)}%</div></Card>
 	</div>
-	<p class="mt-3 text-xs text-slate-400">Net profit = revenue − cost − discounts, across all non-deleted bookings.</p>
+	<p class="mt-3 text-xs text-slate-400">Expected profit = revenue − cost − discounts, across all non-deleted bookings (billed, not yet adjusted for what's collected).</p>
 {/if}

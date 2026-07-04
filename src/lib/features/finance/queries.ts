@@ -3,7 +3,9 @@ import {
 	bookingFinanceByQuery,
 	getProfitSummary,
 	listClientReceivables,
-	listCollections
+	listCollections,
+	listPassengerFinance,
+	listServiceFinance
 } from './api';
 
 export function useClientReceivables() {
@@ -20,4 +22,12 @@ export function useCollections() {
 
 export function useProfitSummary() {
 	return createQuery({ queryKey: ['profit-summary'], queryFn: getProfitSummary });
+}
+
+export function usePassengerFinance() {
+	return createQuery({ queryKey: ['passenger-finance'], queryFn: listPassengerFinance });
+}
+
+export function useServiceFinance() {
+	return createQuery({ queryKey: ['service-finance'], queryFn: listServiceFinance });
 }
