@@ -4,7 +4,7 @@
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { page } from '$app/stores';
 	import type { Snippet } from 'svelte';
-	import { LayoutDashboard, ClipboardList, Users, Building2, Wallet, Tags, PanelLeftClose, PanelLeftOpen } from 'lucide-svelte';
+	import { LayoutDashboard, ClipboardList, Users, Building2, Wallet, Tags, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-svelte';
 	import { createQueryClient } from '$lib/query-client';
 	import { subscribeQueriesRealtime } from '$features/queries/realtime';
 
@@ -38,7 +38,8 @@
 		{ href: '/passengers', label: 'Passengers', icon: Users },
 		{ href: '/vendors', label: 'Vendors', icon: Building2 },
 		{ href: '/rates', label: 'Service Rates', icon: Tags },
-		{ href: '/finance', label: 'Finance', icon: Wallet }
+		{ href: '/finance', label: 'Finance', icon: Wallet },
+		{ href: '/settings', label: 'Branding', icon: Settings }
 	];
 
 	function isActive(href: string): boolean {

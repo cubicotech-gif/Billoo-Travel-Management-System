@@ -2,7 +2,7 @@ import type { CityBlock, PackageType } from '$lib/database.types';
 
 export type { CityBlock };
 
-export const TRIP_TYPES: PackageType[] = ['Umrah', 'Umrah Plus', 'Tour', 'Leisure'];
+export const TRIP_TYPES: PackageType[] = ['Umrah', 'Umrah Plus', 'Hajj', 'Tour', 'Leisure'];
 
 // Pure-Umrah trips only visit the two holy cities, but in any order and any
 // number of times (e.g. Makkah → Madinah → Makkah on a long package).
@@ -14,13 +14,13 @@ export function newCity(city = ''): CityBlock {
 
 /** Default city blocks for a trip type. */
 export function seedCities(type: PackageType): CityBlock[] {
-	if (type === 'Umrah') return [newCity('Makkah'), newCity('Madinah')];
+	if (type === 'Umrah' || type === 'Hajj') return [newCity('Makkah'), newCity('Madinah')];
 	if (type === 'Umrah Plus') return [newCity('Makkah'), newCity('Madinah'), newCity('')];
 	return [newCity('')];
 }
 
 export function isUmrahType(type: PackageType): boolean {
-	return type === 'Umrah' || type === 'Umrah Plus';
+	return type === 'Umrah' || type === 'Umrah Plus' || type === 'Hajj';
 }
 
 /** Sum nights across every block matching a holy city (cities may repeat). */

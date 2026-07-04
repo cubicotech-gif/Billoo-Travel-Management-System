@@ -7,6 +7,7 @@
 	import { getBookingForQuery, listBookingItems } from '$features/bookings/api';
 	import { ratesOf, toPkr, type Rates } from '$features/bookings/totals';
 	import { listQuotations, getQuotationLines } from '$features/quotations/api';
+	import { getOrgSettings, type OrgSettings } from '$features/settings/api';
 	import type { Query } from '$features/queries/types';
 
 	// Client-facing invoice for the booking: the final agreed selling prices,
@@ -24,11 +25,14 @@
 	}
 
 	let query = $state<Query | null>(null);
+	let org = $state<OrgSettings | null>(null);
 	let rows = $state<Row[]>([]);
 	let totalPkr = $state(0);
 	let invoiceNo = $state('');
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
+	// Print-time choice: per-service amounts, or just the grand total.
+	let showBreakup = $state(true);
 
 	$effect(() => {
 		if (loaded) return;
@@ -36,6 +40,7 @@
 		(async () => {
 			try {
 				query = await getQuery(queryId);
+				org = await getOrgSettings().catch(() => null);
 				const booking = await getBookingForQuery(queryId);
 				const items = booking ? await listBookingItems(booking.id) : [];
 				if (booking && items.length > 0) {
@@ -75,11 +80,16 @@
 	const today = new Date().toLocaleDateString();
 </script>
 
-<div class="no-print mb-4 flex items-center justify-between">
+<div class="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
 	<a href="/queries/{queryId}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
 		<ArrowLeft class="h-4 w-4" /> Back to query
 	</a>
-	<Button onclick={() => window.print()}><Printer class="h-4 w-4" /> Print / Save PDF</Button>
+	<div class="flex items-center gap-3">
+		<label class="flex items-center gap-1.5 text-sm text-slate-600">
+			<input type="checkbox" bind:checked={showBreakup} class="rounded border-slate-300" /> Show price breakup
+		</label>
+		<Button onclick={() => window.print()}><Printer class="h-4 w-4" /> Print / Save PDF</Button>
+	</div>
 </div>
 
 {#if error}
@@ -88,11 +98,15 @@
 	<p class="text-slate-400">Loading…</p>
 {:else}
 	<div class="mx-auto max-w-2xl rounded-xl border border-slate-200 bg-white p-8">
-		<div class="mb-6 flex items-start justify-between border-b border-slate-200 pb-4">
-			<div>
-				<div class="text-xl font-bold text-brand-700">Billoo Travel</div>
-				<div class="text-xs text-slate-400">Umrah & Travel Services</div>
-			</div>
+		<div class="mb-6 flex items-center justify-between border-b border-slate-200 pb-4">
+			{#if org?.logo_url}
+				<img src={org.logo_url} alt={org.company_name} style="height: {org.logo_height}px" class="w-auto max-h-56 max-w-[55%] object-contain" />
+			{:else}
+				<div>
+					<div class="text-xl font-bold text-brand-700">{org?.company_name ?? 'Billoo Travels'}</div>
+					{#if org?.tagline}<div class="text-xs text-slate-400">{org.tagline}</div>{/if}
+				</div>
+			{/if}
 			<div class="text-right">
 				<div class="text-lg font-semibold text-slate-800">Invoice</div>
 				<div class="font-mono text-xs text-slate-400">{invoiceNo}</div>
@@ -120,7 +134,7 @@
 				<tr>
 					<th class="py-2 font-medium">Service</th>
 					<th class="py-2 text-center font-medium">Status</th>
-					<th class="py-2 text-right font-medium">Amount (PKR)</th>
+					{#if showBreakup}<th class="py-2 text-right font-medium">Amount (PKR)</th>{/if}
 				</tr>
 			</thead>
 			<tbody class="divide-y divide-slate-100">
@@ -134,11 +148,11 @@
 								<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending</span>
 							{/if}
 						</td>
-						<td class="py-2 text-right font-medium text-slate-700">{formatAmount(r.amountPkr, 'PKR')}</td>
+						{#if showBreakup}<td class="py-2 text-right font-medium text-slate-700">{formatAmount(r.amountPkr, 'PKR')}</td>{/if}
 					</tr>
 				{/each}
 				{#if rows.length === 0}
-					<tr><td colspan="3" class="py-4 text-center text-slate-400">No services yet.</td></tr>
+					<tr><td colspan={showBreakup ? 3 : 2} class="py-4 text-center text-slate-400">No services yet.</td></tr>
 				{/if}
 			</tbody>
 		</table>
@@ -151,7 +165,7 @@
 		</div>
 
 		<p class="mt-8 text-center text-xs text-slate-400">
-			Computer-generated invoice · Billoo Travel · {today}
+			Computer-generated invoice · {org?.company_name ?? 'Billoo Travels'} · {today}
 		</p>
 	</div>
 {/if}

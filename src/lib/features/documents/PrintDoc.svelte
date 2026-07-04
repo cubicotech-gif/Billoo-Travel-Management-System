@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { ArrowLeft, Printer } from 'lucide-svelte';
-	import { base } from '$app/paths';
 	import { Button } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import type { Currency, QuotationLineType } from '$lib/database.types';
 	import { getQuery } from '$features/queries/api';
 	import { getBookingForQuery, listBookingItems } from '$features/bookings/api';
 	import { listQuotations, getQuotationLines } from '$features/quotations/api';
+	import { getOrgSettings, type OrgSettings } from '$features/settings/api';
 	import type { Query } from '$features/queries/types';
 
 	// Client confirmation document, styled after the agency's manual voucher:
@@ -25,14 +25,14 @@
 	}
 
 	let query = $state<Query | null>(null);
+	let org = $state<OrgSettings | null>(null);
 	let rows = $state<Row[]>([]);
 	let totalPkr = $state(0);
 	let ref = $state('');
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
-	// Show the agency logo from /static/logo.(png|svg) if present; fall back to the
-	// text wordmark when the file is missing so the header is never broken.
-	let logoOk = $state(true);
+	// Print-time choice: full per-service breakup, or just the grand total.
+	let showBreakup = $state(true);
 
 	$effect(() => {
 		if (loaded) return;
@@ -40,6 +40,7 @@
 		(async () => {
 			try {
 				query = await getQuery(queryId);
+				org = await getOrgSettings().catch(() => null);
 				const booking = await getBookingForQuery(queryId);
 				const items = booking ? await listBookingItems(booking.id) : [];
 				if (booking && items.length > 0) {
@@ -78,6 +79,11 @@
 
 	const isVoucher = $derived(kind === 'voucher');
 
+	// Religious design (Umrah dua + Saudi-visa note) for Umrah/Hajj; secular for
+	// Tour/Leisure. Untagged packages default to religious (Umrah-first agency).
+	const RELIGIOUS_TYPES = ['Umrah', 'Umrah Plus', 'Hajj'];
+	const religious = $derived(!query?.package_type || RELIGIOUS_TYPES.includes(query.package_type));
+
 	// Accommodation = hotel room lines (skip the breakfast/meal helper lines).
 	const stays = $derived(rows.filter((r) => r.lineType === 'hotel' && r.meta?.kind !== 'breakfast'));
 	const transfers = $derived(rows.filter((r) => r.lineType === 'transfer'));
@@ -114,11 +120,18 @@
 	}
 </script>
 
-<div class="no-print mb-4 flex items-center justify-between">
+<div class="no-print mb-4 flex flex-wrap items-center justify-between gap-2">
 	<a href="/queries/{queryId}" class="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700">
 		<ArrowLeft class="h-4 w-4" /> Back to query
 	</a>
-	<Button onclick={() => window.print()}><Printer class="h-4 w-4" /> Print / Save PDF</Button>
+	<div class="flex items-center gap-3">
+		{#if isVoucher}
+			<label class="flex items-center gap-1.5 text-sm text-slate-600">
+				<input type="checkbox" bind:checked={showBreakup} class="rounded border-slate-300" /> Show price breakup
+			</label>
+		{/if}
+		<Button onclick={() => window.print()}><Printer class="h-4 w-4" /> Print / Save PDF</Button>
+	</div>
 </div>
 
 {#if error}
@@ -127,21 +140,26 @@
 	<p class="text-slate-400">Loading…</p>
 {:else}
 	<div class="print-card print-doc mx-auto max-w-3xl bg-white p-8 text-slate-800 shadow-sm print:shadow-none">
-		<!-- Letterhead -->
-		<div class="doc-section mb-4 flex items-start justify-between gap-4 border-b-2 border-brand-600 pb-4">
-			<div class="flex items-center gap-3">
-				{#if logoOk}
-					<img src="{base}/logo.png" alt="Billoo Travels" class="h-14 w-auto object-contain" onerror={() => (logoOk = false)} />
-				{/if}
+		<!-- Letterhead: uploaded logo (large) or the company wordmark -->
+		<div class="doc-section mb-4 flex items-center justify-between gap-4 border-b-2 border-brand-600 pb-4">
+			{#if org?.logo_url}
+				<img src={org.logo_url} alt={org.company_name} style="height: {org.logo_height}px" class="w-auto max-h-56 max-w-[60%] object-contain" />
+			{:else}
 				<div>
-					<div class="text-2xl font-extrabold tracking-tight text-brand-700">Billoo<span class="font-light text-slate-500"> Travels</span></div>
-					<div class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Since 1969 · Umrah & Travel</div>
+					<div class="text-2xl font-extrabold tracking-tight text-brand-700">{org?.company_name ?? 'Billoo Travels'}</div>
+					{#if org?.tagline}<div class="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">{org.tagline}</div>{/if}
 				</div>
-			</div>
-			<div class="text-right" dir="rtl">
-				<div class="text-base font-semibold text-emerald-700">اللّٰهُمَّ اجعل هذه العُمرة مبرورة</div>
-				<div class="text-base font-semibold text-emerald-700">وذنبنا مغفورا</div>
-			</div>
+			{/if}
+			{#if religious}
+				<div class="text-right" dir="rtl">
+					<div class="text-base font-semibold text-emerald-700">اللّٰهُمَّ اجعل هذه العُمرة مبرورة</div>
+					<div class="text-base font-semibold text-emerald-700">وذنبنا مغفورا</div>
+				</div>
+			{:else}
+				<div class="text-right">
+					<div class="text-sm font-semibold italic text-brand-700">Wishing you a wonderful journey</div>
+				</div>
+			{/if}
 		</div>
 
 		<!-- Confirmation banner -->
@@ -270,14 +288,16 @@
 				<div class="bg-slate-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Charges</div>
 				<table class="w-full text-xs">
 					<tbody class="divide-y divide-slate-100">
-						{#each rows as r, i (i)}
-							<tr>
-								<td class="px-3 py-1.5 text-slate-600">{r.label}</td>
-								<td class="px-3 py-1.5 text-right text-slate-700">{formatAmount(r.amount, r.currency)}</td>
-							</tr>
-						{/each}
+						{#if showBreakup}
+							{#each rows as r, i (i)}
+								<tr>
+									<td class="px-3 py-1.5 text-slate-600">{r.label}</td>
+									<td class="px-3 py-1.5 text-right text-slate-700">{formatAmount(r.amount, r.currency)}</td>
+								</tr>
+							{/each}
+						{/if}
 						<tr class="bg-slate-50 font-bold text-slate-800">
-							<td class="px-3 py-2">Total</td>
+							<td class="px-3 py-2">{showBreakup ? 'Total' : 'Total payable'}</td>
 							<td class="px-3 py-2 text-right">{formatAmount(totalPkr, 'PKR')}</td>
 						</tr>
 					</tbody>
@@ -293,15 +313,19 @@
 		</div>
 
 		<p class="mb-4 text-center text-[11px] font-semibold text-brand-700">
-			Carry valid passport and travel documents (original &amp; copy) at all times during your journey. Ensure your departure from Saudi Arabia is within the visa validity period to avoid penalties.
+			{#if religious}
+				Carry valid passport and travel documents (original &amp; copy) at all times during your journey. Ensure your departure from Saudi Arabia is within the visa validity period to avoid penalties.
+			{:else}
+				Carry valid passport and travel documents (original &amp; copy) at all times during your journey.
+			{/if}
 		</p>
 
-		<div class="text-center text-xs font-semibold text-slate-600">Thank you for choosing BillooTravels.com</div>
+		<div class="text-center text-xs font-semibold text-slate-600">Thank you for choosing {org?.company_name ?? 'Billoo Travels'}</div>
 
 		<!-- Footer -->
 		<div class="mt-4 border-t border-slate-200 pt-3 text-center text-[10px] leading-relaxed text-slate-500">
-			<div class="font-semibold text-slate-600">M-2 Mezzanine Floor, Plot No 41-C, 27th Commercial Street, Phase-V, Tauheed Commercial, DHA Karachi</div>
-			<div>Email: Billootravels@gmail.com · www.Billootravels.com · 021 35876791 / 92 / 93</div>
+			{#if org?.address}<div class="font-semibold text-slate-600">{org.address}</div>{/if}
+			<div>{[org?.email, org?.website, org?.phone].filter(Boolean).join(' · ')}</div>
 		</div>
 	</div>
 {/if}
