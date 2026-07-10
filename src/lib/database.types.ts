@@ -341,6 +341,8 @@ export interface Database {
 					tagline: string | null;
 					logo_url: string | null;
 					logo_height: number;
+					kaaba_url: string | null;
+					kaaba_height: number;
 					address: string | null;
 					phone: string | null;
 					email: string | null;
@@ -353,6 +355,8 @@ export interface Database {
 					tagline?: string | null;
 					logo_url?: string | null;
 					logo_height?: number;
+					kaaba_url?: string | null;
+					kaaba_height?: number;
 					address?: string | null;
 					phone?: string | null;
 					email?: string | null;
