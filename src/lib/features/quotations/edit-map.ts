@@ -98,17 +98,21 @@ export type LineCurrency = 'SAR' | 'USD' | 'PKR';
 export interface BookedFields {
 	booked: boolean;
 	bookedAt: string; // ISO, '' = not booked
-	bookingRef: string; // vendor confirmation no. (optional)
+	bookingRef: string; // vendor confirmation no. / HCN (optional)
+	contactPerson: string; // supplier contact person (e.g. transporter), optional
+	contactNumber: string; // supplier contact number, optional
 	proof: boolean; // a proof/voucher document was filed
 	proofDocId: string; // id of the linked proof document ('' = none)
 }
-const blankBooked = (): BookedFields => ({ booked: false, bookedAt: '', bookingRef: '', proof: false, proofDocId: '' });
+const blankBooked = (): BookedFields => ({ booked: false, bookedAt: '', bookingRef: '', contactPerson: '', contactNumber: '', proof: false, proofDocId: '' });
 /** Read booked status off a line's meta when reopening a saved booking. */
 function readBooked(meta: Record<string, unknown>): BookedFields {
 	return {
 		booked: meta.booked === true,
 		bookedAt: meta.booked_at == null ? '' : String(meta.booked_at),
 		bookingRef: meta.booking_ref == null ? '' : String(meta.booking_ref),
+		contactPerson: meta.contact_person == null ? '' : String(meta.contact_person),
+		contactNumber: meta.contact_number == null ? '' : String(meta.contact_number),
 		proof: meta.proof === true,
 		proofDocId: meta.proof_doc_id == null ? '' : String(meta.proof_doc_id)
 	};
