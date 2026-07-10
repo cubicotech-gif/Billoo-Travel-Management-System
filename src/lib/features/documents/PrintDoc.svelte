@@ -1,5 +1,8 @@
 <script lang="ts">
 	import { ArrowLeft, Printer } from 'lucide-svelte';
+	// Self-hosted calligraphic Arabic font (bundled by Vite → prints reliably,
+	// no CDN/webfont-load race when saving to PDF).
+	import '@fontsource/amiri/arabic-400.css';
 	import { Button } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import type { Currency, QuotationLineType } from '$lib/database.types';
@@ -151,9 +154,19 @@
 				</div>
 			{/if}
 			{#if religious}
-				<div class="text-right" dir="rtl">
-					<div class="text-base font-semibold text-emerald-700">اللّٰهُمَّ اجعل هذه العُمرة مبرورة</div>
-					<div class="text-base font-semibold text-emerald-700">وذنبنا مغفورا</div>
+				<div class="flex items-center justify-end gap-3 text-emerald-700">
+					<!-- Kaaba line-art: inline SVG vector, so it prints crisp at any size. -->
+					<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" class="h-12 w-12 shrink-0" aria-hidden="true">
+						<rect x="16" y="20" width="28" height="34" rx="1" />
+						<path d="M16 20 L24 14 L52 14 L44 20 Z" />
+						<path d="M44 20 L52 14 L52 48 L44 54 Z" />
+						<path d="M16 29 L44 29 M44 29 L52 23" />
+						<path d="M28 54 L28 41 Q32 38 36 41 L36 54" />
+					</svg>
+					<div class="text-right leading-loose" dir="rtl" style="font-family: 'Amiri', 'Scheherazade New', serif;">
+						<div class="text-2xl">اللّٰهُمَّ اجعل هذه العُمرة مبرورة</div>
+						<div class="text-2xl">وذنبنا مغفورا</div>
+					</div>
 				</div>
 			{:else}
 				<div class="text-right">
