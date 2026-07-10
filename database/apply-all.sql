@@ -1586,6 +1586,17 @@ CREATE TRIGGER update_org_settings_updated_at BEFORE UPDATE ON public.org_settin
 
 
 -- ----------------------------------------------------------------
+-- migration: 20260634_org_kaaba.sql
+-- ----------------------------------------------------------------
+-- Uploadable Kaaba emblem for the Umrah/Hajj voucher (additive).
+
+ALTER TABLE public.org_settings
+	ADD COLUMN IF NOT EXISTS kaaba_url TEXT;
+ALTER TABLE public.org_settings
+	ADD COLUMN IF NOT EXISTS kaaba_height INTEGER NOT NULL DEFAULT 56 CHECK (kaaba_height BETWEEN 24 AND 240);
+
+
+-- ----------------------------------------------------------------
 -- dev-open-access.sql (anon RLS for the build-out phase)
 -- ----------------------------------------------------------------
 -- =====================================================

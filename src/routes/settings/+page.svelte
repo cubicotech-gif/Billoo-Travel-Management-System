@@ -14,6 +14,8 @@
 		tagline: '',
 		logo_url: '' as string | null,
 		logo_height: 80,
+		kaaba_url: '' as string | null,
+		kaaba_height: 56,
 		address: '',
 		phone: '',
 		email: '',
@@ -29,6 +31,8 @@
 				tagline: s.tagline ?? '',
 				logo_url: s.logo_url,
 				logo_height: s.logo_height ?? 80,
+				kaaba_url: s.kaaba_url,
+				kaaba_height: s.kaaba_height ?? 56,
 				address: s.address ?? '',
 				phone: s.phone ?? '',
 				email: s.email ?? '',
@@ -37,11 +41,13 @@
 		}
 	});
 
-	let fileInput = $state<HTMLInputElement | null>(null);
+	let logoInput = $state<HTMLInputElement | null>(null);
+	let kaabaInput = $state<HTMLInputElement | null>(null);
 	let error = $state<string | null>(null);
 	let saved = $state(false);
 
-	async function onPick(e: Event) {
+	// Shared image picker → data URL (validates type + size).
+	async function pickImage(e: Event, apply: (url: string) => void) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = '';
@@ -52,14 +58,10 @@
 			return;
 		}
 		if (file.size > 2_000_000) {
-			error = 'Logo is larger than 2 MB — use a smaller/optimised image.';
+			error = 'Image is larger than 2 MB — use a smaller/optimised file.';
 			return;
 		}
-		form.logo_url = await fileToDataUrl(file);
-	}
-
-	function removeLogo() {
-		form.logo_url = null;
+		apply(await fileToDataUrl(file));
 	}
 
 	function submit() {
@@ -70,6 +72,8 @@
 				tagline: form.tagline.trim() || null,
 				logo_url: form.logo_url,
 				logo_height: Number(form.logo_height) || 80,
+				kaaba_url: form.kaaba_url,
+				kaaba_height: Number(form.kaaba_height) || 56,
 				address: form.address.trim() || null,
 				phone: form.phone.trim() || null,
 				email: form.email.trim() || null,
@@ -109,11 +113,11 @@
 					{/if}
 				</div>
 				<div class="sm:w-56">
-					<Button size="sm" onclick={() => fileInput?.click()}><UploadCloud class="h-4 w-4" /> Upload logo</Button>
+					<Button size="sm" onclick={() => logoInput?.click()}><UploadCloud class="h-4 w-4" /> Upload logo</Button>
 					{#if form.logo_url}
-						<button type="button" onclick={removeLogo} class="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600"><Trash2 class="h-3.5 w-3.5" /> Remove</button>
+						<button type="button" onclick={() => (form.logo_url = null)} class="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600"><Trash2 class="h-3.5 w-3.5" /> Remove</button>
 					{/if}
-					<input bind:this={fileInput} type="file" accept="image/*" class="hidden" onchange={onPick} />
+					<input bind:this={logoInput} type="file" accept="image/*" class="hidden" onchange={(e) => pickImage(e, (u) => (form.logo_url = u))} />
 					<p class="mt-2 text-xs text-slate-400">PNG, JPG or SVG. A transparent PNG looks best. Max 2 MB.</p>
 				</div>
 			</div>
@@ -128,6 +132,36 @@
 				<p class="mt-1 text-xs text-slate-400">Drag right for a bigger, bolder logo. The preview above is the real print size.</p>
 			</div>
 		</Card>
+
+		<!-- Kaaba emblem (Umrah/Hajj voucher) -->
+		<div class="mt-6">
+			<Card title="Kaaba emblem (Umrah / Hajj voucher)">
+				<div class="flex flex-col gap-4 sm:flex-row sm:items-start">
+					<div class="flex min-h-[8rem] flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
+						{#if form.kaaba_url}
+							<img src={form.kaaba_url} alt="Kaaba preview" style="height: {form.kaaba_height}px" class="w-auto max-w-full object-contain" />
+						{:else}
+							<span class="text-sm text-slate-400">No image — the voucher uses the built-in Kaaba line-art.</span>
+						{/if}
+					</div>
+					<div class="sm:w-56">
+						<Button size="sm" onclick={() => kaabaInput?.click()}><UploadCloud class="h-4 w-4" /> Upload Kaaba</Button>
+						{#if form.kaaba_url}
+							<button type="button" onclick={() => (form.kaaba_url = null)} class="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600"><Trash2 class="h-3.5 w-3.5" /> Remove</button>
+						{/if}
+						<input bind:this={kaabaInput} type="file" accept="image/*" class="hidden" onchange={(e) => pickImage(e, (u) => (form.kaaba_url = u))} />
+						<p class="mt-2 text-xs text-slate-400">Your exact Kaaba art. Transparent PNG or SVG looks best. Max 2 MB. Only shows on Umrah/Hajj vouchers.</p>
+					</div>
+				</div>
+				<div class="mt-4">
+					<div class="mb-1 flex items-center justify-between text-sm">
+						<span class="font-medium text-slate-600">Kaaba size on the voucher</span>
+						<span class="text-slate-500">{form.kaaba_height}px tall</span>
+					</div>
+					<input type="range" min="24" max="160" step="4" bind:value={form.kaaba_height} class="w-full accent-brand-600" />
+				</div>
+			</Card>
+		</div>
 
 		<!-- Company details -->
 		<div class="mt-6">

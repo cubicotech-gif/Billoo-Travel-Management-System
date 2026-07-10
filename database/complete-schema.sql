@@ -1522,6 +1522,8 @@ CREATE TABLE IF NOT EXISTS public.org_settings (
 	tagline TEXT DEFAULT 'Since 1969 · Umrah & Travel',
 	logo_url TEXT,
 	logo_height INTEGER NOT NULL DEFAULT 80 CHECK (logo_height BETWEEN 24 AND 240),
+	kaaba_url TEXT,
+	kaaba_height INTEGER NOT NULL DEFAULT 56 CHECK (kaaba_height BETWEEN 24 AND 240),
 	address TEXT DEFAULT 'M-2 Mezzanine Floor, Plot No 41-C, 27th Commercial Street, Phase-V, Tauheed Commercial, DHA Karachi',
 	phone TEXT DEFAULT '021 35876791 / 92 / 93',
 	email TEXT DEFAULT 'Billootravels@gmail.com',
