@@ -90,6 +90,24 @@
 	const visas = $derived(rows.filter((r) => r.lineType === 'visa'));
 	const tickets = $derived(rows.filter((r) => r.lineType === 'ticket'));
 
+	// Stays (by `meta.stay` index) that carry a breakfast line — so the meal
+	// column reads B/B even when the room's own meal plan was left at R/O.
+	const breakfastStays = $derived(
+		new Set(
+			rows
+				.filter((r) => r.lineType === 'hotel' && r.meta?.kind === 'breakfast')
+				.map((r) => Number(r.meta?.stay))
+		)
+	);
+
+	// Real traveller names captured on the booking (may be empty on older queries).
+	const manifest = $derived(query?.passenger_manifest ?? []);
+	// True when at least one transfer has no scheduled pick-up time — we then print
+	// the "driver will contact you" note instead of leaving pick-up blank.
+	const anyDriverCall = $derived(
+		transfers.some((t) => !str(t.meta, 'pickup_time') && !str(t.meta, 'date'))
+	);
+
 	function str(meta: Record<string, unknown>, key: string): string {
 		const v = meta[key];
 		return v == null ? '' : String(v);
@@ -102,9 +120,30 @@
 		if (Number.isNaN(d.getTime())) return value;
 		return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 	}
+	// 24h "HH:MM" → friendly 12h ("2:30 PM"). Empty stays empty.
+	function fmtTime(value: string): string {
+		if (!value) return '';
+		const m = value.match(/^(\d{1,2}):(\d{2})/);
+		if (!m) return value;
+		let h = Number(m[1]);
+		const ap = h < 12 ? 'AM' : 'PM';
+		h = h % 12 || 12;
+		return `${h}:${m[2]} ${ap}`;
+	}
+	// Combine a date + time into one compact cell ("03 Mar 2026 · 2:30 PM").
+	function dateTime(dateStr: string, timeStr: string): string {
+		return [fmtDate(dateStr), fmtTime(timeStr)].filter(Boolean).join(' · ');
+	}
 	const MEALS: Record<string, string> = { RO: 'R/O', BB: 'B/B', HB: 'H/B', FB: 'F/B' };
 	function meal(m: string): string {
 		return MEALS[m] ?? (m || 'R/O');
+	}
+	// Meal shown for a stay: a bundled breakfast lifts a plain-room (R/O) to B/B,
+	// but never downgrades an already-richer plan (H/B, F/B).
+	function stayMeal(h: Row): string {
+		const code = str(h.meta, 'meal_plan') || 'RO';
+		if (breakfastStays.has(Number(h.meta?.stay)) && (code === 'RO' || code === 'BB')) return 'B/B';
+		return meal(code);
 	}
 	// Split "A → B" (or ->, /, " to ") into pick-up / drop-off.
 	function legs(route: string): { from: string; to: string } {
@@ -183,36 +222,67 @@
 			</div>
 		</div>
 
-		<!-- Passenger / Visa details -->
-		{#if visas.length || tickets.length}
+		<!-- Passengers: real names (2-column numbered grid), falls back to a count. -->
+		<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
+			<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Passengers</div>
+			{#if manifest.length}
+				<div class="grid grid-cols-2 gap-x-6 gap-y-1 px-3 py-2 text-xs">
+					{#each manifest as p, i (i)}
+						<div class="flex items-baseline gap-1.5 border-b border-slate-50 py-0.5">
+							<span class="w-5 shrink-0 text-right font-mono text-slate-400">{i + 1}.</span>
+							<span class="font-medium text-slate-700">{p.name}</span>
+							{#if p.passport}<span class="ml-auto font-mono text-[10px] text-slate-400">{p.passport}</span>{/if}
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<div class="px-3 py-2 text-xs text-slate-500">
+					{pax()} — passenger names to be confirmed.
+				</div>
+			{/if}
+		</div>
+
+		<!-- Flight details -->
+		{#if tickets.length}
 			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
-				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Passenger Details</div>
+				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Flight Details</div>
 				<table class="w-full text-xs">
 					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
 						<tr>
-							<th class="px-3 py-1.5 font-semibold">Description</th>
-							<th class="px-3 py-1.5 text-center font-semibold">Adult</th>
-							<th class="px-3 py-1.5 text-center font-semibold">Child</th>
-							<th class="px-3 py-1.5 text-center font-semibold">Infant</th>
+							<th class="px-3 py-1.5 font-semibold">Airline / Flight</th>
+							<th class="px-3 py-1.5 font-semibold">Route</th>
+							<th class="px-3 py-1.5 font-semibold">PNR</th>
+							<th class="px-3 py-1.5 font-semibold">Class</th>
 						</tr>
 					</thead>
+					<tbody class="divide-y divide-slate-100">
+						{#each tickets as t, i (i)}
+							<tr>
+								<td class="px-3 py-2 font-medium text-slate-700">{t.label}</td>
+								<td class="px-3 py-2 text-slate-600">{str(t.meta, 'route') || '—'}</td>
+								<td class="px-3 py-2 font-mono text-slate-600">{str(t.meta, 'pnr') || '—'}</td>
+								<td class="px-3 py-2 text-slate-600">{str(t.meta, 'fare_class') || 'Economy'}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		{/if}
+
+		<!-- Visa -->
+		{#if visas.length}
+			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
+				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Visa</div>
+				<table class="w-full text-xs">
 					<tbody class="divide-y divide-slate-100">
 						{#each visas as v, i (i)}
 							<tr>
 								<td class="px-3 py-2 font-medium text-slate-700">
-									{(str(v.meta, 'visa_type') || 'Umrah').toUpperCase()} VISA FOR {str(v.meta, 'persons') || (query.adults + query.children + query.infants)} PERSON(S)
+									{(str(v.meta, 'visa_type') || 'Umrah').toUpperCase()} Visa
 								</td>
-								<td class="px-3 py-2 text-center">{query.adults}</td>
-								<td class="px-3 py-2 text-center">{query.children}</td>
-								<td class="px-3 py-2 text-center">{query.infants}</td>
-							</tr>
-						{/each}
-						{#each tickets as t, i (i)}
-							<tr>
-								<td class="px-3 py-2 font-medium text-slate-700">
-									{t.label}{str(t.meta, 'pnr') ? ` · PNR ${str(t.meta, 'pnr')}` : ''}{str(t.meta, 'route') ? ` · ${str(t.meta, 'route')}` : ''}
+								<td class="px-3 py-2 text-right text-slate-600">
+									{str(v.meta, 'persons') || (query.adults + query.children + query.infants)} person(s)
 								</td>
-								<td class="px-3 py-2 text-center" colspan="3">{str(t.meta, 'fare_class') || 'Air ticket'}</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -228,9 +298,9 @@
 					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
 						<tr>
 							<th class="px-3 py-1.5 font-semibold">Vehicle</th>
-							<th class="px-3 py-1.5 font-semibold">Pick Up</th>
-							<th class="px-3 py-1.5 font-semibold">Date</th>
-							<th class="px-3 py-1.5 font-semibold">Drop Off</th>
+							<th class="px-3 py-1.5 font-semibold">Route</th>
+							<th class="px-3 py-1.5 font-semibold">Pick-up</th>
+							<th class="px-3 py-1.5 font-semibold">Drop-off</th>
 							<th class="px-3 py-1.5 font-semibold">Ref / Contact</th>
 						</tr>
 					</thead>
@@ -238,11 +308,13 @@
 						{#each transfers as t, i (i)}
 							{@const l = legs(str(t.meta, 'route') || t.label)}
 							{@const contact = [str(t.meta, 'contact_person'), str(t.meta, 'contact_number')].filter(Boolean).join(' · ')}
+							{@const pickUp = dateTime(str(t.meta, 'date'), str(t.meta, 'pickup_time'))}
+							{@const dropOff = dateTime(str(t.meta, 'dropoff_date'), str(t.meta, 'dropoff_time'))}
 							<tr>
 								<td class="px-3 py-2 font-medium text-slate-700">{str(t.meta, 'vehicle_type') || '—'}</td>
-								<td class="px-3 py-2 text-slate-700">{l.from}</td>
-								<td class="px-3 py-2 text-slate-600">{fmtDate(str(t.meta, 'date')) || '—'}</td>
-								<td class="px-3 py-2 text-slate-700">{l.to || '—'}</td>
+								<td class="px-3 py-2 text-slate-700">{l.from}{l.to ? ` → ${l.to}` : ''}</td>
+								<td class="px-3 py-2 text-slate-600">{pickUp || 'On arrival'}</td>
+								<td class="px-3 py-2 text-slate-600">{dropOff || '—'}</td>
 								<td class="px-3 py-2 text-slate-600">
 									{#if str(t.meta, 'booking_ref')}<span class="font-mono">{str(t.meta, 'booking_ref')}</span>{/if}
 									{#if contact}<div class="text-[10px] text-slate-400">{contact}</div>{/if}
@@ -252,6 +324,11 @@
 						{/each}
 					</tbody>
 				</table>
+				{#if anyDriverCall}
+					<div class="border-t border-slate-100 bg-slate-50 px-3 py-1.5 text-[10px] italic text-slate-500">
+						Your driver will contact you directly to confirm the exact pick-up time as per your schedule.
+					</div>
+				{/if}
 			</div>
 		{/if}
 
@@ -283,7 +360,7 @@
 								<td class="px-2 py-2 text-center text-slate-700">{str(h.meta, 'nights') || '—'}</td>
 								<td class="px-2 py-2 text-slate-700">{str(h.meta, 'room_type') || 'Room'}</td>
 								<td class="px-2 py-2 text-center text-slate-700">{str(h.meta, 'qty') || 1}</td>
-								<td class="px-2 py-2 text-center text-slate-700">{meal(str(h.meta, 'meal_plan'))}</td>
+								<td class="px-2 py-2 text-center text-slate-700">{stayMeal(h)}</td>
 								<td class="px-2 py-2 font-mono text-slate-700">{str(h.meta, 'booking_ref') || '—'}</td>
 							</tr>
 						{/each}
