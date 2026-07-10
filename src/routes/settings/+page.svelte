@@ -133,32 +133,32 @@
 			</div>
 		</Card>
 
-		<!-- Kaaba emblem (Umrah/Hajj voucher) -->
+		<!-- Umrah/Hajj emblem (Kaaba + dua as one image), shown on the right of the voucher -->
 		<div class="mt-6">
-			<Card title="Kaaba emblem (Umrah / Hajj voucher)">
+			<Card title="Umrah / Hajj emblem (right side of voucher)">
 				<div class="flex flex-col gap-4 sm:flex-row sm:items-start">
 					<div class="flex min-h-[8rem] flex-1 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4">
 						{#if form.kaaba_url}
-							<img src={form.kaaba_url} alt="Kaaba preview" style="height: {form.kaaba_height}px" class="w-auto max-w-full object-contain" />
+							<img src={form.kaaba_url} alt="Emblem preview" style="height: {form.kaaba_height}px" class="w-auto max-w-full object-contain" />
 						{:else}
 							<span class="text-sm text-slate-400">No image — the voucher uses the built-in Kaaba line-art.</span>
 						{/if}
 					</div>
 					<div class="sm:w-56">
-						<Button size="sm" onclick={() => kaabaInput?.click()}><UploadCloud class="h-4 w-4" /> Upload Kaaba</Button>
+						<Button size="sm" onclick={() => kaabaInput?.click()}><UploadCloud class="h-4 w-4" /> Upload emblem</Button>
 						{#if form.kaaba_url}
 							<button type="button" onclick={() => (form.kaaba_url = null)} class="mt-2 inline-flex items-center gap-1 text-xs text-slate-400 hover:text-red-600"><Trash2 class="h-3.5 w-3.5" /> Remove</button>
 						{/if}
 						<input bind:this={kaabaInput} type="file" accept="image/*" class="hidden" onchange={(e) => pickImage(e, (u) => (form.kaaba_url = u))} />
-						<p class="mt-2 text-xs text-slate-400">Your exact Kaaba art. Transparent PNG or SVG looks best. Max 2 MB. Only shows on Umrah/Hajj vouchers.</p>
+						<p class="mt-2 text-xs text-slate-400">Your art with the Kaaba + dua together (transparent PNG or SVG). Sits on the right, opposite the logo. Only on Umrah/Hajj vouchers. Max 2 MB.</p>
 					</div>
 				</div>
 				<div class="mt-4">
 					<div class="mb-1 flex items-center justify-between text-sm">
-						<span class="font-medium text-slate-600">Kaaba size on the voucher</span>
+						<span class="font-medium text-slate-600">Emblem size on the voucher</span>
 						<span class="text-slate-500">{form.kaaba_height}px tall</span>
 					</div>
-					<input type="range" min="24" max="160" step="4" bind:value={form.kaaba_height} class="w-full accent-brand-600" />
+					<input type="range" min="40" max="200" step="4" bind:value={form.kaaba_height} class="w-full accent-brand-600" />
 				</div>
 			</Card>
 		</div>
