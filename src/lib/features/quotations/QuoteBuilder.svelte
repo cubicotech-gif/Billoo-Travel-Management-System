@@ -16,7 +16,7 @@
 	import { useQueryClient } from '@tanstack/svelte-query';
 	import { Button, Card, Input, Select } from '$ui';
 	import { formatAmount } from '$lib/money';
-	import { useQueryDetail, useSetQueryStatus } from '$features/queries/queries';
+	import { useQueryDetail, useSetQueryStatus, useUpdateQuery } from '$features/queries/queries';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { useRates, useLatestRoe } from '$features/rates/queries';
 	import { latestRates, transferRateOptions } from '$features/rates/types';
@@ -104,6 +104,7 @@
 	const createQuotation = untrack(() => useCreateQuotation(queryId));
 	const updateFull = untrack(() => useUpdateQuotationFull(queryId));
 	const setStatus = useSetQueryStatus();
+	const updateQueryPax = useUpdateQuery();
 	const uploadDoc = untrack(() => useUploadDocument('query', queryId));
 
 	// Existing documents the staff can LINK as a service's proof instead of
@@ -711,6 +712,14 @@
 		} else {
 			quotation = await $createQuotation.mutateAsync(args);
 			savedId = quotation.id;
+		}
+		// Keep the query's headline pax in sync with what was actually priced, so the
+		// package panel + itinerary/voucher header + passenger table all match the
+		// booked services (fixes the "6 Adults" header vs a 10-person visa mismatch).
+		const paxNow = { adults: num(form.adults), children: num(form.children), infants: num(form.infants) };
+		const q = $queryDetail.data;
+		if (!q || q.adults !== paxNow.adults || q.children !== paxNow.children || q.infants !== paxNow.infants) {
+			$updateQueryPax.mutate({ id: queryId, patch: paxNow });
 		}
 		// Smart auto-save: persist any new/changed hotel, transfer, ticket & visa
 		// rates so they're available (vendor-wise) next time. Best-effort.
