@@ -145,6 +145,9 @@ export interface TransferForm extends BookedFields {
 	route: string;
 	customRoute: string;
 	date: string; // pick-up date (for the confirmation voucher), '' = none
+	pickupTime: string; // pick-up time (HH:MM), '' = none
+	dropoffDate: string; // drop-off date, '' = none
+	dropoffTime: string; // drop-off time (HH:MM), '' = none
 	currency: LineCurrency;
 	vendorId: string;
 	cost: number;
@@ -210,7 +213,7 @@ export interface BuilderForm {
 
 export const newRoom = (): RoomRow => ({ rt: 'Double', customLabel: '', occupancy: 2, qty: 1, cost: 0, sell: 0 });
 export const blankHotel = (city = ''): HotelForm => ({ id: uid(), hotelId: '', city, currency: 'SAR', sel: '', name: '', vendorId: '', mealPlan: 'RO', checkIn: '', checkOut: '', nights: 0, lockCheckIn: false, parallel: false, rooms: [newRoom()], breakfastMode: 'none', breakfastPersons: 0, breakfastCost: 0, breakfastSell: 0, ...blankBooked() });
-export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Jeddah Airport → Makkah', customRoute: '', date: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, vehicles: 1, ...blankBooked() });
+export const newTransfer = (): TransferForm => ({ sel: '', vehicle: '7-seater', customVehicle: '', route: 'Jeddah Airport → Makkah', customRoute: '', date: '', pickupTime: '', dropoffDate: '', dropoffTime: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, vehicles: 1, ...blankBooked() });
 export const blankVisa = (): VisaForm => ({ type: 'Umrah', otherLabel: '', currency: 'SAR', vendorId: '', cost: 0, sell: 0, persons: 0, ...blankBooked() });
 export const blankOtherService = (): OtherServiceForm => ({ label: '', currency: 'PKR', vendorId: '', cost: 0, sell: 0, qty: 1, ...blankBooked() });
 export const newFareTier = (cost = 0, sell = 0, count = 0): FareTierRow => ({ count, cost, sell });
@@ -326,6 +329,9 @@ export function quotationToForm(q: Quotation, lines: QuotationLine[]): BuilderFo
 				route: rt.choice,
 				customRoute: rt.custom,
 				date: s(meta, 'date'),
+				pickupTime: s(meta, 'pickup_time'),
+				dropoffDate: s(meta, 'dropoff_date'),
+				dropoffTime: s(meta, 'dropoff_time'),
 				currency: cur(l.currency),
 				vendorId: l.vendor_id ?? '',
 				cost: Number(l.unit_cost),

@@ -3,6 +3,7 @@
 	import { Map, FileText, CheckCircle2, Check, Layers, ChevronDown, ChevronRight, FilePlus2 } from 'lucide-svelte';
 	import { Button } from '$ui';
 	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
+	import PassengerManifest from './PassengerManifest.svelte';
 	import { useQuotations } from '$features/quotations/queries';
 	import type { Quotation } from '$features/quotations/types';
 	import { useUpdateQuery } from '$features/queries/queries';
@@ -143,6 +144,9 @@
 	</div>
 
 	{#if hasBooking && basis}
+		<div class="mb-3">
+			<PassengerManifest {queryId} />
+		</div>
 		<div class="rounded-xl bg-slate-50/50 p-3">
 			{#key basis}
 				<QuoteBuilder {queryId} editId={basis} embedded mode="booking" {onSaved} />

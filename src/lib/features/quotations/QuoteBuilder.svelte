@@ -476,6 +476,9 @@
 			vehicleType: vehicleLabel(t),
 			route: routeLabel(t),
 			date: t.date || null,
+			pickupTime: t.pickupTime || null,
+			dropoffDate: t.dropoffDate || null,
+			dropoffTime: t.dropoffTime || null,
 			currency: t.currency,
 			vendorId: t.vendorId || null,
 			costSar: num(t.cost),
@@ -1019,7 +1022,10 @@
 				{#if t.vehicle === 'Custom'}<div class="w-28"><Input label="Custom" bind:value={t.customVehicle} /></div>{/if}
 				<div class="w-44"><Select label="Route" bind:value={t.route} options={ROUTES} /></div>
 				{#if t.route === 'Custom'}<div class="w-40"><Input label="Custom route" bind:value={t.customRoute} /></div>{/if}
-				<div class="w-36"><Input label="Date" type="date" bind:value={t.date} /></div>
+				<div class="w-36"><Input label="Pick-up date" type="date" bind:value={t.date} /></div>
+				<div class="w-28"><Input label="Pick-up time" type="time" bind:value={t.pickupTime} /></div>
+				<div class="w-36"><Input label="Drop-off date" type="date" bind:value={t.dropoffDate} /></div>
+				<div class="w-28"><Input label="Drop-off time" type="time" bind:value={t.dropoffTime} /></div>
 				<div class="w-20"><Select label="Cur" bind:value={t.currency} options={['SAR', 'USD', 'PKR']} /></div>
 				<div class="w-40"><VendorPicker service="Transfer" bind:value={t.vendorId} /></div>
 				<div class="w-16"><Input label="Qty" type="number" min="0" bind:value={t.vehicles} /></div>

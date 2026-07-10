@@ -509,6 +509,11 @@ ALTER TABLE public.queries
 	ADD COLUMN IF NOT EXISTS itinerary_cities JSONB DEFAULT '[]'::jsonb,
 	ADD COLUMN IF NOT EXISTS trip_country TEXT;
 
+-- Passenger manifest (names + optional passport) for the itinerary/voucher.
+-- JSONB array of { name, passport }. Additive — existing rows default to [].
+ALTER TABLE public.queries
+	ADD COLUMN IF NOT EXISTS passenger_manifest JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 
 -- ----------------------------------------------------------------
 -- migration: 20260615_proposal_tiers.sql

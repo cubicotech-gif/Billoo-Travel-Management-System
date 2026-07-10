@@ -1463,6 +1463,10 @@ ALTER TABLE public.queries
 	ADD COLUMN IF NOT EXISTS itinerary_cities JSONB DEFAULT '[]'::jsonb,
 	ADD COLUMN IF NOT EXISTS trip_country TEXT;
 
+-- Passenger manifest (names + optional passport) for the itinerary/voucher.
+ALTER TABLE public.queries
+	ADD COLUMN IF NOT EXISTS passenger_manifest JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 
 -- =====================================================
 -- Tiered proposals: validity + inclusions/exclusions per quotation tier

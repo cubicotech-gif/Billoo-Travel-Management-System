@@ -105,6 +105,9 @@ export interface TransferRow extends BookedStatus {
 	vehicleType: string; // 4 / 7 / 14 / 50-seater / custom
 	route: string; // Airport → Makkah, etc.
 	date?: string | null; // pick-up date (confirmation voucher)
+	pickupTime?: string | null; // pick-up time (HH:MM)
+	dropoffDate?: string | null; // drop-off date
+	dropoffTime?: string | null; // drop-off time (HH:MM)
 	currency?: LineCurrency;
 	vendorId?: string | null;
 	costSar: number; // in `currency` (named for the SAR default)
@@ -356,7 +359,15 @@ export function calculateQuotation(input: QuotationInput): QuotationResult {
 			quantity: t.vehicles,
 			lineCost: toNumber(lineCost),
 			lineSell: toNumber(lineSell),
-			meta: { vehicle_type: t.vehicleType, route: t.route, date: t.date ?? null, ...bookedMeta(t) }
+			meta: {
+				vehicle_type: t.vehicleType,
+				route: t.route,
+				date: t.date ?? null,
+				pickup_time: t.pickupTime ?? null,
+				dropoff_date: t.dropoffDate ?? null,
+				dropoff_time: t.dropoffTime ?? null,
+				...bookedMeta(t)
+			}
 		});
 	}
 

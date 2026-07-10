@@ -38,6 +38,13 @@ export interface CityBlock {
 	activities: number;
 }
 
+// A single traveller on the trip's manifest. `passport` is optional — the
+// itinerary lists names, with the passport shown only when captured.
+export interface PassengerName {
+	name: string;
+	passport: string | null;
+}
+
 export type DocumentType =
 	| 'passport'
 	| 'cnic'
@@ -146,6 +153,7 @@ export interface Database {
 					stage_changed_at: string | null;
 					voucher_sent_at: string | null;
 					itinerary_cities: CityBlock[];
+					passenger_manifest: PassengerName[];
 					trip_country: string | null;
 					is_deleted: boolean;
 					deleted_at: string | null;
@@ -197,6 +205,7 @@ export interface Database {
 					stage_changed_at?: string | null;
 					voucher_sent_at?: string | null;
 					itinerary_cities?: CityBlock[];
+					passenger_manifest?: PassengerName[];
 					trip_country?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['queries']['Insert']>;
