@@ -222,16 +222,23 @@
 							<th class="px-3 py-1.5 font-semibold">Pick Up</th>
 							<th class="px-3 py-1.5 font-semibold">Date</th>
 							<th class="px-3 py-1.5 font-semibold">Drop Off</th>
+							<th class="px-3 py-1.5 font-semibold">Ref / Contact</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-100">
 						{#each transfers as t, i (i)}
 							{@const l = legs(str(t.meta, 'route') || t.label)}
+							{@const contact = [str(t.meta, 'contact_person'), str(t.meta, 'contact_number')].filter(Boolean).join(' · ')}
 							<tr>
 								<td class="px-3 py-2 font-medium text-slate-700">{str(t.meta, 'vehicle_type') || '—'}</td>
 								<td class="px-3 py-2 text-slate-700">{l.from}</td>
 								<td class="px-3 py-2 text-slate-600">{fmtDate(str(t.meta, 'date')) || '—'}</td>
 								<td class="px-3 py-2 text-slate-700">{l.to || '—'}</td>
+								<td class="px-3 py-2 text-slate-600">
+									{#if str(t.meta, 'booking_ref')}<span class="font-mono">{str(t.meta, 'booking_ref')}</span>{/if}
+									{#if contact}<div class="text-[10px] text-slate-400">{contact}</div>{/if}
+									{#if !str(t.meta, 'booking_ref') && !contact}—{/if}
+								</td>
 							</tr>
 						{/each}
 					</tbody>

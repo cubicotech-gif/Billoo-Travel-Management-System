@@ -31,6 +31,8 @@ export interface BookedStatus {
 	booked?: boolean;
 	bookedAt?: string | null;
 	bookingRef?: string | null;
+	contactPerson?: string | null;
+	contactNumber?: string | null;
 	proof?: boolean;
 	/** Id of the document linked as this service's proof (uploaded or existing). */
 	proofDocId?: string | null;
@@ -42,6 +44,8 @@ export function bookedMeta(s: BookedStatus): Record<string, unknown> {
 		booked: !!s.booked,
 		booked_at: s.bookedAt ?? null,
 		booking_ref: s.bookingRef || null,
+		contact_person: s.contactPerson || null,
+		contact_number: s.contactNumber || null,
 		proof: !!s.proof,
 		proof_doc_id: s.proofDocId || null
 	};

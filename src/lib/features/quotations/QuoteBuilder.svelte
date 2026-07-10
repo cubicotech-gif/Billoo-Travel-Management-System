@@ -4,6 +4,8 @@
 		ArrowLeft,
 		Copy,
 		Check,
+		CheckCircle2,
+		Circle,
 		Save,
 		Plus,
 		Trash2,
@@ -129,10 +131,12 @@
 	const booking = $derived(mode === 'booking');
 	const saving = $derived($createQuotation.isPending || $updateFull.isPending);
 	// Spread a form service's booked status into the calculator input.
-	const bk = (x: { booked: boolean; bookedAt: string; bookingRef: string; proof: boolean; proofDocId: string }) => ({
+	const bk = (x: { booked: boolean; bookedAt: string; bookingRef: string; contactPerson: string; contactNumber: string; proof: boolean; proofDocId: string }) => ({
 		booked: x.booked,
 		bookedAt: x.bookedAt || null,
 		bookingRef: x.bookingRef || null,
+		contactPerson: x.contactPerson || null,
+		contactNumber: x.contactNumber || null,
 		proof: x.proof,
 		proofDocId: x.proofDocId || null
 	});
@@ -217,6 +221,15 @@
 	]);
 	const serviceCount = $derived(services.length);
 	const bookedCount = $derived(services.filter((s) => s.booked).length);
+
+	// At-a-glance summary of every service and whether it's booked yet.
+	const serviceSummary = $derived([
+		...form.hotels.map((h) => ({ kind: 'Hotel', label: `${h.city || 'Hotel'}${h.name ? ` · ${h.name}` : ''}`, booked: h.booked })),
+		...form.transfers.map((t) => ({ kind: 'Transfer', label: routeLabel(t), booked: t.booked })),
+		...form.visas.map((v) => ({ kind: 'Visa', label: `${v.type === 'Other' ? v.otherLabel || 'Other' : v.type || 'Umrah'} visa`, booked: v.booked })),
+		...form.otherServices.map((o) => ({ kind: 'Service', label: o.label || 'Service', booked: o.booked })),
+		...(form.airlineInclude ? [{ kind: 'Tickets', label: form.airline.name || 'Air tickets', booked: form.airline.booked }] : [])
+	]);
 
 	let seeded = $state(false);
 	$effect(() => {
@@ -1007,6 +1020,14 @@
 					<Trash2 class="h-4 w-4" />
 				</button>
 			</div>
+			{#if booking}
+				<!-- Transporter booking details (like the hotel HCN) — show on the voucher. -->
+				<div class="mt-2 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-2">
+					<div class="w-40"><Input label="Reference no." bind:value={t.bookingRef} placeholder="Transporter ref / HCN" /></div>
+					<div class="w-44"><Input label="Contact person" bind:value={t.contactPerson} placeholder="Driver / operator" /></div>
+					<div class="w-40"><Input label="Contact number" bind:value={t.contactNumber} placeholder="Phone" /></div>
+				</div>
+			{/if}
 		{/snippet}
 
 		{#if booking}
@@ -1194,13 +1215,22 @@
 		<Card title={booking ? 'Invoice — cost sheet (staff)' : 'Breakdown (staff)'}>
 			{#if booking && serviceCount > 0}
 				<div class="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
-					<div class="mb-1 flex items-center justify-between text-xs font-medium text-slate-600">
-						<span>Booking progress</span>
-						<span>{bookedCount} / {serviceCount} services booked</span>
+					<div class="mb-1.5 flex items-center justify-between text-xs font-medium text-slate-600">
+						<span>Booking checklist</span>
+						<span>{bookedCount} / {serviceCount} booked</span>
 					</div>
-					<div class="h-2 overflow-hidden rounded-full bg-slate-200">
+					<div class="mb-2 h-2 overflow-hidden rounded-full bg-slate-200">
 						<div class="h-full rounded-full bg-emerald-500 transition-all" style="width: {serviceCount ? Math.round((bookedCount / serviceCount) * 100) : 0}%"></div>
 					</div>
+					<ul class="space-y-1">
+						{#each serviceSummary as s, i (i)}
+							<li class="flex items-center gap-1.5 text-xs">
+								{#if s.booked}<CheckCircle2 class="h-3.5 w-3.5 shrink-0 text-emerald-500" />{:else}<Circle class="h-3.5 w-3.5 shrink-0 text-slate-300" />{/if}
+								<span class="shrink-0 text-[10px] uppercase text-slate-400">{s.kind}</span>
+								<span class="truncate {s.booked ? 'text-slate-600' : 'text-slate-400'}">{s.label}</span>
+							</li>
+						{/each}
+					</ul>
 				</div>
 			{/if}
 			<div class="space-y-1.5 text-sm">
