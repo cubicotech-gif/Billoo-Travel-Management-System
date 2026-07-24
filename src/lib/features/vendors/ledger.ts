@@ -2,7 +2,10 @@ import { supabase } from '$lib/supabase';
 import type { Currency, Database, QuotationLineType } from '$lib/database.types';
 import { toNumber } from '$lib/money';
 import { toPkr, ratesOf } from '$features/bookings/totals';
+import { addPkr, paymentPkr, subPkr } from './calc';
 import type { Vendor } from './types';
+
+export { paymentPkr } from './calc';
 
 export type VendorPayment = Database['public']['Tables']['vendor_payments']['Row'];
 export type NewVendorPayment = Database['public']['Tables']['vendor_payments']['Insert'];
@@ -129,23 +132,24 @@ export async function getVendorLedger(vendorId: string): Promise<VendorLedger> {
 		listVendorPayments(vendorId)
 	]);
 
-	// Split payments into per-service buckets vs general (unattributed).
+	// Split payments into per-service buckets vs general (unattributed), each
+	// converted to PKR (a payment may be in SAR/USD).
 	const paidByItem = new Map<string, number>();
 	let unattributedPaid = 0;
 	for (const p of payments) {
-		const amt = Number(p.amount);
-		if (p.booking_item_id) paidByItem.set(p.booking_item_id, (paidByItem.get(p.booking_item_id) ?? 0) + amt);
-		else unattributedPaid += amt;
+		const amt = paymentPkr(p);
+		if (p.booking_item_id) paidByItem.set(p.booking_item_id, addPkr(paidByItem.get(p.booking_item_id) ?? 0, amt));
+		else unattributedPaid = addPkr(unattributedPaid, amt);
 	}
 
 	const services: VendorServiceLine[] = charges.map((c) => {
 		const paidPkr = paidByItem.get(c.itemId) ?? 0;
-		return { ...c, paidPkr, balancePkr: c.owedPkr - paidPkr };
+		return { ...c, paidPkr, balancePkr: subPkr(c.owedPkr, paidPkr) };
 	});
 
-	const owed = charges.reduce((a, c) => a + c.owedPkr, 0);
-	const paid = payments.reduce((a, p) => a + Number(p.amount), 0);
-	return { services, payments, owed, paid, balance: owed - paid, unattributedPaid };
+	const owed = charges.reduce((a, c) => addPkr(a, c.owedPkr), 0);
+	const paid = payments.reduce((a, p) => addPkr(a, paymentPkr(p)), 0);
+	return { services, payments, owed, paid, balance: subPkr(owed, paid), unattributedPaid };
 }
 
 // --- Aggregate balances for the Finance overview -------------------------
@@ -166,8 +170,8 @@ export async function listVendorBalances(): Promise<VendorBalance[]> {
 	);
 	const bookings = unwrap<{ id: string; roe: number; usd_rate: number | null }[]>(await supabase.from('bookings').select('id, roe, usd_rate'));
 	const ratesById = new Map(bookings.map((b) => [b.id, ratesOf(b)]));
-	const payments = unwrap<{ vendor_id: string; amount: number }[]>(
-		await supabase.from('vendor_payments').select('vendor_id, amount')
+	const payments = unwrap<{ vendor_id: string; amount: number; currency: Currency; rate_to_pkr: number }[]>(
+		await supabase.from('vendor_payments').select('vendor_id, amount, currency, rate_to_pkr')
 	);
 
 	const owedByVendor = new Map<string, number>();
@@ -175,18 +179,18 @@ export async function listVendorBalances(): Promise<VendorBalance[]> {
 		if (!i.vendor_id) continue;
 		const rates = ratesById.get(i.booking_id) ?? { roe: 1, usdRate: 1 };
 		const pkr = toNumber(toPkr(Number(i.actual_cost), i.currency, rates));
-		owedByVendor.set(i.vendor_id, (owedByVendor.get(i.vendor_id) ?? 0) + pkr);
+		owedByVendor.set(i.vendor_id, addPkr(owedByVendor.get(i.vendor_id) ?? 0, pkr));
 	}
 	const paidByVendor = new Map<string, number>();
 	for (const p of payments) {
-		paidByVendor.set(p.vendor_id, (paidByVendor.get(p.vendor_id) ?? 0) + Number(p.amount));
+		paidByVendor.set(p.vendor_id, addPkr(paidByVendor.get(p.vendor_id) ?? 0, paymentPkr(p)));
 	}
 
 	return vendors
 		.map((vendor) => {
 			const owed = owedByVendor.get(vendor.id) ?? 0;
 			const paid = paidByVendor.get(vendor.id) ?? 0;
-			return { vendor, owed, paid, balance: owed - paid };
+			return { vendor, owed, paid, balance: subPkr(owed, paid) };
 		})
 		.filter((b) => b.owed > 0 || b.paid > 0)
 		.sort((a, b) => b.balance - a.balance);

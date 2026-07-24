@@ -3,11 +3,14 @@
 	import { ArrowLeft, MessageCircle, Phone, MapPin, Plus, Trash2, X } from 'lucide-svelte';
 	import { Badge, Button, Card, Input } from '$ui';
 	import { formatAmount } from '$lib/money';
-	import type { QuotationLineType } from '$lib/database.types';
+	import type { Currency, QuotationLineType } from '$lib/database.types';
 	import { useVendor, useVendorLedger, useCreateVendorPayment, useDeleteVendorPayment } from './queries';
-	import type { VendorServiceLine } from './ledger';
+	import { paymentPkr, type VendorServiceLine } from './ledger';
 
 	let { id }: { id: string } = $props();
+
+	// Vendors are paid in PKR, or sometimes SAR / USD (converted to PKR via rate).
+	const CURRENCIES: Currency[] = ['PKR', 'SAR', 'USD', 'AED', 'EUR', 'GBP'];
 
 	const vendor = untrack(() => useVendor(id));
 	const ledger = untrack(() => useVendorLedger(id));
@@ -15,9 +18,16 @@
 	const removePayment = untrack(() => useDeleteVendorPayment(id));
 
 	const today = new Date().toISOString().slice(0, 10);
-	let form = $state({ amount: 0, date: today, method: '', reference: '' });
+	let form = $state({ amount: 0, currency: 'PKR' as Currency, rate: 1, date: today, method: '', reference: '' });
 	// What this payment is for: a specific service, or null = general.
 	let payTarget = $state<VendorServiceLine | null>(null);
+
+	// PKR needs no rate; foreign payments convert at amount × rate.
+	const rateNeeded = $derived(form.currency !== 'PKR');
+	const rateValid = $derived(!rateNeeded || Number(form.rate) > 0);
+	const pkrPreview = $derived(
+		rateNeeded ? paymentPkr({ amount: form.amount, currency: form.currency, rate_to_pkr: form.rate }) : Number(form.amount) || 0
+	);
 
 	const services = $derived($ledger.data?.services ?? []);
 	// Service-type filter chips (only types this vendor actually has).
@@ -39,7 +49,10 @@
 
 	function payFor(s: VendorServiceLine) {
 		payTarget = s;
+		// The balance is in PKR, so settle in PKR by default.
 		form.amount = Math.max(0, Math.round(s.balancePkr));
+		form.currency = 'PKR';
+		form.rate = 1;
 		document.getElementById('vendor-pay-form')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 	}
 	function clearTarget() {
@@ -48,9 +61,12 @@
 
 	async function addPayment(e: SubmitEvent) {
 		e.preventDefault();
+		if (!rateValid) return;
 		await $createPayment.mutateAsync({
 			vendor_id: id,
 			amount: Number(form.amount),
+			currency: form.currency,
+			rate_to_pkr: form.currency === 'PKR' ? 1 : Number(form.rate),
 			payment_date: form.date,
 			method: form.method || null,
 			reference: form.reference || null,
@@ -58,7 +74,7 @@
 			booking_id: payTarget?.bookingId ?? null,
 			query_id: payTarget?.queryId ?? null
 		});
-		form = { amount: 0, date: today, method: '', reference: '' };
+		form = { amount: 0, currency: 'PKR', rate: 1, date: today, method: '', reference: '' };
 		payTarget = null;
 	}
 </script>
@@ -187,12 +203,26 @@
 					{/if}
 				</div>
 				<div class="flex flex-wrap items-end gap-2">
-					<div class="w-32"><Input label="Amount (PKR)" type="number" min="0" step="0.01" bind:value={form.amount} /></div>
+					<div class="w-32"><Input label="Amount ({form.currency})" type="number" min="0" step="0.01" bind:value={form.amount} /></div>
+					<div class="w-24">
+						<label class="mb-1 block text-xs font-medium text-slate-600" for="pay-currency">Currency</label>
+						<select id="pay-currency" bind:value={form.currency} class="w-full rounded-lg border border-slate-200 px-2 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500">
+							{#each CURRENCIES as c (c)}<option value={c}>{c}</option>{/each}
+						</select>
+					</div>
+					{#if rateNeeded}
+						<div class="w-28"><Input label="Rate → PKR" type="number" min="0" step="0.0001" bind:value={form.rate} /></div>
+					{/if}
 					<div class="w-40"><Input label="Date" type="date" bind:value={form.date} /></div>
 					<div class="w-32"><Input label="Method" bind:value={form.method} placeholder="Cash / Bank" /></div>
 					<div class="w-36"><Input label="Reference" bind:value={form.reference} /></div>
-					<Button type="submit" size="sm" disabled={$createPayment.isPending}><Plus class="h-4 w-4" /> Record</Button>
+					<Button type="submit" size="sm" disabled={$createPayment.isPending || !rateValid}><Plus class="h-4 w-4" /> Record</Button>
 				</div>
+				{#if rateNeeded}
+					<p class="mt-1.5 text-xs text-slate-400">
+						{#if rateValid}= {formatAmount(pkrPreview, 'PKR')} at {form.rate} PKR/{form.currency}{:else}Enter a conversion rate to PKR.{/if}
+					</p>
+				{/if}
 			</form>
 			{#if l.payments.length === 0}
 				<p class="text-sm text-slate-400">No payments recorded yet.</p>
@@ -201,7 +231,10 @@
 					{#each l.payments as p (p.id)}
 						<div class="flex items-center gap-3 py-2 text-sm">
 							<span class="w-24 text-slate-400">{p.payment_date}</span>
-							<span class="w-28 font-medium text-slate-700">{formatAmount(Number(p.amount), 'PKR')}</span>
+							<span class="w-28 font-medium text-slate-700">
+								{formatAmount(Number(p.amount), p.currency)}
+								{#if p.currency !== 'PKR'}<span class="block text-[10px] font-normal text-slate-400">≈ {formatAmount(paymentPkr(p), 'PKR')}</span>{/if}
+							</span>
 							<span class="flex-1 text-slate-500">
 								{p.booking_item_id ? (labelByItem.get(p.booking_item_id) ?? 'Service') : 'General'}
 								{p.method ? ` · ${p.method}` : ''}{p.reference ? ` · ${p.reference}` : ''}
