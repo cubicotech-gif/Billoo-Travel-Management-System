@@ -1602,6 +1602,20 @@ ALTER TABLE public.org_settings
 
 
 -- ----------------------------------------------------------------
+-- migration: 20260636_vendor_payment_currency.sql
+-- ----------------------------------------------------------------
+-- Vendor settlements can be made in SAR / USD, not just PKR (additive).
+-- `amount` is in `currency`; PKR value = amount × rate_to_pkr. Existing rows
+-- default to ('PKR', 1), so nothing changes for them.
+
+ALTER TABLE public.vendor_payments
+	ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'PKR'
+		CHECK (currency IN ('PKR', 'SAR', 'USD', 'AED', 'EUR', 'GBP')),
+	ADD COLUMN IF NOT EXISTS rate_to_pkr NUMERIC(10, 4) NOT NULL DEFAULT 1
+		CHECK (rate_to_pkr > 0);
+
+
+-- ----------------------------------------------------------------
 -- dev-open-access.sql (anon RLS for the build-out phase)
 -- ----------------------------------------------------------------
 -- =====================================================

@@ -2,6 +2,7 @@ import { supabase } from '$lib/supabase';
 import { money, subtract, sum, toNumber } from '$lib/money';
 import type { Currency, QuotationLineType } from '$lib/database.types';
 import { ratesOf, toPkr } from '$features/bookings/totals';
+import { paymentPkr } from '$features/vendors/calc';
 import { SETTLE_TOLERANCE_PKR } from '$features/bookings/lifecycle';
 import { addN, subN, aggregatePassengers, type PassengerFinanceRow, type RawBooking } from './calc';
 
@@ -245,7 +246,11 @@ export async function listPassengerFinance(): Promise<PassengerFinanceRow[]> {
 export interface ServiceVendorPayment {
 	id: string;
 	date: string | null;
+	/** Value in PKR (converted from the payment's own currency). */
 	amount: number;
+	/** The amount as actually paid, in `currency`. */
+	originalAmount: number;
+	currency: Currency;
 	method: string | null;
 }
 
@@ -305,17 +310,18 @@ export async function listServiceFinance(): Promise<ServiceFinanceRow[]> {
 	const vendorName = new Map(vendors.map((v) => [v.id, v.name]));
 
 	const vpays = unwrap<
-		{ id: string; booking_item_id: string | null; amount: number; payment_date: string | null; method: string | null }[]
+		{ id: string; booking_item_id: string | null; amount: number; currency: Currency; rate_to_pkr: number; payment_date: string | null; method: string | null }[]
 	>(
-		await supabase.from('vendor_payments').select('id, booking_item_id, amount, payment_date, method')
+		await supabase.from('vendor_payments').select('id, booking_item_id, amount, currency, rate_to_pkr, payment_date, method')
 	);
 	const paidByItem = new Map<string, number>();
 	const paymentsByItem = new Map<string, ServiceVendorPayment[]>();
 	for (const p of vpays) {
 		if (!p.booking_item_id) continue;
-		paidByItem.set(p.booking_item_id, addN(paidByItem.get(p.booking_item_id) ?? 0, Number(p.amount)));
+		const pkr = paymentPkr(p);
+		paidByItem.set(p.booking_item_id, addN(paidByItem.get(p.booking_item_id) ?? 0, pkr));
 		const arr = paymentsByItem.get(p.booking_item_id) ?? [];
-		arr.push({ id: p.id, date: p.payment_date, amount: Number(p.amount), method: p.method });
+		arr.push({ id: p.id, date: p.payment_date, amount: pkr, originalAmount: Number(p.amount), currency: p.currency ?? 'PKR', method: p.method });
 		paymentsByItem.set(p.booking_item_id, arr);
 	}
 

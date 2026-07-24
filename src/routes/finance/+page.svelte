@@ -337,7 +337,7 @@
 											{:else}
 												<div class="mt-1 space-y-0.5 text-xs">
 													{#each s.payments as pay (pay.id)}
-														<div class="flex justify-between text-slate-600"><span>{pay.date ?? '—'}{pay.method ? ` · ${pay.method}` : ''}</span><span class="text-green-600">{formatAmount(pay.amount, 'PKR')}</span></div>
+														<div class="flex justify-between text-slate-600"><span>{pay.date ?? '—'}{pay.method ? ` · ${pay.method}` : ''}{pay.currency !== 'PKR' ? ` · ${formatAmount(pay.originalAmount, pay.currency)}` : ''}</span><span class="text-green-600">{formatAmount(pay.amount, 'PKR')}</span></div>
 													{/each}
 													<div class="flex justify-between border-t border-slate-200 pt-0.5 font-medium text-slate-700"><span>Balance</span><span class={s.vendorBalance > 0 ? 'text-amber-600' : 'text-green-600'}>{formatAmount(s.vendorBalance, 'PKR')}</span></div>
 												</div>

@@ -322,6 +322,8 @@ export interface Database {
 					booking_item_id: string | null;
 					query_id: string | null;
 					amount: number;
+					currency: Currency;
+					rate_to_pkr: number;
 					payment_date: string | null;
 					method: string | null;
 					reference: string | null;
@@ -335,6 +337,8 @@ export interface Database {
 					booking_item_id?: string | null;
 					query_id?: string | null;
 					amount?: number;
+					currency?: Currency;
+					rate_to_pkr?: number;
 					payment_date?: string | null;
 					method?: string | null;
 					reference?: string | null;

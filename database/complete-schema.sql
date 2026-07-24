@@ -1504,7 +1504,9 @@ CREATE TABLE IF NOT EXISTS public.vendor_payments (
 	booking_id UUID REFERENCES public.bookings(id) ON DELETE SET NULL,
 	booking_item_id UUID REFERENCES public.booking_items(id) ON DELETE SET NULL,
 	query_id UUID REFERENCES public.queries(id) ON DELETE SET NULL,
-	amount NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (amount >= 0), -- PKR
+	amount NUMERIC(12, 2) NOT NULL DEFAULT 0 CHECK (amount >= 0), -- in `currency`
+	currency TEXT NOT NULL DEFAULT 'PKR' CHECK (currency IN ('PKR', 'SAR', 'USD', 'AED', 'EUR', 'GBP')),
+	rate_to_pkr NUMERIC(10, 4) NOT NULL DEFAULT 1 CHECK (rate_to_pkr > 0), -- 1 unit of `currency` = rate_to_pkr PKR
 	payment_date DATE DEFAULT CURRENT_DATE,
 	method TEXT,
 	reference TEXT,
