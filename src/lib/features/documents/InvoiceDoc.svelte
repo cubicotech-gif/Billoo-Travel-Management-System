@@ -8,7 +8,7 @@
 	import { ratesOf, toPkr, type Rates } from '$features/bookings/totals';
 	import { paidTotal } from '$features/bookings/lifecycle';
 	import { listQuotations, getQuotationLines } from '$features/quotations/api';
-	import { listPayments } from '$features/payments/api';
+	import { listPayments, type Payment } from '$features/payments/api';
 	import { getOrgSettings, type OrgSettings } from '$features/settings/api';
 	import type { Query } from '$features/queries/types';
 
@@ -31,7 +31,7 @@
 	let rows = $state<Row[]>([]);
 	let totalPkr = $state(0);
 	let discountPkr = $state(0);
-	let paidPkr = $state(0);
+	let payments = $state<Payment[]>([]);
 	let invoiceNo = $state('');
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
@@ -40,15 +40,38 @@
 	// Print-time choice: show the paid-so-far / balance-due settlement, or just
 	// the total payable (some clients get a clean bill with no payment history).
 	let showPayments = $state(true);
+	// Print-time choice: itemise every installment (with its date), or collapse
+	// the received payments into a single "Amount paid" figure.
+	let showPaymentSchedule = $state(true);
+
+	// The client's received installments, oldest first — clients pay in parts on
+	// different dates, so the invoice lists each one with the date it was paid.
+	const paidRows = $derived(
+		payments
+			.filter((p) => p.status === 'paid')
+			.map((p) => ({
+				date: p.paid_date ?? p.created_at,
+				amountPkr: Number(p.amount),
+				method: p.method,
+				reference: p.reference
+			}))
+			.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))
+	);
 
 	// Settlement math — all through the money layer, never raw float arithmetic.
 	// Total payable = package total − order discount; balance = payable − paid.
+	const paidPkr = $derived(paidTotal(payments));
 	const payablePkr = $derived(
 		toNumber(subtract(money(totalPkr, 'PKR'), money(discountPkr, 'PKR')))
 	);
 	const balancePkr = $derived(
 		toNumber(subtract(money(payablePkr, 'PKR'), money(paidPkr, 'PKR')))
 	);
+
+	function fmtDate(d: string): string {
+		const t = new Date(d);
+		return isNaN(t.getTime()) ? d : t.toLocaleDateString();
+	}
 
 	$effect(() => {
 		if (loaded) return;
@@ -59,7 +82,7 @@
 				org = await getOrgSettings().catch(() => null);
 				// Payments are query-scoped (they survive across quote/booking edits),
 				// so load them regardless of which price source we render below.
-				paidPkr = paidTotal(await listPayments(queryId).catch(() => []));
+				payments = await listPayments(queryId).catch(() => []);
 				const booking = await getBookingForQuery(queryId);
 				const items = booking ? await listBookingItems(booking.id) : [];
 				if (booking && items.length > 0) {
@@ -110,6 +133,9 @@
 		</label>
 		<label class="flex items-center gap-1.5 text-sm text-slate-600">
 			<input type="checkbox" bind:checked={showPayments} class="rounded border-slate-300" /> Show payments
+		</label>
+		<label class="flex items-center gap-1.5 text-sm text-slate-600" class:opacity-40={!showPayments}>
+			<input type="checkbox" bind:checked={showPaymentSchedule} disabled={!showPayments} class="rounded border-slate-300" /> Show payment dates
 		</label>
 		<Button onclick={() => window.print()}><Printer class="h-4 w-4" /> Print / Save PDF</Button>
 	</div>
@@ -197,8 +223,23 @@
 					<span class="text-2xl font-bold text-slate-800">{formatAmount(payablePkr, 'PKR')}</span>
 				</div>
 				{#if showPayments && (paidPkr > 0 || balancePkr !== payablePkr)}
-					<div class="flex justify-between text-slate-500">
-						<span>Amount paid</span>
+					{#if showPaymentSchedule && paidRows.length > 0}
+						<div class="border-t border-slate-200 pt-2">
+							<div class="mb-1 text-xs uppercase tracking-wide text-slate-400">Payments received</div>
+							<div class="space-y-1">
+								{#each paidRows as p, i (i)}
+									<div class="flex justify-between text-slate-500">
+										<span>
+											{fmtDate(p.date)}{#if p.method}<span class="text-slate-400"> · {p.method}</span>{/if}
+										</span>
+										<span>{formatAmount(p.amountPkr, 'PKR')}</span>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/if}
+					<div class="flex justify-between {showPaymentSchedule && paidRows.length > 0 ? 'text-slate-600' : 'border-t border-slate-200 pt-2 text-slate-500'}">
+						<span>{showPaymentSchedule && paidRows.length > 0 ? 'Total paid' : 'Amount paid'}</span>
 						<span>− {formatAmount(paidPkr, 'PKR')}</span>
 					</div>
 					<div class="flex items-center justify-between border-t border-slate-200 pt-2">
