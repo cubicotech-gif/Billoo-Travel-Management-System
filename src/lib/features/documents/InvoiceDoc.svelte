@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { ArrowLeft, Printer } from 'lucide-svelte';
 	import { Button } from '$ui';
-	import { formatAmount, toNumber } from '$lib/money';
+	import { formatAmount, money, subtract, toNumber } from '$lib/money';
 	import type { Currency, QuotationLineType } from '$lib/database.types';
 	import { getQuery } from '$features/queries/api';
 	import { getBookingForQuery, listBookingItems } from '$features/bookings/api';
 	import { ratesOf, toPkr, type Rates } from '$features/bookings/totals';
+	import { paidTotal } from '$features/bookings/lifecycle';
 	import { listQuotations, getQuotationLines } from '$features/quotations/api';
+	import { listPayments } from '$features/payments/api';
 	import { getOrgSettings, type OrgSettings } from '$features/settings/api';
 	import type { Query } from '$features/queries/types';
 
@@ -28,11 +30,25 @@
 	let org = $state<OrgSettings | null>(null);
 	let rows = $state<Row[]>([]);
 	let totalPkr = $state(0);
+	let discountPkr = $state(0);
+	let paidPkr = $state(0);
 	let invoiceNo = $state('');
 	let loaded = $state(false);
 	let error = $state<string | null>(null);
 	// Print-time choice: per-service amounts, or just the grand total.
 	let showBreakup = $state(true);
+	// Print-time choice: show the paid-so-far / balance-due settlement, or just
+	// the total payable (some clients get a clean bill with no payment history).
+	let showPayments = $state(true);
+
+	// Settlement math — all through the money layer, never raw float arithmetic.
+	// Total payable = package total − order discount; balance = payable − paid.
+	const payablePkr = $derived(
+		toNumber(subtract(money(totalPkr, 'PKR'), money(discountPkr, 'PKR')))
+	);
+	const balancePkr = $derived(
+		toNumber(subtract(money(payablePkr, 'PKR'), money(paidPkr, 'PKR')))
+	);
 
 	$effect(() => {
 		if (loaded) return;
@@ -41,6 +57,9 @@
 			try {
 				query = await getQuery(queryId);
 				org = await getOrgSettings().catch(() => null);
+				// Payments are query-scoped (they survive across quote/booking edits),
+				// so load them regardless of which price source we render below.
+				paidPkr = paidTotal(await listPayments(queryId).catch(() => []));
 				const booking = await getBookingForQuery(queryId);
 				const items = booking ? await listBookingItems(booking.id) : [];
 				if (booking && items.length > 0) {
@@ -53,6 +72,7 @@
 						booked: (i.meta as Record<string, unknown>)?.booked === true
 					}));
 					totalPkr = Number(booking.actual_sell_pkr);
+					discountPkr = Number(booking.discount_pkr) || 0;
 					invoiceNo = `INV-${query?.query_number ?? booking.id.slice(0, 8)}`;
 				} else {
 					const quotes = await listQuotations(queryId);
@@ -87,6 +107,9 @@
 	<div class="flex items-center gap-3">
 		<label class="flex items-center gap-1.5 text-sm text-slate-600">
 			<input type="checkbox" bind:checked={showBreakup} class="rounded border-slate-300" /> Show price breakup
+		</label>
+		<label class="flex items-center gap-1.5 text-sm text-slate-600">
+			<input type="checkbox" bind:checked={showPayments} class="rounded border-slate-300" /> Show payments
 		</label>
 		<Button onclick={() => window.print()}><Printer class="h-4 w-4" /> Print / Save PDF</Button>
 	</div>
@@ -158,9 +181,35 @@
 		</table>
 
 		<div class="mt-4 flex justify-end border-t border-slate-200 pt-3">
-			<div class="text-right">
-				<div class="text-xs uppercase tracking-wide text-slate-400">Total payable</div>
-				<div class="text-2xl font-bold text-slate-800">{formatAmount(totalPkr, 'PKR')}</div>
+			<div class="w-full max-w-xs space-y-1.5 text-sm">
+				{#if discountPkr > 0}
+					<div class="flex justify-between text-slate-500">
+						<span>Subtotal</span>
+						<span>{formatAmount(totalPkr, 'PKR')}</span>
+					</div>
+					<div class="flex justify-between text-slate-500">
+						<span>Discount</span>
+						<span>− {formatAmount(discountPkr, 'PKR')}</span>
+					</div>
+				{/if}
+				<div class="flex items-center justify-between border-t border-slate-200 pt-2">
+					<span class="text-xs uppercase tracking-wide text-slate-400">Total payable</span>
+					<span class="text-2xl font-bold text-slate-800">{formatAmount(payablePkr, 'PKR')}</span>
+				</div>
+				{#if showPayments && (paidPkr > 0 || balancePkr !== payablePkr)}
+					<div class="flex justify-between text-slate-500">
+						<span>Amount paid</span>
+						<span>− {formatAmount(paidPkr, 'PKR')}</span>
+					</div>
+					<div class="flex items-center justify-between border-t border-slate-200 pt-2">
+						<span class="text-xs uppercase tracking-wide text-slate-400">
+							{balancePkr < 0 ? 'Advance / credit' : 'Balance due'}
+						</span>
+						<span class="text-lg font-bold {balancePkr <= 0 ? 'text-green-700' : 'text-slate-800'}">
+							{formatAmount(Math.abs(balancePkr), 'PKR')}
+						</span>
+					</div>
+				{/if}
 			</div>
 		</div>
 
