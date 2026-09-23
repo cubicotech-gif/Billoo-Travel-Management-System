@@ -100,28 +100,30 @@
 </div>
 
 <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-	<table class="w-full text-sm">
-		<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
-			<tr>
-				<th class="px-3 py-2 font-medium">Component</th>
-				<th class="px-3 py-2 font-medium">Actual vendor</th>
-				<th class="px-3 py-2 text-right font-medium">Quoted c/s</th>
-				<th class="px-3 py-2 font-medium">Act. cost</th>
-				<th class="px-3 py-2 font-medium">Act. sell</th>
-				<th class="px-3 py-2 text-right font-medium">Profit</th>
-				<th class="px-3 py-2 text-right font-medium">vs quote</th>
-				<th class="px-3 py-2"></th>
-			</tr>
-		</thead>
-		<tbody class="divide-y divide-slate-50">
-			{#each $items.data ?? [] as item (item.id)}
-				<BookingItemRow {item} {booking} {queryId} />
-			{/each}
-			{#if ($items.data ?? []).length === 0}
-				<tr><td colspan="8" class="px-3 py-6 text-center text-sm text-slate-400">No services yet — add what you're booking below.</td></tr>
-			{/if}
-		</tbody>
-	</table>
+	<div class="table-scroll">
+		<table class="w-full text-sm">
+			<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+				<tr>
+					<th class="px-3 py-2 font-medium">Component</th>
+					<th class="px-3 py-2 font-medium">Actual vendor</th>
+					<th class="px-3 py-2 text-right font-medium">Quoted c/s</th>
+					<th class="px-3 py-2 font-medium">Act. cost</th>
+					<th class="px-3 py-2 font-medium">Act. sell</th>
+					<th class="px-3 py-2 text-right font-medium">Profit</th>
+					<th class="px-3 py-2 text-right font-medium">vs quote</th>
+					<th class="px-3 py-2"></th>
+				</tr>
+			</thead>
+			<tbody class="divide-y divide-slate-50">
+				{#each $items.data ?? [] as item (item.id)}
+					<BookingItemRow {item} {booking} {queryId} />
+				{/each}
+				{#if ($items.data ?? []).length === 0}
+					<tr><td colspan="8" class="px-3 py-6 text-center text-sm text-slate-400">No services yet — add what you're booking below.</td></tr>
+				{/if}
+			</tbody>
+		</table>
+	</div>
 </div>
 
 <!-- Add a vendor service: cost + sell feed the vendor's account automatically. -->

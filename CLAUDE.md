@@ -50,6 +50,10 @@ src/
     login/  queries/  passengers/  vendors/  finance/
 ```
 
+**Mobile:** below `md` the layout swaps the sidebar for a top bar, a bottom tab
+bar and a slide-out drawer; `Modal` becomes a bottom sheet. Wrap new data
+tables in `<div class="table-scroll">` so they swipe sideways on phones.
+
 Path aliases: `$features` → `src/lib/features`, `$ui` → `src/lib/ui`,
 `$lib` → `src/lib` (built in).
 
@@ -90,7 +94,8 @@ Copy `.env.example` → `.env` and set `PUBLIC_SUPABASE_URL` /
 
 - **Phase 0/1 (done):** SvelteKit shell, money layer, Queries wired end-to-end.
 - **Phase 2 (in progress):** full Queries detail + services, Passengers, Vendors, Finance.
-- **Phase 3:** Realtime notifications + PWA + Web Push.
+- **Phase 3:** Realtime notifications + Web Push. (PWA shell is done: `static/manifest.webmanifest`,
+  `src/service-worker.ts` caches only the app shell — never Supabase data.)
 - **Phase 4:** squash migrations to one baseline, e2e tests, **re-enable auth**.
 
 ## Auth (temporarily disabled)

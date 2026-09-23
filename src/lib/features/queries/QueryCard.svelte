@@ -68,7 +68,7 @@
 	]} {dragging ? 'opacity-50' : ''}"
 >
 	<!-- hover quick actions (desktop) -->
-	<div class="absolute right-1.5 top-1.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+	<div class="absolute right-1.5 top-1.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">
 		<button type="button" onclick={onEdit} class="rounded bg-white/90 p-1 text-slate-400 shadow-sm hover:bg-slate-100 hover:text-slate-600" aria-label="Edit">
 			<Pencil class="h-3.5 w-3.5" />
 		</button>

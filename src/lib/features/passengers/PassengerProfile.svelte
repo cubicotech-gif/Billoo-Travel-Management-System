@@ -228,23 +228,25 @@
 			<div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-sm text-slate-400">No payments recorded yet.</div>
 		{:else}
 			<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-				<table class="w-full text-sm">
-					<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
-						<tr><th class="px-4 py-3 font-medium">Query</th><th class="px-4 py-3 font-medium">Label</th><th class="px-4 py-3 text-right font-medium">Amount</th><th class="px-4 py-3 font-medium">Date</th><th class="px-4 py-3 font-medium">Status</th></tr>
-					</thead>
-					<tbody class="divide-y divide-slate-50">
-						{#each payments as pay (pay.id)}
-							{@const st = paymentStatus(pay)}
-							<tr class="hover:bg-slate-50">
-								<td class="px-4 py-3 font-mono text-xs"><a href="/queries/{pay.query_id}" class="text-brand-600 hover:underline">{queryRef.get(pay.query_id) ?? '—'}</a></td>
-								<td class="px-4 py-3 text-slate-600">{pay.label}</td>
-								<td class="px-4 py-3 text-right text-slate-700">{formatAmount(Number(pay.amount), 'PKR')}</td>
-								<td class="px-4 py-3 text-xs text-slate-400">{fmtDate(pay.paid_date ?? pay.due_date)}</td>
-								<td class="px-4 py-3"><Badge tone={payTone[st]}>{st}</Badge></td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+				<div class="table-scroll">
+					<table class="w-full text-sm">
+						<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+							<tr><th class="px-4 py-3 font-medium">Query</th><th class="px-4 py-3 font-medium">Label</th><th class="px-4 py-3 text-right font-medium">Amount</th><th class="px-4 py-3 font-medium">Date</th><th class="px-4 py-3 font-medium">Status</th></tr>
+						</thead>
+						<tbody class="divide-y divide-slate-50">
+							{#each payments as pay (pay.id)}
+								{@const st = paymentStatus(pay)}
+								<tr class="hover:bg-slate-50">
+									<td class="px-4 py-3 font-mono text-xs"><a href="/queries/{pay.query_id}" class="text-brand-600 hover:underline">{queryRef.get(pay.query_id) ?? '—'}</a></td>
+									<td class="px-4 py-3 text-slate-600">{pay.label}</td>
+									<td class="px-4 py-3 text-right text-slate-700">{formatAmount(Number(pay.amount), 'PKR')}</td>
+									<td class="px-4 py-3 text-xs text-slate-400">{fmtDate(pay.paid_date ?? pay.due_date)}</td>
+									<td class="px-4 py-3"><Badge tone={payTone[st]}>{st}</Badge></td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{/if}
 	{:else if tab === 'documents'}
@@ -254,22 +256,24 @@
 			<div class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-slate-400">No queries yet for this passenger.</div>
 		{:else}
 			<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-				<table class="w-full text-sm">
-					<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
-						<tr><th class="px-4 py-3 font-medium">Query</th><th class="px-4 py-3 font-medium">Destination</th><th class="px-4 py-3 font-medium">Stage</th><th class="px-4 py-3 text-right font-medium">Selling</th><th class="px-4 py-3 font-medium">Created</th></tr>
-					</thead>
-					<tbody class="divide-y divide-slate-50">
-						{#each $queries.data ?? [] as q (q.id)}
-							<tr class="hover:bg-slate-50">
-								<td class="px-4 py-3 font-mono text-xs"><a href="/queries/{q.id}" class="text-brand-600 hover:underline">{q.query_number}</a></td>
-								<td class="px-4 py-3 text-slate-600">{q.destination}</td>
-								<td class="px-4 py-3"><Badge tone={stageFor(q.status).tone}>{stageFor(q.status).label}</Badge></td>
-								<td class="px-4 py-3 text-right text-slate-700">{formatAmount(Number(q.selling_price))}</td>
-								<td class="px-4 py-3 text-xs text-slate-400">{fmtDate(q.created_at)}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+				<div class="table-scroll">
+					<table class="w-full text-sm">
+						<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+							<tr><th class="px-4 py-3 font-medium">Query</th><th class="px-4 py-3 font-medium">Destination</th><th class="px-4 py-3 font-medium">Stage</th><th class="px-4 py-3 text-right font-medium">Selling</th><th class="px-4 py-3 font-medium">Created</th></tr>
+						</thead>
+						<tbody class="divide-y divide-slate-50">
+							{#each $queries.data ?? [] as q (q.id)}
+								<tr class="hover:bg-slate-50">
+									<td class="px-4 py-3 font-mono text-xs"><a href="/queries/{q.id}" class="text-brand-600 hover:underline">{q.query_number}</a></td>
+									<td class="px-4 py-3 text-slate-600">{q.destination}</td>
+									<td class="px-4 py-3"><Badge tone={stageFor(q.status).tone}>{stageFor(q.status).label}</Badge></td>
+									<td class="px-4 py-3 text-right text-slate-700">{formatAmount(Number(q.selling_price))}</td>
+									<td class="px-4 py-3 text-xs text-slate-400">{fmtDate(q.created_at)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{/if}
 	{/if}

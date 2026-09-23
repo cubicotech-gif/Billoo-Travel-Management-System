@@ -70,31 +70,33 @@
 						<div>
 							<div class="mb-1 text-xs font-semibold text-slate-600">{g.vendor}</div>
 							<div class="overflow-hidden rounded-md border border-slate-200 bg-white">
-								<table class="w-full text-xs">
-									<tbody class="divide-y divide-slate-50">
-										{#each g.rows as r (`${r.roomType}|${r.mealPlan}|${r.validFrom}|${r.rate}`)}
-											<tr
-												class="group {onPick ? 'cursor-pointer' : ''} hover:bg-brand-50/60"
-												onclick={onPick ? () => applyPick(g.vendorId, r) : undefined}
-												title={onPick ? 'Fill this stay with this rate' : undefined}
-											>
-												<td class="px-2 py-1.5 text-slate-600">{roomLabel(r.roomType, r.occupancy)}</td>
-												<td class="px-2 py-1.5"><Badge tone={mealTone(r.mealPlan)}>{r.mealPlan}</Badge></td>
-												<td class="whitespace-nowrap px-2 py-1.5 text-right font-medium text-slate-700">{formatAmount(r.rate, 'SAR')}</td>
-												<td class="whitespace-nowrap px-2 py-1.5 text-slate-400">{fmtDate(r.validFrom)} → {fmtDate(r.validTo)}</td>
-												<td class="px-2 py-1.5 text-right">
-													{#if r.needsVerify}
-														<span class="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700">
-															<AlertTriangle class="h-3 w-3" /> verify
-														</span>
-													{:else if onPick}
-														<MousePointerClick class="ml-auto h-3.5 w-3.5 text-slate-300 group-hover:text-brand-500" />
-													{/if}
-												</td>
-											</tr>
-										{/each}
-									</tbody>
-								</table>
+								<div class="table-scroll">
+									<table class="w-full text-xs">
+										<tbody class="divide-y divide-slate-50">
+											{#each g.rows as r (`${r.roomType}|${r.mealPlan}|${r.validFrom}|${r.rate}`)}
+												<tr
+													class="group {onPick ? 'cursor-pointer' : ''} hover:bg-brand-50/60"
+													onclick={onPick ? () => applyPick(g.vendorId, r) : undefined}
+													title={onPick ? 'Fill this stay with this rate' : undefined}
+												>
+													<td class="px-2 py-1.5 text-slate-600">{roomLabel(r.roomType, r.occupancy)}</td>
+													<td class="px-2 py-1.5"><Badge tone={mealTone(r.mealPlan)}>{r.mealPlan}</Badge></td>
+													<td class="whitespace-nowrap px-2 py-1.5 text-right font-medium text-slate-700">{formatAmount(r.rate, 'SAR')}</td>
+													<td class="whitespace-nowrap px-2 py-1.5 text-slate-400">{fmtDate(r.validFrom)} → {fmtDate(r.validTo)}</td>
+													<td class="px-2 py-1.5 text-right">
+														{#if r.needsVerify}
+															<span class="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700">
+																<AlertTriangle class="h-3 w-3" /> verify
+															</span>
+														{:else if onPick}
+															<MousePointerClick class="ml-auto h-3.5 w-3.5 text-slate-300 group-hover:text-brand-500" />
+														{/if}
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
 							</div>
 						</div>
 					{/each}

@@ -75,49 +75,51 @@
 		</div>
 	{:else}
 		<div class="mb-3 overflow-hidden rounded-lg border border-slate-200">
-			<table class="w-full text-sm">
-				<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
-					<tr>
-						<th class="px-3 py-2 font-medium">Label</th>
-						<th class="px-3 py-2 text-right font-medium">Amount</th>
-						<th class="px-3 py-2 font-medium">Date</th>
-						<th class="px-3 py-2 font-medium">Status</th>
-						<th class="px-3 py-2"></th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-slate-50">
-					{#each rows as p (p.id)}
-						{@const st = paymentStatus(p)}
-						<tr class="hover:bg-slate-50">
-							<td class="px-3 py-2 text-slate-700">{p.label}</td>
-							<td class="px-3 py-2 text-right text-slate-700">{formatAmount(Number(p.amount), 'PKR')}</td>
-							<td class="px-3 py-2 text-slate-500">
-								<span class="inline-flex items-center gap-1">
-									{#if st === 'overdue'}<CalendarClock class="h-3.5 w-3.5 text-red-500" />{/if}
-									{p.status === 'paid' ? (p.paid_date ?? '—') : (p.due_date ?? '—')}
-								</span>
-							</td>
-							<td class="px-3 py-2"><Badge tone={tone[st]}>{st}</Badge></td>
-							<td class="px-3 py-2">
-								<div class="flex justify-end gap-1">
-									{#if p.status !== 'paid'}
-										<button onclick={() => markPaid(p)} class="rounded p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600" aria-label="Mark paid" title="Mark paid">
-											<Check class="h-4 w-4" />
-										</button>
-									{:else}
-										<a href="/queries/{queryId}/receipt/{p.id}" class="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Receipt" title="Receipt">
-											<Receipt class="h-4 w-4" />
-										</a>
-									{/if}
-									<button onclick={() => confirm('Delete this payment?') && $remove.mutate(p.id)} class="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete">
-										<Trash2 class="h-4 w-4" />
-									</button>
-								</div>
-							</td>
+			<div class="table-scroll">
+				<table class="w-full text-sm">
+					<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+						<tr>
+							<th class="px-3 py-2 font-medium">Label</th>
+							<th class="px-3 py-2 text-right font-medium">Amount</th>
+							<th class="px-3 py-2 font-medium">Date</th>
+							<th class="px-3 py-2 font-medium">Status</th>
+							<th class="px-3 py-2"></th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
+					</thead>
+					<tbody class="divide-y divide-slate-50">
+						{#each rows as p (p.id)}
+							{@const st = paymentStatus(p)}
+							<tr class="hover:bg-slate-50">
+								<td class="px-3 py-2 text-slate-700">{p.label}</td>
+								<td class="px-3 py-2 text-right text-slate-700">{formatAmount(Number(p.amount), 'PKR')}</td>
+								<td class="px-3 py-2 text-slate-500">
+									<span class="inline-flex items-center gap-1">
+										{#if st === 'overdue'}<CalendarClock class="h-3.5 w-3.5 text-red-500" />{/if}
+										{p.status === 'paid' ? (p.paid_date ?? '—') : (p.due_date ?? '—')}
+									</span>
+								</td>
+								<td class="px-3 py-2"><Badge tone={tone[st]}>{st}</Badge></td>
+								<td class="px-3 py-2">
+									<div class="flex justify-end gap-1">
+										{#if p.status !== 'paid'}
+											<button onclick={() => markPaid(p)} class="rounded p-1.5 text-slate-400 hover:bg-green-50 hover:text-green-600" aria-label="Mark paid" title="Mark paid">
+												<Check class="h-4 w-4" />
+											</button>
+										{:else}
+											<a href="/queries/{queryId}/receipt/{p.id}" class="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Receipt" title="Receipt">
+												<Receipt class="h-4 w-4" />
+											</a>
+										{/if}
+										<button onclick={() => confirm('Delete this payment?') && $remove.mutate(p.id)} class="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete">
+											<Trash2 class="h-4 w-4" />
+										</button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		</div>
 	{/if}
 

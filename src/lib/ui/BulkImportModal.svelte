@@ -65,16 +65,18 @@
 
 	{#if rows.length}
 		<div class="mt-3 max-h-48 overflow-auto rounded-lg border border-slate-200">
-			<table class="w-full text-xs">
-				<thead class="bg-slate-50 text-left text-slate-400">
-					<tr>{#each columns as c, i (i)}<th class="px-2 py-1 font-medium">{c}</th>{/each}</tr>
-				</thead>
-				<tbody class="divide-y divide-slate-50">
-					{#each rows.slice(0, 20) as r, i (i)}
-						<tr>{#each columns as _c, ci (ci)}<td class="px-2 py-1 text-slate-600">{r[ci] ?? ''}</td>{/each}</tr>
-					{/each}
-				</tbody>
-			</table>
+			<div class="table-scroll">
+				<table class="w-full text-xs">
+					<thead class="bg-slate-50 text-left text-slate-400">
+						<tr>{#each columns as c, i (i)}<th class="px-2 py-1 font-medium">{c}</th>{/each}</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-50">
+						{#each rows.slice(0, 20) as r, i (i)}
+							<tr>{#each columns as _c, ci (ci)}<td class="px-2 py-1 text-slate-600">{r[ci] ?? ''}</td>{/each}</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		</div>
 		<p class="mt-1 text-xs text-slate-400">{rows.length} row(s){rows.length > 20 ? ' (showing 20)' : ''}</p>
 	{/if}

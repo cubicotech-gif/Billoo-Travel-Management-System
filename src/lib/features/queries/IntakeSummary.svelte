@@ -44,19 +44,21 @@
 				<MapPin class="h-3.5 w-3.5" /> Itinerary
 			</div>
 			<div class="overflow-hidden rounded-lg border border-slate-200">
-				<table class="w-full text-sm">
-					<tbody class="divide-y divide-slate-50">
-						{#each cities as c, i (i)}
-							<tr>
-								<td class="px-3 py-1.5 font-medium text-slate-700">{c.city || '—'}</td>
-								<td class="px-3 py-1.5 text-slate-500">{c.nights} nights</td>
-								{#if c.arrival_date}<td class="px-3 py-1.5 text-slate-500">arr {c.arrival_date}</td>{/if}
-								{#if c.activities}<td class="px-3 py-1.5 text-slate-500">{c.activities} activities</td>{/if}
-								<td class="px-3 py-1.5 text-slate-400">{c.hotel_preference}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+				<div class="table-scroll">
+					<table class="w-full text-sm">
+						<tbody class="divide-y divide-slate-50">
+							{#each cities as c, i (i)}
+								<tr>
+									<td class="px-3 py-1.5 font-medium text-slate-700">{c.city || '—'}</td>
+									<td class="px-3 py-1.5 text-slate-500">{c.nights} nights</td>
+									{#if c.arrival_date}<td class="px-3 py-1.5 text-slate-500">arr {c.arrival_date}</td>{/if}
+									{#if c.activities}<td class="px-3 py-1.5 text-slate-500">{c.activities} activities</td>{/if}
+									<td class="px-3 py-1.5 text-slate-400">{c.hotel_preference}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</div>
 	{/if}

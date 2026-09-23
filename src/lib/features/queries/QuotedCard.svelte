@@ -69,7 +69,7 @@
 		? 'opacity-50'
 		: ''}"
 >
-	<div class="absolute right-1.5 top-1.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
+	<div class="absolute right-1.5 top-1.5 z-20 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">
 		<button type="button" onclick={onEdit} class="rounded bg-white/90 p-1 text-slate-400 shadow-sm hover:bg-slate-100 hover:text-slate-600" aria-label="Edit">
 			<Pencil class="h-3.5 w-3.5" />
 		</button>
@@ -130,7 +130,7 @@
 							<button
 								type="button"
 								onclick={() => $deleteReply.mutate(r.id)}
-								class="shrink-0 text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover/r:opacity-100"
+								class="shrink-0 text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover/r:opacity-100 [@media(hover:none)]:opacity-100"
 								aria-label="Delete reply"
 							>
 								<Trash2 class="h-3 w-3" />
