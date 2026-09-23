@@ -94,7 +94,7 @@
 						<button
 							type="button"
 							onclick={() => $deleteReply.mutate(r.id)}
-							class="mt-1 shrink-0 text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
+							class="mt-1 shrink-0 text-slate-300 opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 [@media(hover:none)]:opacity-100"
 							aria-label="Delete message"
 						>
 							<Trash2 class="h-3.5 w-3.5" />

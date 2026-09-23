@@ -35,7 +35,7 @@
 	});
 </script>
 
-<div class="mb-6 flex items-center justify-between">
+<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
 	<div>
 		<h1 class="text-2xl font-bold text-slate-800">Dashboard</h1>
 		<p class="text-sm text-slate-500">Umrah season at a glance.</p>
@@ -52,22 +52,22 @@
 {:else if $queries.isError}
 	<p class="text-red-600">Failed to load: {$queries.error.message}</p>
 {:else}
-	<div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+	<div class="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
 		<Card>
 			<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Total Queries</div>
-			<div class="mt-1 text-2xl font-bold text-slate-800">{stats.total}</div>
+			<div class="mt-1 break-words text-lg font-bold sm:text-2xl text-slate-800">{stats.total}</div>
 		</Card>
 		<Card>
 			<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Open</div>
-			<div class="mt-1 text-2xl font-bold text-slate-800">{stats.open}</div>
+			<div class="mt-1 break-words text-lg font-bold sm:text-2xl text-slate-800">{stats.open}</div>
 		</Card>
 		<Card>
 			<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Pipeline Value</div>
-			<div class="mt-1 text-2xl font-bold text-slate-800">{formatAmount(stats.pipelineValue)}</div>
+			<div class="mt-1 break-words text-lg font-bold sm:text-2xl text-slate-800">{formatAmount(stats.pipelineValue)}</div>
 		</Card>
 		<Card>
 			<div class="text-xs font-medium uppercase tracking-wide text-slate-400">Projected Profit</div>
-			<div class="mt-1 text-2xl font-bold text-green-600">{formatAmount(stats.projectedProfit)}</div>
+			<div class="mt-1 break-words text-lg font-bold sm:text-2xl text-green-600">{formatAmount(stats.projectedProfit)}</div>
 		</Card>
 	</div>
 

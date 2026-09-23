@@ -214,43 +214,45 @@
 									{#if v.cheapest > 0}<span class="text-xs text-slate-400">from {formatAmount(v.cheapest, 'SAR')}</span>{/if}
 								</div>
 								<div class="overflow-hidden rounded-lg border border-slate-100">
-									<table class="w-full text-sm">
-										<tbody class="divide-y divide-slate-50">
-											{#each v.rooms as room (room.roomType + '|' + room.occupancy + '|' + room.mealPlan)}
-												{#each room.bands as band, bi (band.id)}
-													{@const r = byId.get(band.id)}
-													<tr class="hover:bg-slate-50/60 {band.invalidated ? 'opacity-50' : ''}">
-														<td class="w-32 px-3 py-1.5 align-top">
-															{#if bi === 0}
-																<span class="font-medium text-slate-700">{roomLabel(room.roomType, room.occupancy)}</span>
-															{/if}
-														</td>
-														<td class="w-14 px-2 py-1.5 align-top">
-															{#if bi === 0}<Badge tone={mealTone(room.mealPlan)}>{room.mealPlan}</Badge>{/if}
-														</td>
-														<td class="whitespace-nowrap px-3 py-1.5 text-slate-500">{fmtDate(band.from)} → {fmtDate(band.to)}</td>
-														<td class="whitespace-nowrap px-3 py-1.5 text-right font-semibold text-slate-800">{formatAmount(band.rate, band.currency)}</td>
-														<td class="px-3 py-1.5">
-															<div class="flex items-center justify-end gap-1">
-																{#if band.needsVerify}
-																	<span class="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700">
-																		<AlertTriangle class="h-3 w-3" /> verify
-																	</span>
+									<div class="table-scroll">
+										<table class="w-full text-sm">
+											<tbody class="divide-y divide-slate-50">
+												{#each v.rooms as room (room.roomType + '|' + room.occupancy + '|' + room.mealPlan)}
+													{#each room.bands as band, bi (band.id)}
+														{@const r = byId.get(band.id)}
+														<tr class="hover:bg-slate-50/60 {band.invalidated ? 'opacity-50' : ''}">
+															<td class="w-32 px-3 py-1.5 align-top">
+																{#if bi === 0}
+																	<span class="font-medium text-slate-700">{roomLabel(room.roomType, room.occupancy)}</span>
 																{/if}
-																{#if band.invalidated}<Badge tone="danger">void</Badge>{/if}
-																<button type="button" onclick={() => openEdit(band.id)} class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Edit"><Pencil class="h-4 w-4" /></button>
-																<button type="button" onclick={() => toggleVerify(band.id)} class="rounded p-1 text-slate-400 hover:bg-amber-50 hover:text-amber-600" aria-label="Toggle verify">
-																	{#if r?.needsVerify}<ShieldCheck class="h-4 w-4" />{:else}<ShieldAlert class="h-4 w-4" />{/if}
-																</button>
-																<button type="button" onclick={() => toggleInvalid(band.id)} class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Toggle invalidate"><RotateCcw class="h-4 w-4" /></button>
-																<button type="button" onclick={() => remove(band.id)} class="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete"><Trash2 class="h-4 w-4" /></button>
-															</div>
-														</td>
-													</tr>
+															</td>
+															<td class="w-14 px-2 py-1.5 align-top">
+																{#if bi === 0}<Badge tone={mealTone(room.mealPlan)}>{room.mealPlan}</Badge>{/if}
+															</td>
+															<td class="whitespace-nowrap px-3 py-1.5 text-slate-500">{fmtDate(band.from)} → {fmtDate(band.to)}</td>
+															<td class="whitespace-nowrap px-3 py-1.5 text-right font-semibold text-slate-800">{formatAmount(band.rate, band.currency)}</td>
+															<td class="px-3 py-1.5">
+																<div class="flex items-center justify-end gap-1">
+																	{#if band.needsVerify}
+																		<span class="inline-flex items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] font-semibold text-amber-700">
+																			<AlertTriangle class="h-3 w-3" /> verify
+																		</span>
+																	{/if}
+																	{#if band.invalidated}<Badge tone="danger">void</Badge>{/if}
+																	<button type="button" onclick={() => openEdit(band.id)} class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Edit"><Pencil class="h-4 w-4" /></button>
+																	<button type="button" onclick={() => toggleVerify(band.id)} class="rounded p-1 text-slate-400 hover:bg-amber-50 hover:text-amber-600" aria-label="Toggle verify">
+																		{#if r?.needsVerify}<ShieldCheck class="h-4 w-4" />{:else}<ShieldAlert class="h-4 w-4" />{/if}
+																	</button>
+																	<button type="button" onclick={() => toggleInvalid(band.id)} class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Toggle invalidate"><RotateCcw class="h-4 w-4" /></button>
+																	<button type="button" onclick={() => remove(band.id)} class="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete"><Trash2 class="h-4 w-4" /></button>
+																</div>
+															</td>
+														</tr>
+													{/each}
 												{/each}
-											{/each}
-										</tbody>
-									</table>
+											</tbody>
+										</table>
+									</div>
 								</div>
 							</div>
 						{/each}

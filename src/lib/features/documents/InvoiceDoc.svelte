@@ -178,33 +178,35 @@
 			</div>
 		</div>
 
-		<table class="w-full text-sm">
-			<thead class="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
-				<tr>
-					<th class="py-2 font-medium">Service</th>
-					<th class="py-2 text-center font-medium">Status</th>
-					{#if showBreakup}<th class="py-2 text-right font-medium">Amount (PKR)</th>{/if}
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-slate-100">
-				{#each rows as r, i (i)}
+		<div class="table-scroll">
+			<table class="w-full text-sm">
+				<thead class="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
 					<tr>
-						<td class="py-2 text-slate-700">{r.label}</td>
-						<td class="py-2 text-center">
-							{#if r.booked}
-								<span class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">Booked</span>
-							{:else}
-								<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending</span>
-							{/if}
-						</td>
-						{#if showBreakup}<td class="py-2 text-right font-medium text-slate-700">{formatAmount(r.amountPkr, 'PKR')}</td>{/if}
+						<th class="py-2 font-medium">Service</th>
+						<th class="py-2 text-center font-medium">Status</th>
+						{#if showBreakup}<th class="py-2 text-right font-medium">Amount (PKR)</th>{/if}
 					</tr>
-				{/each}
-				{#if rows.length === 0}
-					<tr><td colspan={showBreakup ? 3 : 2} class="py-4 text-center text-slate-400">No services yet.</td></tr>
-				{/if}
-			</tbody>
-		</table>
+				</thead>
+				<tbody class="divide-y divide-slate-100">
+					{#each rows as r, i (i)}
+						<tr>
+							<td class="py-2 text-slate-700">{r.label}</td>
+							<td class="py-2 text-center">
+								{#if r.booked}
+									<span class="rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-green-700">Booked</span>
+								{:else}
+									<span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">Pending</span>
+								{/if}
+							</td>
+							{#if showBreakup}<td class="py-2 text-right font-medium text-slate-700">{formatAmount(r.amountPkr, 'PKR')}</td>{/if}
+						</tr>
+					{/each}
+					{#if rows.length === 0}
+						<tr><td colspan={showBreakup ? 3 : 2} class="py-4 text-center text-slate-400">No services yet.</td></tr>
+					{/if}
+				</tbody>
+			</table>
+		</div>
 
 		<div class="mt-4 flex justify-end border-t border-slate-200 pt-3">
 			<div class="w-full max-w-xs space-y-1.5 text-sm">

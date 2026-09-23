@@ -189,12 +189,12 @@
 	}
 </script>
 
-<div class="mb-6 flex items-center justify-between">
+<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
 	<div>
 		<h1 class="text-2xl font-bold text-slate-800">Queries</h1>
 		<p class="text-sm text-slate-500">Drag across the pipeline, or click a card to expand, advance, and act.</p>
 	</div>
-	<div class="flex items-center gap-2">
+	<div class="flex flex-wrap items-center gap-2">
 		<Button variant="secondary" onclick={() => (showDeleted = !showDeleted)}>
 			<Archive class="h-4 w-4" /> Deleted{($deleted.data ?? []).length ? ` · ${($deleted.data ?? []).length}` : ''}
 		</Button>
@@ -209,13 +209,13 @@
 
 <!-- Search + filter chips: find a passenger by name and narrow the board. -->
 <div class="mb-5 flex flex-wrap items-center gap-2">
-	<div class="relative">
+	<div class="relative w-full sm:w-80">
 		<Search class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
 		<input
 			type="search"
 			bind:value={search}
 			placeholder="Search by passenger name, ref or destination…"
-			class="w-80 rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+			class="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm text-slate-700 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
 		/>
 	</div>
 
@@ -285,12 +285,13 @@
 		{/if}
 	{/snippet}
 
-	<div class="flex items-start gap-4">
-		<!-- Always open: narrow single-column lists that scroll vertically. -->
+	<div class="flex flex-col gap-4 lg:flex-row lg:items-start">
+		<!-- Always open: narrow single-column lists that scroll vertically
+		     (stacked full-width on phones/tablets). -->
 		{#each openColumns as col (col.id)}
 			<div
 				role="list"
-				class="flex max-h-[calc(100vh-11rem)] w-80 shrink-0 flex-col rounded-xl border bg-slate-100/60 transition-colors {dragOverId ===
+				class="flex max-h-[70vh] w-full shrink-0 flex-col lg:max-h-[calc(100vh-11rem)] lg:w-80 rounded-xl border bg-slate-100/60 transition-colors {dragOverId ===
 				col.id
 					? 'border-brand-400 bg-brand-50'
 					: 'border-transparent'}"
@@ -349,7 +350,7 @@
 						onclick={() => (openState[col.id] = !open)}
 						class="flex w-full items-center justify-between px-3 py-2.5 hover:bg-slate-100/70"
 					>
-						<span class="flex items-center gap-2 text-sm font-semibold {headerTone[col.tone] ?? 'text-slate-700'}">
+						<span class="flex min-w-0 items-center gap-2 text-sm font-semibold {headerTone[col.tone] ?? 'text-slate-700'}">
 							<ChevronDown class="h-4 w-4 text-slate-400 transition-transform {open ? '' : '-rotate-90'}" />
 							<span class="h-2 w-2 rounded-full {dotTone[col.tone] ?? 'bg-slate-300'}"></span>
 							{col.label}

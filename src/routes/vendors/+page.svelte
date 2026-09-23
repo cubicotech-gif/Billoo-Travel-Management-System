@@ -48,7 +48,7 @@
 	}
 </script>
 
-<div class="mb-6 flex items-center justify-between">
+<div class="mb-6 flex flex-wrap items-center justify-between gap-3">
 	<div>
 		<h1 class="text-2xl font-bold text-slate-800">Vendors</h1>
 		<p class="text-sm text-slate-500">Suppliers you book hotels, transfers, visas and tickets from.</p>
@@ -69,53 +69,55 @@
 	</div>
 {:else}
 	<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-		<table class="w-full text-sm">
-			<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
-				<tr>
-					<th class="px-4 py-3 font-medium">Name</th>
-					<th class="px-4 py-3 font-medium">Services</th>
-					<th class="px-4 py-3 font-medium">WhatsApp group</th>
-					<th class="px-4 py-3 font-medium">Phone</th>
-					<th class="px-4 py-3 font-medium">Location</th>
-					<th class="px-4 py-3"></th>
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-slate-50">
-				{#each $vendors.data ?? [] as v (v.id)}
-					<tr class="hover:bg-slate-50">
-						<td class="px-4 py-3 font-medium text-slate-700">
-							<a href="/vendors/{v.id}" class="hover:text-brand-600">{v.name}</a>
-						</td>
-						<td class="px-4 py-3">
-							<div class="flex flex-wrap gap-1">
-								{#each v.service_types?.length ? v.service_types : [v.type] as s (s)}
-									<Badge tone="info">{s}</Badge>
-								{/each}
-							</div>
-						</td>
-						<td class="px-4 py-3">
-							{#if v.whatsapp_group}
-								<a href={v.whatsapp_group} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-green-600 hover:underline">
-									<MessageCircle class="h-4 w-4" /> Open group
-								</a>
-							{:else}<span class="text-slate-400">—</span>{/if}
-						</td>
-						<td class="px-4 py-3 text-slate-600">{v.phone ?? v.whatsapp_number ?? '—'}</td>
-						<td class="px-4 py-3 text-slate-500">{v.location ?? '—'}</td>
-						<td class="px-4 py-3">
-							<div class="flex justify-end gap-1">
-								<button onclick={() => openEdit(v)} class="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Edit">
-									<Pencil class="h-4 w-4" />
-								</button>
-								<button onclick={() => remove(v)} class="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete">
-									<Trash2 class="h-4 w-4" />
-								</button>
-							</div>
-						</td>
+		<div class="table-scroll">
+			<table class="w-full text-sm">
+				<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+					<tr>
+						<th class="px-4 py-3 font-medium">Name</th>
+						<th class="px-4 py-3 font-medium">Services</th>
+						<th class="px-4 py-3 font-medium">WhatsApp group</th>
+						<th class="px-4 py-3 font-medium">Phone</th>
+						<th class="px-4 py-3 font-medium">Location</th>
+						<th class="px-4 py-3"></th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody class="divide-y divide-slate-50">
+					{#each $vendors.data ?? [] as v (v.id)}
+						<tr class="hover:bg-slate-50">
+							<td class="px-4 py-3 font-medium text-slate-700">
+								<a href="/vendors/{v.id}" class="hover:text-brand-600">{v.name}</a>
+							</td>
+							<td class="px-4 py-3">
+								<div class="flex flex-wrap gap-1">
+									{#each v.service_types?.length ? v.service_types : [v.type] as s (s)}
+										<Badge tone="info">{s}</Badge>
+									{/each}
+								</div>
+							</td>
+							<td class="px-4 py-3">
+								{#if v.whatsapp_group}
+									<a href={v.whatsapp_group} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-green-600 hover:underline">
+										<MessageCircle class="h-4 w-4" /> Open group
+									</a>
+								{:else}<span class="text-slate-400">—</span>{/if}
+							</td>
+							<td class="px-4 py-3 text-slate-600">{v.phone ?? v.whatsapp_number ?? '—'}</td>
+							<td class="px-4 py-3 text-slate-500">{v.location ?? '—'}</td>
+							<td class="px-4 py-3">
+								<div class="flex justify-end gap-1">
+									<button onclick={() => openEdit(v)} class="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Edit">
+										<Pencil class="h-4 w-4" />
+									</button>
+									<button onclick={() => remove(v)} class="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete">
+										<Trash2 class="h-4 w-4" />
+									</button>
+								</div>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	</div>
 {/if}
 

@@ -134,7 +134,7 @@
 </div>
 
 <!-- Type tabs -->
-<div class="mb-4 flex items-center justify-between">
+<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 	<div class="flex gap-1 rounded-lg bg-slate-100 p-1">
 		{#each RATE_TYPES as t (t.type)}
 			<button
@@ -167,58 +167,60 @@
 	</div>
 {:else}
 	<div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
-		<table class="w-full text-sm">
-			<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
-				<tr>
-					<th class="px-4 py-3 font-medium">Name</th>
-					{#if config.hasCity}<th class="px-4 py-3 font-medium">City</th>{/if}
-					<th class="px-4 py-3 font-medium">Vendor</th>
-					<th class="px-4 py-3 text-right font-medium">Cost</th>
-					<th class="px-4 py-3 text-right font-medium">Selling</th>
-					<th class="px-4 py-3 text-right font-medium">Margin</th>
-					<th class="px-4 py-3 font-medium">Date</th>
-					<th class="px-4 py-3"></th>
-				</tr>
-			</thead>
-			<tbody class="divide-y divide-slate-50">
-				{#each rows as r (r.id)}
-					{@const margin = Number(r.selling_price) - Number(r.cost_price)}
-					<tr class="hover:bg-slate-50">
-						<td class="px-4 py-3 font-medium text-slate-700">{r.name}</td>
-						{#if config.hasCity}<td class="px-4 py-3"><Badge tone="neutral">{r.city ?? '—'}</Badge></td>{/if}
-						<td class="px-4 py-3 text-slate-500">{vendorName(r.vendor_id)}</td>
-						<td class="px-4 py-3 text-right text-slate-600">{formatAmount(Number(r.cost_price), r.currency)}</td>
-						<td class="px-4 py-3 text-right text-slate-700">{formatAmount(Number(r.selling_price), r.currency)}</td>
-						<td class="px-4 py-3 text-right font-medium {margin >= 0 ? 'text-green-600' : 'text-red-600'}">
-							{formatAmount(margin, r.currency)}
-						</td>
-						<td class="px-4 py-3 text-xs">
-							<div class="flex items-center gap-1.5">
-								<span class="text-slate-400">{new Date(r.rate_date).toLocaleDateString()}</span>
-								{#if isRateValid(r.rate_date)}
-									<Badge tone="success">valid</Badge>
-								{:else}
-									<Badge tone="warning">stale</Badge>
-								{/if}
-							</div>
-						</td>
-						<td class="px-4 py-3">
-							<div class="flex justify-end gap-1">
-								<button onclick={() => openUpdateToday(r)} class="rounded p-1.5 text-slate-400 hover:bg-brand-50 hover:text-brand-600" aria-label="Update today's rate" title="Update today's rate">
-									<CalendarClock class="h-4 w-4" />
-								</button>
-								<button onclick={() => openEdit(r)} class="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Edit">
-									<Pencil class="h-4 w-4" />
-								</button>
-								<button onclick={() => remove(r)} class="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete">
-									<Trash2 class="h-4 w-4" />
-								</button>
-							</div>
-						</td>
+		<div class="table-scroll">
+			<table class="w-full text-sm">
+				<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+					<tr>
+						<th class="px-4 py-3 font-medium">Name</th>
+						{#if config.hasCity}<th class="px-4 py-3 font-medium">City</th>{/if}
+						<th class="px-4 py-3 font-medium">Vendor</th>
+						<th class="px-4 py-3 text-right font-medium">Cost</th>
+						<th class="px-4 py-3 text-right font-medium">Selling</th>
+						<th class="px-4 py-3 text-right font-medium">Margin</th>
+						<th class="px-4 py-3 font-medium">Date</th>
+						<th class="px-4 py-3"></th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody class="divide-y divide-slate-50">
+					{#each rows as r (r.id)}
+						{@const margin = Number(r.selling_price) - Number(r.cost_price)}
+						<tr class="hover:bg-slate-50">
+							<td class="px-4 py-3 font-medium text-slate-700">{r.name}</td>
+							{#if config.hasCity}<td class="px-4 py-3"><Badge tone="neutral">{r.city ?? '—'}</Badge></td>{/if}
+							<td class="px-4 py-3 text-slate-500">{vendorName(r.vendor_id)}</td>
+							<td class="px-4 py-3 text-right text-slate-600">{formatAmount(Number(r.cost_price), r.currency)}</td>
+							<td class="px-4 py-3 text-right text-slate-700">{formatAmount(Number(r.selling_price), r.currency)}</td>
+							<td class="px-4 py-3 text-right font-medium {margin >= 0 ? 'text-green-600' : 'text-red-600'}">
+								{formatAmount(margin, r.currency)}
+							</td>
+							<td class="px-4 py-3 text-xs">
+								<div class="flex items-center gap-1.5">
+									<span class="text-slate-400">{new Date(r.rate_date).toLocaleDateString()}</span>
+									{#if isRateValid(r.rate_date)}
+										<Badge tone="success">valid</Badge>
+									{:else}
+										<Badge tone="warning">stale</Badge>
+									{/if}
+								</div>
+							</td>
+							<td class="px-4 py-3">
+								<div class="flex justify-end gap-1">
+									<button onclick={() => openUpdateToday(r)} class="rounded p-1.5 text-slate-400 hover:bg-brand-50 hover:text-brand-600" aria-label="Update today's rate" title="Update today's rate">
+										<CalendarClock class="h-4 w-4" />
+									</button>
+									<button onclick={() => openEdit(r)} class="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600" aria-label="Edit">
+										<Pencil class="h-4 w-4" />
+									</button>
+									<button onclick={() => remove(r)} class="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete">
+										<Trash2 class="h-4 w-4" />
+									</button>
+								</div>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	</div>
 {/if}
 

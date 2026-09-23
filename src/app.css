@@ -8,6 +8,41 @@
 	}
 	body {
 		@apply min-h-screen;
+		/* No grey flash on tap, no accidental horizontal drift on phones. */
+		-webkit-tap-highlight-color: transparent;
+		overflow-x: hidden;
+	}
+}
+
+/* Data tables scroll sideways inside their card instead of squashing columns
+   (or blowing out the page) on narrow screens. */
+.table-scroll {
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+}
+.table-scroll > table {
+	min-width: 100%;
+}
+
+@media screen and (max-width: 767px) {
+	/* One line per cell on phones — swipe the table rather than read a word
+	   per line. */
+	.table-scroll th,
+	.table-scroll td {
+		white-space: nowrap;
+	}
+	/* iOS zooms the page when focusing a field under 16px; keep them at 16px. */
+	input:not([type='checkbox']):not([type='radio']):not([type='range']),
+	select,
+	textarea {
+		font-size: 16px !important;
+	}
+}
+
+/* Installed-app feel: no pull-to-refresh bounce fighting the scroll areas. */
+@media (display-mode: standalone) {
+	body {
+		overscroll-behavior-y: none;
 	}
 }
 
@@ -17,7 +52,8 @@
 	.no-print {
 		display: none !important;
 	}
-	main {
+	main,
+	.table-scroll {
 		overflow: visible !important;
 	}
 	/* Render brand colours/backgrounds instead of stripping them. */

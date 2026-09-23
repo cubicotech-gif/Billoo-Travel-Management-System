@@ -149,41 +149,43 @@
 			</div>
 		{:else}
 			<div class="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
-				<table class="w-full text-sm">
-					<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
-						<tr>
-							<th class="px-4 py-2 font-medium">Service</th>
-							<th class="px-4 py-2 font-medium">Booking / passenger</th>
-							<th class="px-4 py-2 text-right font-medium">Owed</th>
-							<th class="px-4 py-2 text-right font-medium">Paid</th>
-							<th class="px-4 py-2 text-right font-medium">Balance</th>
-							<th class="px-4 py-2"></th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-50">
-						{#each shownServices as s (s.itemId)}
-							<tr class="hover:bg-slate-50">
-								<td class="px-4 py-2">
-									<div class="font-medium text-slate-700">{s.label}</div>
-									<span class="text-[10px] uppercase text-slate-400">{TYPE_LABEL[s.lineType]}</span>
-								</td>
-								<td class="px-4 py-2">
-									{#if s.queryId}<a href="/queries/{s.queryId}" class="text-brand-600 hover:underline">{s.clientName ?? s.queryNumber}</a>{:else}—{/if}
-								</td>
-								<td class="px-4 py-2 text-right text-slate-600">{formatAmount(s.owedPkr, 'PKR')}</td>
-								<td class="px-4 py-2 text-right text-green-600">{formatAmount(s.paidPkr, 'PKR')}</td>
-								<td class="px-4 py-2 text-right font-medium {s.balancePkr > 0 ? 'text-amber-600' : 'text-green-600'}">{formatAmount(s.balancePkr, 'PKR')}</td>
-								<td class="px-4 py-2 text-right">
-									{#if s.balancePkr > 0}
-										<Button size="sm" variant="secondary" onclick={() => payFor(s)}>Pay</Button>
-									{:else}
-										<span class="text-xs text-green-600">Settled</span>
-									{/if}
-								</td>
+				<div class="table-scroll">
+					<table class="w-full text-sm">
+						<thead class="border-b border-slate-100 bg-slate-50 text-left text-xs uppercase text-slate-400">
+							<tr>
+								<th class="px-4 py-2 font-medium">Service</th>
+								<th class="px-4 py-2 font-medium">Booking / passenger</th>
+								<th class="px-4 py-2 text-right font-medium">Owed</th>
+								<th class="px-4 py-2 text-right font-medium">Paid</th>
+								<th class="px-4 py-2 text-right font-medium">Balance</th>
+								<th class="px-4 py-2"></th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody class="divide-y divide-slate-50">
+							{#each shownServices as s (s.itemId)}
+								<tr class="hover:bg-slate-50">
+									<td class="px-4 py-2">
+										<div class="font-medium text-slate-700">{s.label}</div>
+										<span class="text-[10px] uppercase text-slate-400">{TYPE_LABEL[s.lineType]}</span>
+									</td>
+									<td class="px-4 py-2">
+										{#if s.queryId}<a href="/queries/{s.queryId}" class="text-brand-600 hover:underline">{s.clientName ?? s.queryNumber}</a>{:else}—{/if}
+									</td>
+									<td class="px-4 py-2 text-right text-slate-600">{formatAmount(s.owedPkr, 'PKR')}</td>
+									<td class="px-4 py-2 text-right text-green-600">{formatAmount(s.paidPkr, 'PKR')}</td>
+									<td class="px-4 py-2 text-right font-medium {s.balancePkr > 0 ? 'text-amber-600' : 'text-green-600'}">{formatAmount(s.balancePkr, 'PKR')}</td>
+									<td class="px-4 py-2 text-right">
+										{#if s.balancePkr > 0}
+											<Button size="sm" variant="secondary" onclick={() => payFor(s)}>Pay</Button>
+										{:else}
+											<span class="text-xs text-green-600">Settled</span>
+										{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{/if}
 

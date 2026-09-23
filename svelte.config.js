@@ -11,6 +11,11 @@ const config = {
 			precompress: false,
 			strict: false
 		}),
+		// Installed (PWA) sessions stay open for days — poll for a new deploy so
+		// the next navigation does a full reload onto the fresh build.
+		version: {
+			pollInterval: 5 * 60 * 1000
+		},
 		alias: {
 			$features: 'src/lib/features',
 			$ui: 'src/lib/ui'

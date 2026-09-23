@@ -23,28 +23,30 @@
 {:else if ($lines.data ?? []).length === 0}
 	<p class="px-1 py-2 text-xs text-slate-400">No line items recorded for this version.</p>
 {:else}
-	<table class="w-full text-xs">
-		<thead>
-			<tr class="text-left text-[10px] uppercase tracking-wide text-slate-400">
-				<th class="py-1 pr-2 font-medium">Item</th>
-				<th class="py-1 px-2 text-right font-medium">Qty</th>
-				<th class="py-1 px-2 text-right font-medium">Cost</th>
-				<th class="py-1 pl-2 text-right font-medium">Sell</th>
-			</tr>
-		</thead>
-		<tbody class="divide-y divide-slate-100">
-			{#each $lines.data ?? [] as l (l.id)}
-				{@const d = detail(l.meta)}
-				<tr>
-					<td class="py-1.5 pr-2 align-top">
-						<div class="font-medium text-slate-700">{l.label}</div>
-						{#if d}<div class="text-[10px] text-slate-400">{d}</div>{/if}
-					</td>
-					<td class="py-1.5 px-2 text-right align-top text-slate-500">{l.quantity}</td>
-					<td class="py-1.5 px-2 text-right align-top text-slate-500">{formatAmount(Number(l.line_cost), l.currency)}</td>
-					<td class="py-1.5 pl-2 text-right align-top font-medium text-slate-700">{formatAmount(Number(l.line_sell), l.currency)}</td>
+	<div class="table-scroll">
+		<table class="w-full text-xs">
+			<thead>
+				<tr class="text-left text-[10px] uppercase tracking-wide text-slate-400">
+					<th class="py-1 pr-2 font-medium">Item</th>
+					<th class="py-1 px-2 text-right font-medium">Qty</th>
+					<th class="py-1 px-2 text-right font-medium">Cost</th>
+					<th class="py-1 pl-2 text-right font-medium">Sell</th>
 				</tr>
-			{/each}
-		</tbody>
-	</table>
+			</thead>
+			<tbody class="divide-y divide-slate-100">
+				{#each $lines.data ?? [] as l (l.id)}
+					{@const d = detail(l.meta)}
+					<tr>
+						<td class="py-1.5 pr-2 align-top">
+							<div class="font-medium text-slate-700">{l.label}</div>
+							{#if d}<div class="text-[10px] text-slate-400">{d}</div>{/if}
+						</td>
+						<td class="py-1.5 px-2 text-right align-top text-slate-500">{l.quantity}</td>
+						<td class="py-1.5 px-2 text-right align-top text-slate-500">{formatAmount(Number(l.line_cost), l.currency)}</td>
+						<td class="py-1.5 pl-2 text-right align-top font-medium text-slate-700">{formatAmount(Number(l.line_sell), l.currency)}</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
 {/if}

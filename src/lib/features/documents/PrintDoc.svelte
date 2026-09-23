@@ -246,26 +246,28 @@
 		{#if tickets.length}
 			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
 				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Flight Details</div>
-				<table class="w-full text-xs">
-					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
-						<tr>
-							<th class="px-3 py-1.5 font-semibold">Airline / Flight</th>
-							<th class="px-3 py-1.5 font-semibold">Route</th>
-							<th class="px-3 py-1.5 font-semibold">PNR</th>
-							<th class="px-3 py-1.5 font-semibold">Class</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-100">
-						{#each tickets as t, i (i)}
+				<div class="table-scroll">
+					<table class="w-full text-xs">
+						<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
 							<tr>
-								<td class="px-3 py-2 font-medium text-slate-700">{t.label}</td>
-								<td class="px-3 py-2 text-slate-600">{str(t.meta, 'route') || '—'}</td>
-								<td class="px-3 py-2 font-mono text-slate-600">{str(t.meta, 'pnr') || '—'}</td>
-								<td class="px-3 py-2 text-slate-600">{str(t.meta, 'fare_class') || 'Economy'}</td>
+								<th class="px-3 py-1.5 font-semibold">Airline / Flight</th>
+								<th class="px-3 py-1.5 font-semibold">Route</th>
+								<th class="px-3 py-1.5 font-semibold">PNR</th>
+								<th class="px-3 py-1.5 font-semibold">Class</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody class="divide-y divide-slate-100">
+							{#each tickets as t, i (i)}
+								<tr>
+									<td class="px-3 py-2 font-medium text-slate-700">{t.label}</td>
+									<td class="px-3 py-2 text-slate-600">{str(t.meta, 'route') || '—'}</td>
+									<td class="px-3 py-2 font-mono text-slate-600">{str(t.meta, 'pnr') || '—'}</td>
+									<td class="px-3 py-2 text-slate-600">{str(t.meta, 'fare_class') || 'Economy'}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{/if}
 
@@ -273,20 +275,22 @@
 		{#if visas.length}
 			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
 				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Visa</div>
-				<table class="w-full text-xs">
-					<tbody class="divide-y divide-slate-100">
-						{#each visas as v, i (i)}
-							<tr>
-								<td class="px-3 py-2 font-medium text-slate-700">
-									{(str(v.meta, 'visa_type') || 'Umrah').toUpperCase()} Visa
-								</td>
-								<td class="px-3 py-2 text-right text-slate-600">
-									{str(v.meta, 'persons') || (query.adults + query.children + query.infants)} person(s)
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+				<div class="table-scroll">
+					<table class="w-full text-xs">
+						<tbody class="divide-y divide-slate-100">
+							{#each visas as v, i (i)}
+								<tr>
+									<td class="px-3 py-2 font-medium text-slate-700">
+										{(str(v.meta, 'visa_type') || 'Umrah').toUpperCase()} Visa
+									</td>
+									<td class="px-3 py-2 text-right text-slate-600">
+										{str(v.meta, 'persons') || (query.adults + query.children + query.infants)} person(s)
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{/if}
 
@@ -294,36 +298,38 @@
 		{#if transfers.length}
 			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
 				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Transfer Details</div>
-				<table class="w-full text-xs">
-					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
-						<tr>
-							<th class="px-3 py-1.5 font-semibold">Vehicle</th>
-							<th class="px-3 py-1.5 font-semibold">Route</th>
-							<th class="px-3 py-1.5 font-semibold">Pick-up</th>
-							<th class="px-3 py-1.5 font-semibold">Drop-off</th>
-							<th class="px-3 py-1.5 font-semibold">Ref / Contact</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-100">
-						{#each transfers as t, i (i)}
-							{@const l = legs(str(t.meta, 'route') || t.label)}
-							{@const contact = [str(t.meta, 'contact_person'), str(t.meta, 'contact_number')].filter(Boolean).join(' · ')}
-							{@const pickUp = dateTime(str(t.meta, 'date'), str(t.meta, 'pickup_time'))}
-							{@const dropOff = dateTime(str(t.meta, 'dropoff_date'), str(t.meta, 'dropoff_time'))}
+				<div class="table-scroll">
+					<table class="w-full text-xs">
+						<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
 							<tr>
-								<td class="px-3 py-2 font-medium text-slate-700">{str(t.meta, 'vehicle_type') || '—'}</td>
-								<td class="px-3 py-2 text-slate-700">{l.from}{l.to ? ` → ${l.to}` : ''}</td>
-								<td class="px-3 py-2 text-slate-600">{pickUp || 'On arrival'}</td>
-								<td class="px-3 py-2 text-slate-600">{dropOff || '—'}</td>
-								<td class="px-3 py-2 text-slate-600">
-									{#if str(t.meta, 'booking_ref')}<span class="font-mono">{str(t.meta, 'booking_ref')}</span>{/if}
-									{#if contact}<div class="text-[10px] text-slate-400">{contact}</div>{/if}
-									{#if !str(t.meta, 'booking_ref') && !contact}—{/if}
-								</td>
+								<th class="px-3 py-1.5 font-semibold">Vehicle</th>
+								<th class="px-3 py-1.5 font-semibold">Route</th>
+								<th class="px-3 py-1.5 font-semibold">Pick-up</th>
+								<th class="px-3 py-1.5 font-semibold">Drop-off</th>
+								<th class="px-3 py-1.5 font-semibold">Ref / Contact</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody class="divide-y divide-slate-100">
+							{#each transfers as t, i (i)}
+								{@const l = legs(str(t.meta, 'route') || t.label)}
+								{@const contact = [str(t.meta, 'contact_person'), str(t.meta, 'contact_number')].filter(Boolean).join(' · ')}
+								{@const pickUp = dateTime(str(t.meta, 'date'), str(t.meta, 'pickup_time'))}
+								{@const dropOff = dateTime(str(t.meta, 'dropoff_date'), str(t.meta, 'dropoff_time'))}
+								<tr>
+									<td class="px-3 py-2 font-medium text-slate-700">{str(t.meta, 'vehicle_type') || '—'}</td>
+									<td class="px-3 py-2 text-slate-700">{l.from}{l.to ? ` → ${l.to}` : ''}</td>
+									<td class="px-3 py-2 text-slate-600">{pickUp || 'On arrival'}</td>
+									<td class="px-3 py-2 text-slate-600">{dropOff || '—'}</td>
+									<td class="px-3 py-2 text-slate-600">
+										{#if str(t.meta, 'booking_ref')}<span class="font-mono">{str(t.meta, 'booking_ref')}</span>{/if}
+										{#if contact}<div class="text-[10px] text-slate-400">{contact}</div>{/if}
+										{#if !str(t.meta, 'booking_ref') && !contact}—{/if}
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 				{#if anyDriverCall}
 					<div class="border-t border-slate-100 bg-slate-50 px-3 py-1.5 text-[10px] italic text-slate-500">
 						Your driver will contact you directly to confirm the exact pick-up time as per your schedule.
@@ -336,36 +342,38 @@
 		{#if stays.length}
 			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
 				<div class="bg-brand-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Accommodation Details</div>
-				<table class="w-full text-xs">
-					<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
-						<tr>
-							<th class="px-2 py-1.5 font-semibold">City</th>
-							<th class="px-2 py-1.5 font-semibold">Hotel</th>
-							<th class="px-2 py-1.5 font-semibold">Check-in</th>
-							<th class="px-2 py-1.5 font-semibold">Check-out</th>
-							<th class="px-2 py-1.5 text-center font-semibold">Nights</th>
-							<th class="px-2 py-1.5 font-semibold">Room Type</th>
-							<th class="px-2 py-1.5 text-center font-semibold">Rooms</th>
-							<th class="px-2 py-1.5 text-center font-semibold">Meal</th>
-							<th class="px-2 py-1.5 font-semibold">HCN / Ref</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-100">
-						{#each stays as h, i (i)}
+				<div class="table-scroll">
+					<table class="w-full text-xs">
+						<thead class="bg-slate-50 text-left uppercase tracking-wide text-slate-400">
 							<tr>
-								<td class="px-2 py-2 font-medium text-slate-700">{str(h.meta, 'city')}</td>
-								<td class="px-2 py-2 text-slate-700">{str(h.meta, 'hotel')}</td>
-								<td class="px-2 py-2 text-slate-600">{fmtDate(str(h.meta, 'check_in')) || '—'}</td>
-								<td class="px-2 py-2 text-slate-600">{fmtDate(str(h.meta, 'check_out')) || '—'}</td>
-								<td class="px-2 py-2 text-center text-slate-700">{str(h.meta, 'nights') || '—'}</td>
-								<td class="px-2 py-2 text-slate-700">{str(h.meta, 'room_type') || 'Room'}</td>
-								<td class="px-2 py-2 text-center text-slate-700">{str(h.meta, 'qty') || 1}</td>
-								<td class="px-2 py-2 text-center text-slate-700">{stayMeal(h)}</td>
-								<td class="px-2 py-2 font-mono text-slate-700">{str(h.meta, 'booking_ref') || '—'}</td>
+								<th class="px-2 py-1.5 font-semibold">City</th>
+								<th class="px-2 py-1.5 font-semibold">Hotel</th>
+								<th class="px-2 py-1.5 font-semibold">Check-in</th>
+								<th class="px-2 py-1.5 font-semibold">Check-out</th>
+								<th class="px-2 py-1.5 text-center font-semibold">Nights</th>
+								<th class="px-2 py-1.5 font-semibold">Room Type</th>
+								<th class="px-2 py-1.5 text-center font-semibold">Rooms</th>
+								<th class="px-2 py-1.5 text-center font-semibold">Meal</th>
+								<th class="px-2 py-1.5 font-semibold">HCN / Ref</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody class="divide-y divide-slate-100">
+							{#each stays as h, i (i)}
+								<tr>
+									<td class="px-2 py-2 font-medium text-slate-700">{str(h.meta, 'city')}</td>
+									<td class="px-2 py-2 text-slate-700">{str(h.meta, 'hotel')}</td>
+									<td class="px-2 py-2 text-slate-600">{fmtDate(str(h.meta, 'check_in')) || '—'}</td>
+									<td class="px-2 py-2 text-slate-600">{fmtDate(str(h.meta, 'check_out')) || '—'}</td>
+									<td class="px-2 py-2 text-center text-slate-700">{str(h.meta, 'nights') || '—'}</td>
+									<td class="px-2 py-2 text-slate-700">{str(h.meta, 'room_type') || 'Room'}</td>
+									<td class="px-2 py-2 text-center text-slate-700">{str(h.meta, 'qty') || 1}</td>
+									<td class="px-2 py-2 text-center text-slate-700">{stayMeal(h)}</td>
+									<td class="px-2 py-2 font-mono text-slate-700">{str(h.meta, 'booking_ref') || '—'}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{/if}
 
@@ -379,22 +387,24 @@
 		{#if isVoucher && rows.length}
 			<div class="doc-section mb-4 overflow-hidden rounded border border-slate-200">
 				<div class="bg-slate-700 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white">Charges</div>
-				<table class="w-full text-xs">
-					<tbody class="divide-y divide-slate-100">
-						{#if showBreakup}
-							{#each rows as r, i (i)}
-								<tr>
-									<td class="px-3 py-1.5 text-slate-600">{r.label}</td>
-									<td class="px-3 py-1.5 text-right text-slate-700">{formatAmount(r.amount, r.currency)}</td>
-								</tr>
-							{/each}
-						{/if}
-						<tr class="bg-slate-50 font-bold text-slate-800">
-							<td class="px-3 py-2">{showBreakup ? 'Total' : 'Total payable'}</td>
-							<td class="px-3 py-2 text-right">{formatAmount(totalPkr, 'PKR')}</td>
-						</tr>
-					</tbody>
-				</table>
+				<div class="table-scroll">
+					<table class="w-full text-xs">
+						<tbody class="divide-y divide-slate-100">
+							{#if showBreakup}
+								{#each rows as r, i (i)}
+									<tr>
+										<td class="px-3 py-1.5 text-slate-600">{r.label}</td>
+										<td class="px-3 py-1.5 text-right text-slate-700">{formatAmount(r.amount, r.currency)}</td>
+									</tr>
+								{/each}
+							{/if}
+							<tr class="bg-slate-50 font-bold text-slate-800">
+								<td class="px-3 py-2">{showBreakup ? 'Total' : 'Total payable'}</td>
+								<td class="px-3 py-2 text-right">{formatAmount(totalPkr, 'PKR')}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{/if}
 
