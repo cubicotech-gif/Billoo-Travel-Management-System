@@ -22,6 +22,7 @@
 	import { createQueryClient } from '$lib/query-client';
 	import { subscribeQueriesRealtime } from '$features/queries/realtime';
 	import { install, initInstall } from '$lib/stores/install.svelte';
+	import AppBrand from '$features/settings/AppBrand.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -85,10 +86,7 @@
 		>
 			<div class="flex items-center justify-between gap-2 px-3 py-5">
 				{#if !collapsed}
-					<div class="min-w-0 pl-2">
-						<div class="truncate text-lg font-bold text-brand-700">Billoo Travel</div>
-						<div class="truncate text-xs text-slate-400">Umrah Season Console</div>
-					</div>
+					<a href="/" class="min-w-0 pl-2"><AppBrand /></a>
 				{/if}
 				<button
 					type="button"
@@ -147,10 +145,7 @@
 			<header
 				class="no-print sticky top-0 z-30 flex items-center justify-between gap-2 border-b border-slate-200 bg-white/95 px-4 pb-2.5 pt-[calc(env(safe-area-inset-top)+0.625rem)] backdrop-blur md:hidden"
 			>
-				<a href="/" class="min-w-0">
-					<div class="truncate text-base font-bold leading-tight text-brand-700">Billoo Travel</div>
-					<div class="truncate text-[11px] leading-tight text-slate-400">Umrah Season Console</div>
-				</a>
+				<a href="/" class="min-w-0"><AppBrand size="sm" /></a>
 				<button
 					type="button"
 					onclick={() => (drawerOpen = true)}
@@ -217,10 +212,7 @@
 				class="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col bg-white pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-xl"
 			>
 				<div class="flex items-center justify-between px-5 py-4">
-					<div>
-						<div class="text-lg font-bold text-brand-700">Billoo Travel</div>
-						<div class="text-xs text-slate-400">Umrah Season Console</div>
-					</div>
+					<AppBrand />
 					<button
 						type="button"
 						onclick={() => (drawerOpen = false)}
