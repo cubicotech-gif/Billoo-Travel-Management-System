@@ -1,6 +1,21 @@
-import type { Database, HajjCurrency, HajjOptionCode, HajjRoomType } from '$lib/database.types';
+import type {
+	Database,
+	HajjCurrency,
+	HajjOptionCode,
+	HajjProposalSnapshot,
+	HajjProposalStatus,
+	HajjRoomType,
+	HajjSnapshotTraveller
+} from '$lib/database.types';
 
-export type { HajjCurrency, HajjOptionCode, HajjRoomType };
+export type {
+	HajjCurrency,
+	HajjOptionCode,
+	HajjProposalSnapshot,
+	HajjProposalStatus,
+	HajjRoomType,
+	HajjSnapshotTraveller
+};
 
 type Tables = Database['public']['Tables'];
 
@@ -17,6 +32,10 @@ export type HajjQuoteUpdate = Tables['hajj_quotes']['Update'];
 
 export type HajjCommissionReceipt = Tables['hajj_commission_receipts']['Row'];
 export type NewHajjCommissionReceipt = Tables['hajj_commission_receipts']['Insert'];
+
+export type HajjProposal = Tables['hajj_proposals']['Row'];
+export type NewHajjProposal = Tables['hajj_proposals']['Insert'];
+export type HajjProposalUpdate = Tables['hajj_proposals']['Update'];
 
 export type HajjTravellerRow = Tables['hajj_travellers']['Row'];
 export type NewHajjTraveller = Tables['hajj_travellers']['Insert'];

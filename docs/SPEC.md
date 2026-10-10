@@ -288,3 +288,15 @@ diabetic / smoker, profession. Passport must be valid to 30 Nov 2027.
    (`20260639_hajj_booking.sql`, done).
 5. Hajj invoice, voucher and itinerary (done). Still open: vendor payments (what we owe the vendor);
    per-vendor commission accounts.
+
+### 8.x Saved proposals (options)
+
+The Working-stage builder edits one live working copy. **Save proposal** freezes it as a
+labelled option in `hajj_proposals` (version, label, status draft/sent/accepted/rejected/archived,
+valid-until, frozen `snapshot` incl. selling prices, totals + profit for lists). **Save & add another**
+keeps the query in Working; **Save proposal** moves New Query/Working → Quoted. The list (Working,
+Quoted, Booking) offers View, Load into builder (Working only; replaces the working copy), Mark sent,
+Accept (loads it as the working copy and moves the query to Booking), Reject, Remove (drafts deleted,
+others archived). The client proposal/WhatsApp can carry several options (`?o=id,id` or the option
+chips); with no saved options it falls back to the live working copy. Client output stays vendor-free
+and shows selling prices only.

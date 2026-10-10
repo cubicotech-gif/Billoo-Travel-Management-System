@@ -6,6 +6,8 @@
 	import { fullName } from '$features/passengers/types';
 	import type { Query } from '$features/queries/types';
 	import AddTravellerForm from './AddTravellerForm.svelte';
+	import HajjProposalList from './HajjProposalList.svelte';
+	import HajjSavePanel from './HajjSavePanel.svelte';
 	import HajjTotals from './HajjTotals.svelte';
 	import NumberField from './NumberField.svelte';
 	import TravellerCard from './TravellerCard.svelte';
@@ -210,10 +212,22 @@
 							/>
 						{/if}
 					{/each}
+					<HajjProposalList {queryId} stage="working" />
 				</div>
 				{#if list.length > 0}
-					<div class="xl:sticky xl:top-4 xl:self-start">
+					<div class="space-y-4 xl:sticky xl:top-4 xl:self-start">
 						<HajjTotals {result} {names} {usdRate} />
+						<HajjSavePanel
+							{query}
+							{usdRate}
+							data={{
+								roe,
+								travellers: list,
+								packages: $packages.data ?? [],
+								addons: $addons.data ?? [],
+								catalogues: $catalogues.data ?? []
+							}}
+						/>
 					</div>
 				{/if}
 			</div>

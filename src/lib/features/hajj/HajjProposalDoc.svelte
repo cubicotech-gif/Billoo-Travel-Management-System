@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { page } from '$app/stores';
 	import { ArrowLeft, Check, Copy, MessageCircle, Printer } from 'lucide-svelte';
 	import { Button } from '$ui';
 	import { formatAmount } from '$lib/money';
@@ -23,17 +24,19 @@
 		hotelsLine,
 		instalments,
 		minaCategory,
-		proposalWhatsApp,
+		proposalOptionsWhatsApp,
 		roomLabel
 	} from './proposal';
 	import {
 		useHajjAddons,
 		useHajjCatalogues,
 		useHajjPackages,
+		useHajjProposals,
 		useHajjQuote,
 		useHajjTravellers
 	} from './queries';
-	import type { HajjCurrency, HajjDay } from './types';
+	import { isLive, optionTitle, snapshotToTravellers } from './snapshot';
+	import type { HajjCurrency, HajjDay, HajjTraveller } from './types';
 	import { DEFAULT_HAJJ_ROE } from './types';
 
 	// Client-facing Hajj proposal: print / save as PDF, or copy as WhatsApp text.
@@ -48,6 +51,7 @@
 	const packages = untrack(() => useHajjPackages());
 	const addons = untrack(() => useHajjAddons());
 	const passengers = untrack(() => usePassengers());
+	const proposals = untrack(() => useHajjProposals(queryId));
 	const settings = untrack(() => useOrgSettings());
 
 	const org = $derived($settings.data ?? null);
@@ -70,36 +74,98 @@
 
 	const list = $derived($travellers.data ?? []);
 
-	// Itinerary rows for each distinct package on the quote (fetched as needed).
+	// Saved options (if any). A query with none falls back to the live working copy.
+	// A failed load (migration not applied) just means "no saved options".
+	const saved = $derived($proposals.data ?? []);
+	const settled = $derived(!$proposals.isLoading);
+	const liveSaved = $derived(saved.filter(isLive));
+	const urlIds = $derived(
+		($page.url.searchParams.get('o') ?? '').split(',').filter((x) => x.length > 0)
+	);
+	// Which saved options appear in the document. null = the default (the URL's
+	// choice, else every live option); the chips below override it.
+	let picked = $state<string[] | null>(null);
+	const chosenIds = $derived(
+		picked ??
+			(urlIds.length > 0
+				? urlIds.filter((id) => saved.some((p) => p.id === id))
+				: liveSaved.map((p) => p.id))
+	);
+	const chosen = $derived(
+		saved.filter((p) => chosenIds.includes(p.id)).sort((x, y) => x.version - y.version)
+	);
+	function toggle(id: string) {
+		const cur = new Set(chosenIds);
+		if (cur.has(id)) cur.delete(id);
+		else cur.add(id);
+		picked = [...cur];
+	}
+
+	const personName = $derived(
+		new Map(($passengers.data ?? []).map((p) => [p.id, fullName(p)]))
+	);
+	const namesOf = (ts: HajjTraveller[]) =>
+		Object.fromEntries(ts.map((t) => [t.id, personName.get(t.passenger_id) ?? 'Traveller']));
+
+	// What each option prices: a saved snapshot, or the live working copy.
+	interface Source {
+		key: string;
+		title: string | null;
+		roe: number;
+		travellers: HajjTraveller[];
+	}
+	const sources = $derived<Source[]>(
+		chosen.length > 0
+			? chosen.map((p) => ({
+					key: p.id,
+					title: optionTitle(p),
+					roe: Number(p.snapshot.roe),
+					travellers: snapshotToTravellers(p.snapshot, queryId)
+				}))
+			: saved.length === 0
+				? [
+						{
+							key: 'live',
+							title: null,
+							roe: Number($quote.data?.roe ?? DEFAULT_HAJJ_ROE),
+							travellers: list
+						}
+					]
+				: []
+	);
+
+	// Itinerary rows for each distinct package across the options (fetched as needed).
 	let days = $state<Record<string, HajjDay[]>>({});
 	$effect(() => {
 		const have = untrack(() => days);
-		for (const id of new Set(list.map((t) => t.package_id)))
+		const ids = new Set(sources.flatMap((src) => src.travellers.map((t) => t.package_id)));
+		for (const id of ids)
 			if (!(id in have))
 				listPackageDays(id)
 					.then((rows) => (days = { ...days, [id]: rows }))
 					.catch(() => (days = { ...days, [id]: [] }));
 	});
 
-	const names = $derived.by(() => {
-		const byId = new Map(($passengers.data ?? []).map((p) => [p.id, fullName(p)]));
-		return Object.fromEntries(list.map((t) => [t.id, byId.get(t.passenger_id) ?? 'Traveller']));
-	});
-
-	const proposal = $derived(
-		ready && $query.data
-			? buildProposal({
-					roe: Number($quote.data?.roe ?? DEFAULT_HAJJ_ROE),
-					travellers: list,
-					packages: $packages.data ?? [],
-					addons: $addons.data ?? [],
-					catalogues: $catalogues.data ?? [],
-					query: $query.data,
-					names,
-					days
-				})
-			: null
+	const options = $derived(
+		ready && settled && $query.data
+			? sources.map((src) => ({
+					key: src.key,
+					title: src.title,
+					proposal: buildProposal({
+						roe: src.roe,
+						travellers: src.travellers,
+						packages: $packages.data ?? [],
+						addons: $addons.data ?? [],
+						catalogues: $catalogues.data ?? [],
+						query: $query.data!,
+						names: namesOf(src.travellers),
+						days
+					})
+				}))
+			: []
 	);
+	const head = $derived(options[0]?.proposal ?? null);
+	const multi = $derived(options.length > 1);
 
 	// --- Print-time choices ----------------------------------------------------
 	let showItinerary = $state(true);
@@ -110,6 +176,14 @@
 		return d.toISOString().slice(0, 10);
 	};
 	let validUntil = $state(inSevenDays());
+	let validSeeded = false;
+	$effect(() => {
+		const v = chosen[0]?.valid_until;
+		if (v && !validSeeded) {
+			validSeeded = true;
+			validUntil = v;
+		}
+	});
 
 	const today = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 	const fmtDate = (iso: string) =>
@@ -129,22 +203,28 @@
 
 	const money = (n: number, cur: HajjCurrency | 'PKR') => formatAmount(n, cur);
 
-	const plan = $derived(proposal ? instalments(proposal.totals) : []);
-	const aziziyaOnly = $derived(proposal?.groups.some((g) => g.pkg.has_aziziya) ?? false);
-	const nonAziziya = $derived(proposal?.groups.some((g) => !g.pkg.has_aziziya) ?? false);
+	const allGroups = $derived(options.flatMap((o) => o.proposal.groups));
+	const aziziyaOnly = $derived(allGroups.some((g) => g.pkg.has_aziziya));
+	const nonAziziya = $derived(allGroups.some((g) => !g.pkg.has_aziziya));
 	const notIncluded = $derived(
-		proposal
-			? exclusions({ ticketQuoted: proposal.ticketQuoted, qurbaniQuoted: proposal.qurbaniQuoted })
+		options.length > 0
+			? exclusions({
+					ticketQuoted: options.every((o) => o.proposal.ticketQuoted),
+					qurbaniQuoted: options.every((o) => o.proposal.qurbaniQuoted)
+				})
 			: []
 	);
 
 	// --- WhatsApp ----------------------------------------------------------------
 	const waText = $derived(
-		proposal
-			? proposalWhatsApp(proposal, {
-					validUntil: validUntil ? fmtDate(validUntil) : null,
-					brand: org?.company_name ?? 'Billoo Travel'
-				})
+		options.length > 0
+			? proposalOptionsWhatsApp(
+					options.map((o, i) => ({ title: o.title ?? `Option ${i + 1}`, proposal: o.proposal })),
+					{
+						validUntil: validUntil ? fmtDate(validUntil) : null,
+						brand: org?.company_name ?? 'Billoo Travel'
+					}
+				)
 			: ''
 	);
 	let copied = $state(false);
@@ -172,17 +252,37 @@
 			<ArrowLeft class="h-4 w-4" /> Back to query
 		</a>
 		<div class="flex flex-wrap gap-2">
-			<Button variant="secondary" onclick={copyText} disabled={!proposal}>
+			<Button variant="secondary" onclick={copyText} disabled={!head}>
 				{#if copied}<Check class="h-4 w-4" /> Copied{:else}<Copy class="h-4 w-4" /> Copy WhatsApp text{/if}
 			</Button>
-			<Button variant="secondary" onclick={sendWhatsApp} disabled={!proposal}>
+			<Button variant="secondary" onclick={sendWhatsApp} disabled={!head}>
 				<MessageCircle class="h-4 w-4" /> Send on WhatsApp
 			</Button>
-			<Button onclick={() => window.print()} disabled={!proposal}>
+			<Button onclick={() => window.print()} disabled={!head}>
 				<Printer class="h-4 w-4" /> Print / Save PDF
 			</Button>
 		</div>
 	</div>
+	{#if saved.length > 0}
+		<div class="flex flex-wrap items-center gap-2 text-sm text-slate-600" data-testid="hajj-option-picker">
+			<span class="text-xs font-medium uppercase tracking-wide text-slate-400">Options in this proposal</span>
+			{#each [...saved].reverse().filter((p) => isLive(p) || chosenIds.includes(p.id)) as p (p.id)}
+				<label
+					class="flex items-center gap-1.5 rounded-full border px-3 py-1 {chosenIds.includes(p.id)
+						? 'border-brand-500 bg-brand-50 text-brand-700'
+						: 'border-slate-300'}"
+				>
+					<input
+						type="checkbox"
+						checked={chosenIds.includes(p.id)}
+						onchange={() => toggle(p.id)}
+						class="rounded border-slate-300"
+					/>
+					v{p.version} · {optionTitle(p)}
+				</label>
+			{/each}
+		</div>
+	{/if}
 	<div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
 		<label class="flex items-center gap-1.5">
 			<input type="checkbox" bind:checked={showItinerary} class="rounded border-slate-300" /> Day-by-day itinerary
@@ -207,7 +307,9 @@
 	<p class="text-slate-400">Loading…</p>
 {:else if $query.data && $query.data.package_type !== 'Hajj'}
 	<p class="text-slate-500">This query isn’t a Hajj package — use its regular proposal.</p>
-{:else if !proposal || proposal.groups.length === 0}
+{:else if saved.length > 0 && chosen.length === 0}
+	<p class="text-slate-500">Choose at least one saved option above to build the proposal.</p>
+{:else if !head || options.every((o) => o.proposal.groups.length === 0)}
 	<p class="text-slate-500">Add at least one traveller in the Hajj builder to prepare a proposal.</p>
 {:else}
 	<div
@@ -246,17 +348,28 @@
 		<div class="doc-section mb-5 text-center">
 			<div class="text-xs font-semibold uppercase tracking-[0.25em] text-brand-700">{SEASON_LABEL}</div>
 			<div class="mt-1 text-2xl font-bold text-slate-800">Hajj Package Proposal</div>
-			<div class="mt-2 text-sm font-semibold uppercase text-slate-700">{proposal.clientName}</div>
+			<div class="mt-2 text-sm font-semibold uppercase text-slate-700">{head.clientName}</div>
 			<div class="text-xs text-slate-500">
-				{proposal.travellerCount} traveller{proposal.travellerCount === 1 ? '' : 's'}
-				<span class="ml-2 font-mono text-slate-400">Ref {proposal.reference}</span>
+				{head.travellerCount} traveller{head.travellerCount === 1 ? '' : 's'}
+				<span class="ml-2 font-mono text-slate-400">Ref {head.reference}</span>
 			</div>
+			{#if multi}
+				<div class="mt-1 text-xs font-medium text-slate-600">{options.length} options to choose from</div>
+			{/if}
 			<div class="mt-0.5 text-xs text-slate-400">
 				Prepared {today}{validUntil ? ` · Valid until ${fmtDate(validUntil)}` : ''}
 			</div>
 		</div>
 
-		<!-- One block per package choice (usually one for the whole family) -->
+		<!-- One block per saved option (one when there is a single proposal) -->
+		{#each options as opt, oi (opt.key)}
+			{@const proposal = opt.proposal}
+			{@const plan = instalments(proposal.totals)}
+			{#if multi}
+				<div class="doc-section mb-3 mt-2 rounded bg-slate-800 px-3 py-1.5 text-sm font-bold text-white">
+					Option {oi + 1} — {opt.title}
+				</div>
+			{/if}
 		{#each proposal.groups as g, gi (g.key)}
 			<section class="doc-section mb-5 overflow-hidden rounded border border-slate-200">
 				<div class="flex flex-wrap items-baseline justify-between gap-2 bg-brand-600 px-3 py-2 text-white">
@@ -409,6 +522,7 @@
 			</div>
 			<p class="mt-2 text-[10px] text-slate-400">{PRICE_NOTE}</p>
 		</section>
+		{/each}
 
 		<!-- What's included -->
 		<section class="doc-section mb-5">
