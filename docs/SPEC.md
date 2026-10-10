@@ -264,6 +264,19 @@ diabetic / smoker, profession. Passport must be valid to 30 Nov 2027.
 - **Traveller details** (mehram, blood group, fiqah, next of kin, …) are captured per traveller, with a
   readiness checklist (passport valid to 30 Nov 2027, age 12+, mehram for women, …).
 
+### Documents
+- Hajj queries get Hajj versions of the **invoice**, **voucher** (booking confirmation) and
+  **itinerary** at the same URLs (`/queries/[id]/invoice|voucher|itinerary`); other queries keep the
+  regular ones. The payment **receipt** is already payment-based and needs no change.
+- All three are client-facing: our brand only, **no vendor name or package code**, selling prices only
+  (never cost, margin or commission). The itinerary is price-free.
+- **Invoice:** each pilgrim's package and add-ons, SAR → PKR at the ROE and USD → PKR at the quote's
+  USD rate (USD charges are listed separately until a rate is set), then discount, payments received,
+  balance and the upcoming 50/50 instalments.
+- **Voucher:** pilgrims with passport numbers, hotels and nights per package, Mina camp category,
+  additional services, inclusions, optional day-by-day and total payable, travel notes.
+- **Itinerary:** pilgrims and the day-by-day schedule per package, with travel notes.
+
 ### Build sequence (Hajj)
 1. Catalogue tables + 2027 seed (`20260637_hajj_catalogue.sql`, done).
 2. Hajj package builder in the Working stage (`20260638_hajj_quote.sql`, done): one quote per
@@ -272,5 +285,6 @@ diabetic / smoker, profession. Passport must be valid to 30 Nov 2027.
 3. Proposal document (print/PDF + WhatsApp) — done: `/queries/[id]/hajj-proposal`. Selling prices
    only, our brand only; client wording lives in `src/lib/features/hajj/content.ts`.
 4. Booking bridge, GMC settlement across clients, commission, 50/50 schedule, traveller details
-   (`20260639_hajj_booking.sql`, done). Not yet adapted for Hajj: invoice, voucher and itinerary
-   documents; vendor payments; per-vendor commission accounts.
+   (`20260639_hajj_booking.sql`, done).
+5. Hajj invoice, voucher and itinerary (done). Still open: vendor payments (what we owe the vendor);
+   per-vendor commission accounts.

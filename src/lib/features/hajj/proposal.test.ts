@@ -6,6 +6,7 @@ import {
 	REQUIRED_DOCUMENTS,
 	SEASON_LABEL,
 	TERMS,
+	TRAVEL_NOTES,
 	exclusions,
 	inclusionsFor
 } from './content';
@@ -261,6 +262,7 @@ describe('client-facing rules', () => {
 			PRICE_NOTE,
 			AZIZIYA_NOTE,
 			...TERMS,
+			...TRAVEL_NOTES,
 			...REQUIRED_DOCUMENTS,
 			...PAYMENT_PLAN.map((s) => s.label),
 			...inclusionsFor({ has_aziziya: true }),

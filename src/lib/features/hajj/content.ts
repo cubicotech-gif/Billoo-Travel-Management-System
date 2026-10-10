@@ -88,4 +88,15 @@ export const TERMS = [
 	'All packages, policies and bookings are subject to final guidelines from the Governments of Saudi Arabia and Pakistan and to approval by the Ministry of Religious Affairs. Neither party is liable for delays or failure caused by events beyond its control (force majeure).'
 ];
 
+/** Practical notes printed on the voucher and itinerary. */
+export const TRAVEL_NOTES = [
+	'Carry your original passport, Hajj documents and a copy at all times during the journey.',
+	'During peak days (1–14 Zil Hajj) hotel check-in is after Isha prayers; check-out time is 12 PM.',
+	'Tents, food, transport and bathrooms during the Mashaer days are provided and managed by the Saudi service provider under Saudi regulations.',
+	'Buses drop pilgrims at Muzdalifah and return for pick-up between 6 AM and 10 AM.',
+	'Only one suitcase per person is allowed for the Hajj journey; keep valuables and medicines in your hand luggage.',
+	'Attendance at the Hajj training sessions is mandatory.',
+	'Itinerary, hotels and services are tentative and subject to Saudi laws and group operation limits.'
+];
+
 export const AZIZIYA_NOTE = 'Aziziya accommodation is not comparable to hotel services.';

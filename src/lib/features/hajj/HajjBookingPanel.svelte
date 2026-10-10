@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { useQueryClient } from '@tanstack/svelte-query';
-	import { AlertTriangle, CheckCircle2, FileText, RefreshCw, RotateCcw } from 'lucide-svelte';
+	import { AlertTriangle, CheckCircle2, FileText, Map as MapIcon, Receipt, RefreshCw, RotateCcw } from 'lucide-svelte';
 	import { Button, Card } from '$ui';
 	import BookingLifecyclePanel from '$features/bookings/BookingLifecyclePanel.svelte';
 	import {
@@ -81,6 +81,15 @@
 			<div class="flex flex-wrap items-center gap-2">
 				<Button variant="secondary" size="sm" href="/queries/{queryId}/hajj-proposal">
 					<FileText class="h-4 w-4" /> Proposal
+				</Button>
+				<Button variant="secondary" size="sm" href="/queries/{queryId}/voucher">
+					<FileText class="h-4 w-4" /> Voucher
+				</Button>
+				<Button variant="secondary" size="sm" href="/queries/{queryId}/itinerary">
+					<MapIcon class="h-4 w-4" /> Itinerary
+				</Button>
+				<Button variant="secondary" size="sm" href="/queries/{queryId}/invoice">
+					<Receipt class="h-4 w-4" /> Invoice
 				</Button>
 				<Button variant="secondary" size="sm" disabled={refreshing} onclick={refresh}>
 					<RefreshCw class="h-4 w-4 {refreshing ? 'animate-spin' : ''}" /> Refresh figures
