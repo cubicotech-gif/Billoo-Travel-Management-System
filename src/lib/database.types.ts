@@ -30,6 +30,20 @@ export type UserRole = 'admin' | 'manager' | 'agent' | 'finance' | 'viewer';
 
 export type PackageType = 'Umrah' | 'Umrah Plus' | 'Hajj' | 'Tour' | 'Leisure';
 
+export type HajjCurrency = 'USD' | 'SAR';
+export type HajjRoomType = 'Sharing' | 'Quad' | 'Triple' | 'Double';
+export type HajjOptionCode = 'A' | 'B';
+export type HajjSeries =
+	| 'platinum_makkah_medinah'
+	| 'platinum_aziziya_makkah_medinah'
+	| 'platinum_aziziya_medinah';
+export type HajjDayKind = 'stay' | 'mina' | 'arafat' | 'departure';
+export type HajjAddonKind =
+	| 'per_person'
+	| 'per_person_by_room'
+	| 'per_night_by_room'
+	| 'pooled_vehicle';
+
 export interface CityBlock {
 	city: string;
 	arrival_date: string | null;
@@ -806,6 +820,283 @@ export interface Database {
 					notes?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['rate_observations']['Insert']>;
+				Relationships: [];
+			};
+			hajj_catalogues: {
+				Row: {
+					id: string;
+					code: string;
+					name: string;
+					season_year: number;
+					hijri_year: number | null;
+					currency: HajjCurrency;
+					mina_category: string | null;
+					price_list_date: string | null;
+					is_active: boolean;
+					notes: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					code: string;
+					name: string;
+					season_year: number;
+					hijri_year?: number | null;
+					currency: HajjCurrency;
+					mina_category?: string | null;
+					price_list_date?: string | null;
+					is_active?: boolean;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_catalogues']['Insert']>;
+				Relationships: [];
+			};
+			hajj_packages: {
+				Row: {
+					id: string;
+					catalogue_id: string;
+					code: string;
+					alt_code: string | null;
+					tier_label: string;
+					title: string;
+					hotel_focus: string | null;
+					series: HajjSeries;
+					first_city: 'Makkah' | 'Medinah';
+					total_days: number;
+					duration_label: string | null;
+					is_short: boolean;
+					is_shifting: boolean;
+					has_aziziya: boolean;
+					start_date: string;
+					end_date: string;
+					notes: string | null;
+					commission_per_person: number | null;
+					sort_order: number;
+					is_active: boolean;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					catalogue_id: string;
+					code: string;
+					alt_code?: string | null;
+					tier_label?: string;
+					title: string;
+					hotel_focus?: string | null;
+					series: HajjSeries;
+					first_city: 'Makkah' | 'Medinah';
+					total_days: number;
+					duration_label?: string | null;
+					is_short?: boolean;
+					is_shifting?: boolean;
+					has_aziziya?: boolean;
+					start_date: string;
+					end_date: string;
+					notes?: string | null;
+					commission_per_person?: number | null;
+					sort_order?: number;
+					is_active?: boolean;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_packages']['Insert']>;
+				Relationships: [];
+			};
+			hajj_package_options: {
+				Row: {
+					id: string;
+					package_id: string;
+					code: HajjOptionCode;
+					label: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					package_id: string;
+					code: HajjOptionCode;
+					label?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_package_options']['Insert']>;
+				Relationships: [];
+			};
+			hajj_package_prices: {
+				Row: {
+					id: string;
+					option_id: string;
+					room_type: HajjRoomType;
+					price: number;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					option_id: string;
+					room_type: HajjRoomType;
+					price: number;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_package_prices']['Insert']>;
+				Relationships: [];
+			};
+			hajj_package_days: {
+				Row: {
+					id: string;
+					package_id: string;
+					day_no: number;
+					date_ad: string;
+					date_ad_end: string | null;
+					hijri_label: string | null;
+					city_label: string | null;
+					kind: HajjDayKind;
+					hotel_a: string;
+					stars_a: number | null;
+					hotel_b: string | null;
+					stars_b: number | null;
+				};
+				Insert: {
+					id?: string;
+					package_id: string;
+					day_no: number;
+					date_ad: string;
+					date_ad_end?: string | null;
+					hijri_label?: string | null;
+					city_label?: string | null;
+					kind?: HajjDayKind;
+					hotel_a: string;
+					stars_a?: number | null;
+					hotel_b?: string | null;
+					stars_b?: number | null;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_package_days']['Insert']>;
+				Relationships: [];
+			};
+			hajj_addons: {
+				Row: {
+					id: string;
+					catalogue_id: string;
+					code: string;
+					name: string;
+					group_name: string;
+					description: string | null;
+					pricing_kind: HajjAddonKind;
+					unit_price: number | null;
+					capacity: number | null;
+					is_estimate: boolean;
+					package_codes: string[] | null;
+					sort_order: number;
+					is_active: boolean;
+					notes: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					catalogue_id: string;
+					code: string;
+					name: string;
+					group_name: string;
+					description?: string | null;
+					pricing_kind: HajjAddonKind;
+					unit_price?: number | null;
+					capacity?: number | null;
+					is_estimate?: boolean;
+					package_codes?: string[] | null;
+					sort_order?: number;
+					is_active?: boolean;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_addons']['Insert']>;
+				Relationships: [];
+			};
+			hajj_addon_room_prices: {
+				Row: {
+					id: string;
+					addon_id: string;
+					room_type: HajjRoomType;
+					price: number;
+				};
+				Insert: {
+					id?: string;
+					addon_id: string;
+					room_type: HajjRoomType;
+					price: number;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_addon_room_prices']['Insert']>;
+				Relationships: [];
+			};
+			hajj_quotes: {
+				Row: {
+					id: string;
+					query_id: string;
+					roe: number;
+					notes: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					roe?: number;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_quotes']['Insert']>;
+				Relationships: [];
+			};
+			hajj_travellers: {
+				Row: {
+					id: string;
+					query_id: string;
+					passenger_id: string;
+					is_lead: boolean;
+					package_id: string;
+					option_code: HajjOptionCode;
+					room_type: HajjRoomType;
+					sell_price: number;
+					ticket_airline: string | null;
+					ticket_cost_pkr: number;
+					ticket_sell_pkr: number;
+					notes: string | null;
+					sort_order: number;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					passenger_id: string;
+					is_lead?: boolean;
+					package_id: string;
+					option_code?: HajjOptionCode;
+					room_type: HajjRoomType;
+					sell_price?: number;
+					ticket_airline?: string | null;
+					ticket_cost_pkr?: number;
+					ticket_sell_pkr?: number;
+					notes?: string | null;
+					sort_order?: number;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_travellers']['Insert']>;
+				Relationships: [];
+			};
+			hajj_traveller_addons: {
+				Row: {
+					id: string;
+					traveller_id: string;
+					addon_id: string;
+					qty: number;
+					cost_override: number | null;
+					sell_price: number | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					traveller_id: string;
+					addon_id: string;
+					qty?: number;
+					cost_override?: number | null;
+					sell_price?: number | null;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_traveller_addons']['Insert']>;
 				Relationships: [];
 			};
 		};
