@@ -30,6 +30,7 @@ export type UserRole = 'admin' | 'manager' | 'agent' | 'finance' | 'viewer';
 
 export type PackageType = 'Umrah' | 'Umrah Plus' | 'Hajj' | 'Tour' | 'Leisure';
 
+export type BloodGroup = 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
 export type HajjCurrency = 'USD' | 'SAR';
 export type HajjRoomType = 'Sharing' | 'Quad' | 'Triple' | 'Double';
 export type HajjOptionCode = 'A' | 'B';
@@ -1031,12 +1032,14 @@ export interface Database {
 					notes: string | null;
 					created_at: string;
 					updated_at: string;
+					usd_rate: number | null;
 				};
 				Insert: {
 					id?: string;
 					query_id: string;
 					roe?: number;
 					notes?: string | null;
+					usd_rate?: number | null;
 				};
 				Update: Partial<Database['public']['Tables']['hajj_quotes']['Insert']>;
 				Relationships: [];
@@ -1058,6 +1061,21 @@ export interface Database {
 					sort_order: number;
 					created_at: string;
 					updated_at: string;
+					marital_status: string | null;
+					blood_group: BloodGroup | null;
+					fiqah: string | null;
+					performed_hajj_5y: boolean | null;
+					hajj_e_badal: boolean | null;
+					group_worker: boolean | null;
+					is_diabetic: boolean | null;
+					is_smoker: boolean | null;
+					profession: string | null;
+					mehram_traveller_id: string | null;
+					mehram_relation: string | null;
+					kin_name: string | null;
+					kin_phone: string | null;
+					kin_cnic: string | null;
+					kin_relation: string | null;
 				};
 				Insert: {
 					id?: string;
@@ -1073,6 +1091,21 @@ export interface Database {
 					ticket_sell_pkr?: number;
 					notes?: string | null;
 					sort_order?: number;
+					marital_status?: string | null;
+					blood_group?: BloodGroup | null;
+					fiqah?: string | null;
+					performed_hajj_5y?: boolean | null;
+					hajj_e_badal?: boolean | null;
+					group_worker?: boolean | null;
+					is_diabetic?: boolean | null;
+					is_smoker?: boolean | null;
+					profession?: string | null;
+					mehram_traveller_id?: string | null;
+					mehram_relation?: string | null;
+					kin_name?: string | null;
+					kin_phone?: string | null;
+					kin_cnic?: string | null;
+					kin_relation?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['hajj_travellers']['Insert']>;
 				Relationships: [];
@@ -1087,6 +1120,9 @@ export interface Database {
 					sell_price: number | null;
 					created_at: string;
 					updated_at: string;
+					pool_cost: number | null;
+					pool_sharers: number | null;
+					pool_vehicle: string | null;
 				};
 				Insert: {
 					id?: string;
@@ -1095,8 +1131,32 @@ export interface Database {
 					qty?: number;
 					cost_override?: number | null;
 					sell_price?: number | null;
+					pool_cost?: number | null;
+					pool_sharers?: number | null;
+					pool_vehicle?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['hajj_traveller_addons']['Insert']>;
+				Relationships: [];
+			};
+			hajj_commission_receipts: {
+				Row: {
+					id: string;
+					amount: number;
+					currency: HajjCurrency | 'PKR';
+					received_date: string;
+					reference: string | null;
+					notes: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					amount: number;
+					currency: HajjCurrency | 'PKR';
+					received_date?: string;
+					reference?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_commission_receipts']['Insert']>;
 				Relationships: [];
 			};
 		};

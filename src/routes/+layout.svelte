@@ -11,6 +11,7 @@
 		Building2,
 		Wallet,
 		Tags,
+		Wheat,
 		Settings,
 		PanelLeftClose,
 		PanelLeftOpen,
@@ -63,6 +64,7 @@
 		{ href: '/passengers', label: 'Passengers', icon: Users },
 		{ href: '/vendors', label: 'Vendors', icon: Building2 },
 		{ href: '/rates', label: 'Service Rates', icon: Tags },
+		{ href: '/hajj', label: 'Hajj', icon: Wheat },
 		{ href: '/finance', label: 'Finance', icon: Wallet },
 		{ href: '/settings', label: 'Branding', icon: Settings }
 	];

@@ -89,6 +89,9 @@ export interface CalcAddonLine {
 	qty: number;
 	costOverride: number | null;
 	sellPrice: number | null;
+	/** Settled GMC share (once the query is in Booking); null while still quoting. */
+	poolCost?: number | null;
+	poolSharers?: number | null;
 }
 
 export interface CalcTraveller {
@@ -100,6 +103,8 @@ export interface CalcTraveller {
 	baseSell: number;
 	ticketCost: number;
 	ticketSell: number;
+	/** Commission the vendor pays us for this person (base currency); 0 if not set. */
+	commission?: number;
 	addons: CalcAddonLine[];
 }
 
@@ -132,6 +137,7 @@ export interface TravellerResult {
 	amounts: Partial<Record<HajjCurrency, Amounts>>;
 	ticketCost: number;
 	ticketSell: number;
+	commission: number;
 }
 
 export interface CurrencyTotals extends Amounts {
@@ -145,6 +151,8 @@ export interface QuoteResult {
 	byCurrency: CurrencyTotals[];
 	ticket: Amounts & { profit: number };
 	roe: number;
+	/** Commission receivable from the vendor, per currency (staff only). */
+	commission: Partial<Record<HajjCurrency, number>>;
 	/** SAR side converted to PKR at the ROE, plus tickets. USD is never converted. */
 	pkr: Amounts & { profit: number };
 	usd: CurrencyTotals | null;
@@ -194,7 +202,7 @@ export function computeQuote(input: { roe: number; travellers: CalcTraveller[] }
 	const pools = new Map<string, string[]>();
 	for (const t of travellers)
 		for (const l of t.addons)
-			if (l.def.kind === 'pooled_vehicle' && l.costOverride === null) {
+			if (l.def.kind === 'pooled_vehicle' && l.costOverride === null && l.poolCost == null) {
 				const arr = pools.get(l.def.id) ?? [];
 				arr.push(l.id);
 				pools.set(l.def.id, arr);
@@ -215,7 +223,11 @@ export function computeQuote(input: { roe: number; travellers: CalcTraveller[] }
 			let cost: number | null;
 			let sharers: number | null = null;
 			if (l.costOverride !== null) cost = l.costOverride;
-			else if (l.def.kind === 'pooled_vehicle') {
+			else if (l.def.kind === 'pooled_vehicle' && l.poolCost != null) {
+				// Settled across clients at booking.
+				cost = l.poolCost;
+				sharers = l.poolSharers ?? null;
+			} else if (l.def.kind === 'pooled_vehicle') {
 				const p = poolShare.get(l.id);
 				cost = p ? p.share : null;
 				sharers = p ? p.sharers : null;
@@ -257,7 +269,8 @@ export function computeQuote(input: { roe: number; travellers: CalcTraveller[] }
 			addons: lines,
 			amounts,
 			ticketCost: t.ticketCost,
-			ticketSell: t.ticketSell
+			ticketSell: t.ticketSell,
+			commission: t.commission ?? 0
 		};
 	});
 
@@ -282,6 +295,19 @@ export function computeQuote(input: { roe: number; travellers: CalcTraveller[] }
 		});
 	}
 
+	// Commission is paid in the traveller's package currency.
+	const commission: Partial<Record<HajjCurrency, number>> = {};
+	for (const cur of CURRENCY_ORDER) {
+		const parts = results.filter((r) => r.currency === cur && r.commission > 0);
+		if (parts.length)
+			commission[cur] = toNumber(
+				sum(
+					parts.map((r) => money(r.commission, cur)),
+					cur
+				)
+			);
+	}
+
 	const ticketCost = sum(
 		results.map((r) => money(r.ticketCost, 'PKR')),
 		'PKR'
@@ -304,6 +330,7 @@ export function computeQuote(input: { roe: number; travellers: CalcTraveller[] }
 			profit: toNumber(subtract(ticketSell, ticketCost))
 		},
 		roe,
+		commission,
 		pkr: {
 			cost: toNumber(pkrCost),
 			sell: toNumber(pkrSell),

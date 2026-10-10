@@ -54,11 +54,5 @@ export async function deletePayment(id: string): Promise<void> {
 	if (error) throw new Error(error.message);
 }
 
-export type PaymentStatus = 'paid' | 'pending' | 'overdue';
-
-/** Effective status: a pending payment past its due date is overdue. */
-export function paymentStatus(p: Pick<Payment, 'status' | 'due_date'>): PaymentStatus {
-	if (p.status === 'paid') return 'paid';
-	if (p.due_date && new Date(p.due_date).getTime() < Date.now()) return 'overdue';
-	return 'pending';
-}
+// Status rules live in ./status (pure, unit-tested); re-exported for existing imports.
+export { paymentStatus, type PaymentStatus } from './status';

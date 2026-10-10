@@ -177,7 +177,10 @@ describe('buildProposal', () => {
 							cost_override: null,
 							sell_price: 9000,
 							created_at: '',
-							updated_at: ''
+							updated_at: '',
+							pool_cost: null,
+							pool_sharers: null,
+							pool_vehicle: null
 						}
 					]
 				})
@@ -220,7 +223,10 @@ describe('buildProposal', () => {
 							cost_override: null,
 							sell_price: null,
 							created_at: '',
-							updated_at: ''
+							updated_at: '',
+							pool_cost: null,
+							pool_sharers: null,
+							pool_vehicle: null
 						}
 					]
 				})
@@ -300,7 +306,10 @@ describe('proposalWhatsApp', () => {
 					cost_override: null,
 					sell_price: null,
 					created_at: '',
-					updated_at: ''
+					updated_at: '',
+					pool_cost: null,
+					pool_sharers: null,
+					pool_vehicle: null
 				}
 			]
 		});

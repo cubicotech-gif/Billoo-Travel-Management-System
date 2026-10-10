@@ -80,7 +80,10 @@ describe('buildQuote', () => {
 			cost_override: null,
 			sell_price: null,
 			created_at: '',
-			updated_at: ''
+			updated_at: '',
+			pool_cost: null,
+			pool_sharers: null,
+			pool_vehicle: null
 		});
 		const q = buildQuote({
 			roe: 77,
@@ -130,5 +133,25 @@ describe('buildQuote', () => {
 			]
 		});
 		expect(q.travellers[0]?.addons).toEqual([]);
+	});
+
+	it('reads add-on rows from before the settlement migration (no pool_* columns) as not settled', () => {
+		const old = {
+			id: 'l',
+			traveller_id: 't',
+			addon_id: 'gmc',
+			qty: 1,
+			cost_override: null,
+			sell_price: null
+		} as never;
+		const q = buildQuote({
+			roe: 77,
+			catalogues,
+			packages,
+			addons: [gmcSar],
+			travellers: [traveller({ addons: [old] })]
+		});
+		// falls back to the family split (a lone traveller pays the whole vehicle) — not NaN
+		expect(q.travellers[0]?.addons[0]).toMatchObject({ cost: 35000, sharers: 1 });
 	});
 });

@@ -53,6 +53,9 @@
 	const list = $derived($travellers.data ?? []);
 	const roe = $derived(Number($quote.data?.roe ?? DEFAULT_HAJJ_ROE));
 
+	const passengerById = $derived(new Map(($passengers.data ?? []).map((p) => [p.id, p])));
+	const usdRate = $derived($quote.data?.usd_rate == null ? null : Number($quote.data.usd_rate));
+
 	const names = $derived.by(() => {
 		const byId = new Map(($passengers.data ?? []).map((p) => [p.id, fullName(p)]));
 		return Object.fromEntries(list.map((t) => [t.id, byId.get(t.passenger_id) ?? 'Traveller']));
@@ -132,6 +135,17 @@
 						onCommit={(n) => $updateQuote.mutate({ id: $quote.data!.id, patch: { roe: n } })}
 					/>
 				{/if}
+				{#if $quote.data}
+					<NumberField
+						class="w-36"
+						label="USD → PKR (finance)"
+						step="0.01"
+						hint={usdRate === null ? 'Needed to count USD in finance' : undefined}
+						value={usdRate ?? 0}
+						onCommit={(n) =>
+							$updateQuote.mutate({ id: $quote.data!.id, patch: { usd_rate: n > 0 ? n : null } })}
+					/>
+				{/if}
 				{#if list.length > 1}
 					<Button variant="secondary" size="sm" onclick={applyLeadToAll}>Same package for everyone</Button>
 				{/if}
@@ -190,6 +204,8 @@
 								catalogues={$catalogues.data ?? []}
 								addons={$addons.data ?? []}
 								result={r}
+								passenger={passengerById.get(t.passenger_id)}
+								others={list.filter((x) => x.id !== t.id).map((x) => ({ id: x.id, name: names[x.id] ?? 'Traveller' }))}
 								onMakeLead={() => makeLead(t.id)}
 							/>
 						{/if}
@@ -197,7 +213,7 @@
 				</div>
 				{#if list.length > 0}
 					<div class="xl:sticky xl:top-4 xl:self-start">
-						<HajjTotals {result} {names} />
+						<HajjTotals {result} {names} {usdRate} />
 					</div>
 				{/if}
 			</div>

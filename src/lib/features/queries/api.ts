@@ -75,6 +75,17 @@ export async function updateQuery(id: string, patch: QueryUpdate): Promise<Query
 	if (patch.advance_payment_amount !== undefined && patch.advance_payment_amount !== null) {
 		logActivity({ query_id: id, kind: 'payment', summary: 'Advance payment recorded' });
 	}
+	// A Hajj query changing stage re-settles the shared GMC pool, refreshes its
+	// finance figures and (entering Booking) lays down the 50/50 schedule. Loaded
+	// lazily: the hajj feature itself depends on this module.
+	if (patch.status !== undefined && row.package_type === 'Hajj') {
+		try {
+			const { onHajjStatusChange } = await import('$features/hajj/booking');
+			await onHajjStatusChange(row);
+		} catch (e) {
+			console.warn('[hajj] stage sync failed', e);
+		}
+	}
 	return row;
 }
 

@@ -3,10 +3,19 @@
 	import { Card } from '$ui';
 	import { formatAmount } from '$lib/money';
 	import type { QuoteResult } from './calc';
+	import { financeBridge } from './bridge';
 
 	// Family totals. USD is never converted; SAR is converted to PKR at the ROE
 	// (and tickets, which are PKR, join that PKR figure).
-	let { result, names }: { result: QuoteResult; names: Record<string, string> } = $props();
+	let {
+		result,
+		names,
+		usdRate = null
+	}: { result: QuoteResult; names: Record<string, string>; usdRate?: number | null } = $props();
+
+	// What the rest of the app (payments, finance, the booking lifecycle) sees, in PKR.
+	const bridge = $derived(financeBridge(result, usdRate));
+	const hasCommission = $derived(Object.keys(result.commission).length > 0);
 
 	const hasMixed = $derived(result.usd !== null && result.byCurrency.some((c) => c.currency === 'SAR'));
 	const sar = $derived(result.byCurrency.find((c) => c.currency === 'SAR'));
@@ -73,6 +82,32 @@
 				</div>
 			</div>
 		{/if}
+
+		<!-- Staff only: never shown to the client -->
+		<div class="rounded-lg border border-slate-200 px-3 py-2 text-xs">
+			<p class="mb-1 font-semibold text-slate-600">Books &amp; finance (staff only)</p>
+			<dl class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 tabular-nums">
+				{#if hasCommission}
+					<dt class="text-slate-400">Vendor commission</dt>
+					<dd class="text-right">
+						{#each Object.entries(result.commission) as [cur, amt], i (cur)}
+							{i ? ' + ' : ''}{formatAmount(amt, cur as 'USD' | 'SAR')}
+						{/each}
+					</dd>
+				{/if}
+				<dt class="text-slate-400">Client owes (PKR)</dt>
+				<dd class="text-right font-medium text-slate-800">{formatAmount(bridge.sellPkr, 'PKR')}</dd>
+				<dt class="text-slate-400">Cost, net of commission</dt>
+				<dd class="text-right">{formatAmount(bridge.costPkr, 'PKR')}</dd>
+				<dt class="text-slate-400">Profit incl. commission</dt>
+				<dd class="text-right {bridge.profitPkr >= 0 ? 'text-green-600' : 'text-red-600'}">{formatAmount(bridge.profitPkr, 'PKR')}</dd>
+			</dl>
+			{#if bridge.usdMissingRate}
+				<p class="mt-1.5 flex items-start gap-1 text-amber-700">
+					<AlertTriangle class="mt-0.5 h-3 w-3 shrink-0" /> USD charges are not counted above — set the USD → PKR rate.
+				</p>
+			{/if}
+		</div>
 
 		<details>
 			<summary class="cursor-pointer text-xs font-medium text-slate-500">Per traveller</summary>

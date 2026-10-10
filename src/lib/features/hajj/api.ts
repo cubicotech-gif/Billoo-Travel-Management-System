@@ -1,8 +1,8 @@
 import { supabase } from '$lib/supabase';
-import { updateQuery } from '$features/queries/api';
 import type {
 	HajjAddon,
 	HajjCatalogue,
+	HajjCommissionReceipt,
 	HajjDay,
 	HajjPackage,
 	HajjQuote,
@@ -12,6 +12,7 @@ import type {
 	HajjTravellerAddonUpdate,
 	HajjTravellerRow,
 	HajjTravellerUpdate,
+	NewHajjCommissionReceipt,
 	NewHajjTraveller,
 	NewHajjTravellerAddon
 } from './types';
@@ -153,10 +154,110 @@ export async function deleteTravellerAddon(id: string): Promise<void> {
 	if (error) throw new Error(error.message);
 }
 
-// --- Keep the query's head-count in step with the family -------------------
+// --- Booking bridge / settlement reads & writes ------------------------------
 
-/** Hajj travellers are all adults (12+), so the query's pax is simply the headcount. */
-export async function syncQueryPax(queryId: string, travellers: number): Promise<void> {
-	if (travellers < 1) return;
-	await updateQuery(queryId, { adults: travellers, children: 0, infants: 0 });
+/** The query's Hajj quote, or null when it has none yet (read-only; never creates). */
+export async function getQuoteRow(queryId: string): Promise<HajjQuote | null> {
+	const { data, error } = await supabase
+		.from('hajj_quotes')
+		.select('*')
+		.eq('query_id', queryId)
+		.maybeSingle();
+	if (error) throw new Error(error.message);
+	return data;
+}
+
+/** Every traveller-add-on row that takes one of the given (pooled) add-ons. */
+export async function listAddonLines(addonIds: string[]): Promise<HajjTravellerAddonRow[]> {
+	if (addonIds.length === 0) return [];
+	return unwrap(await supabase.from('hajj_traveller_addons').select('*').in('addon_id', addonIds));
+}
+
+export async function listTravellerRefs(
+	ids: string[]
+): Promise<{ id: string; query_id: string; passenger_id: string }[]> {
+	if (ids.length === 0) return [];
+	return unwrap(
+		await supabase.from('hajj_travellers').select('id, query_id, passenger_id').in('id', ids)
+	);
+}
+
+export interface QueryRef {
+	id: string;
+	query_number: string;
+	client_name: string;
+	status: string;
+	stage_changed_at: string | null;
+	created_at: string;
+	is_deleted: boolean;
+}
+
+export async function listQueryRefs(ids: string[]): Promise<QueryRef[]> {
+	if (ids.length === 0) return [];
+	return unwrap(
+		await supabase
+			.from('queries')
+			.select('id, query_number, client_name, status, stage_changed_at, created_at, is_deleted')
+			.in('id', ids)
+	);
+}
+
+export async function setLinePool(
+	lineId: string,
+	pool: { pool_cost: number | null; pool_sharers: number | null; pool_vehicle: string | null }
+): Promise<void> {
+	const { error } = await supabase.from('hajj_traveller_addons').update(pool).eq('id', lineId);
+	if (error) throw new Error(error.message);
+}
+
+/** Every Hajj traveller (id, query, package) — for commission and pool reports. */
+export async function listAllTravellerRefs(): Promise<
+	{ id: string; query_id: string; package_id: string }[]
+> {
+	return unwrap(await supabase.from('hajj_travellers').select('id, query_id, package_id'));
+}
+
+// --- Package commission ------------------------------------------------------
+
+export async function setPackageCommission(
+	packageId: string,
+	commission: number | null
+): Promise<void> {
+	const { error } = await supabase
+		.from('hajj_packages')
+		.update({ commission_per_person: commission })
+		.eq('id', packageId);
+	if (error) throw new Error(error.message);
+}
+
+// --- Commission receipts -----------------------------------------------------
+
+export async function listCommissionReceipts(): Promise<HajjCommissionReceipt[]> {
+	return unwrap(
+		await supabase
+			.from('hajj_commission_receipts')
+			.select('*')
+			.order('received_date', { ascending: false })
+			.order('created_at', { ascending: false })
+	);
+}
+
+export async function addCommissionReceipt(
+	input: NewHajjCommissionReceipt
+): Promise<HajjCommissionReceipt> {
+	return unwrap<HajjCommissionReceipt>(
+		await supabase.from('hajj_commission_receipts').insert(input).select().single()
+	);
+}
+
+export async function deleteCommissionReceipt(id: string): Promise<void> {
+	const { error } = await supabase.from('hajj_commission_receipts').delete().eq('id', id);
+	if (error) throw new Error(error.message);
+}
+
+/** GMC lines that have been settled into a vehicle. */
+export async function listSettledPoolLines(): Promise<HajjTravellerAddonRow[]> {
+	return unwrap(
+		await supabase.from('hajj_traveller_addons').select('*').not('pool_vehicle', 'is', null)
+	);
 }
