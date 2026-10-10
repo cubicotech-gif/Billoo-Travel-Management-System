@@ -179,3 +179,72 @@ C. Passenger CRM + New Query intake (3 modes, staff selector).
 D. Quotation calculator + WhatsApp template + multi-quote history.
 E. Booking (actuals, profit/loss, payment/check-in).
 F. Documents (uploads) + voucher/itinerary PDFs.
+
+## 8. Hajj Packages
+
+Hajj is a package type that goes through the **same query intake and the same 4
+stages**, but its **Working** stage uses a **Hajj package builder** instead of
+the stay-based Umrah quote builder. Hajj sells from a **fixed catalogue** of
+dated, vendor-priced packages.
+
+### Catalogue
+- The vendor publishes **two separate price lists — USD and SAR** (2027/1448:
+  UB001–UB026 in each). They are kept as **two catalogues and never merged**,
+  even where the products look the same.
+- A package has a fixed itinerary (day-by-day, AD + Hijri dates), so a package
+  *is* a departure. It has **hotel Option A / Option B** (some packages have only
+  one) and a **per-person price per room sharing** (Quad / Triple / Double, and
+  "Sharing" on a few). Prices are **our cost**; the selling price is set per quote.
+- The vendor pays a **fixed commission per person, per package** (same for every
+  room type and add-on). Not in the brochures — entered later; money we **receive
+  later** from the vendor. Stored on the package, in the catalogue's currency.
+- Source data lives in `scripts/hajj-2027/data.mjs`; `node scripts/hajj-2027/generate.mjs`
+  writes `database/seeds/hajj-2027-catalogue.sql` and `docs/hajj-2027-price-check.md`.
+
+### Travellers
+- **One query per family**; **one traveller row per person**, each linked to a
+  passenger profile (own passport, documents, price). Travellers are linked as a
+  family. Everyone is 12+ (no child/infant pricing).
+- By default the whole family takes the same package, option and room type, but
+  any traveller may take a **different package or hotel option**.
+- Currency follows the traveller's package. A mixed family shows **two totals**:
+  SAR → PKR at the ROE (default **77**, editable per quote) and USD unconverted.
+
+### Pricing and add-ons
+- The package price is the base. Add-ons **only add** to it (nothing is removed).
+  The base price may be sold below cost; **add-ons may be sold higher, never lower**
+  than their cost.
+- Add-ons (see `hajj_addons`): Kaaba view, Aziziya family room, extra Medinah
+  nights, airport taxis, **GMC private vehicle**, Qurbani assistance, Mina tent
+  upgrades (5-person, 8-person, deluxe family), business-class upgrade. Tent and
+  business-class prices are supplied by us (not in the brochures).
+- **Tickets** are not in any package. We sell them ourselves in PKR (adult fares,
+  our own cost and selling price), as for Umrah.
+- **GMC pool:** one vehicle costs a fixed amount (max 6 people) and its cost is
+  **divided by the headcount** in the vehicle. A family that takes GMC shares one
+  vehicle among its own members only; single travellers pool **across clients and
+  across packages** (Mashaer days are the same for everyone). A quote shows the
+  full vehicle price; the final split is settled at booking, counting only
+  travellers in the Booking stage. Vehicles may mix travellers whose packages
+  are in different currencies.
+- **Tent upgrades** are charged **per person** (e.g. a 5-person tent surcharge is
+  paid by each of the 5 travellers).
+
+### Output
+- A designed **printable proposal (PDF)** and a **WhatsApp text** version, under
+  **our own brand only** — no vendor name, no photos. Package details come from
+  the catalogue; terms and the 50/50 payment plan are included.
+- Payment plan: **50% at booking, 50% by 15 November 2026**; cancellation before
+  the cut-off forfeits a US$350 per person service charge (per the vendor).
+
+### Hajj traveller data (beyond a normal passenger)
+Mehram (and the lady's mehram link), blood group, fiqah, Hajj performed in the
+last 5 years, Hajj-e-Badal, group worker, nominee / emergency contact,
+diabetic / smoker, profession. Passport must be valid to 30 Nov 2027.
+
+### Build sequence (Hajj)
+1. Catalogue tables + 2027 seed (`20260637_hajj_catalogue.sql`, done).
+2. Hajj package builder (travellers, add-ons, totals) in the Working stage.
+3. Proposal document (print/PDF + WhatsApp).
+4. GMC pool settlement, commission receivable, 50/50 payment schedule, Hajj
+   traveller fields.
