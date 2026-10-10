@@ -70,6 +70,15 @@
 		box-shadow: none !important;
 		padding: 0 !important;
 	}
+	/* Multi-page documents (opt in with .print-flush): drop the screen shell's
+	   padding and min-height, otherwise a document that ends near the bottom of
+	   a page spills a blank trailing page. Other documents are unaffected. */
+	main > div:has(.print-flush) {
+		padding: 0 !important;
+	}
+	.min-h-screen:has(.print-flush) {
+		min-height: 0 !important;
+	}
 	/* Keep a tier/section from splitting across a page break. */
 	.break-avoid {
 		break-inside: avoid;

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Plus, Users, Wheat } from 'lucide-svelte';
+	import { FileText, Plus, Users, Wheat } from 'lucide-svelte';
 	import { Button, Card } from '$ui';
 	import { usePassengers } from '$features/passengers/queries';
 	import { fullName } from '$features/passengers/types';
@@ -134,6 +134,11 @@
 				{/if}
 				{#if list.length > 1}
 					<Button variant="secondary" size="sm" onclick={applyLeadToAll}>Same package for everyone</Button>
+				{/if}
+				{#if list.length > 0}
+					<Button variant="secondary" size="sm" href="/queries/{queryId}/hajj-proposal">
+						<FileText class="h-4 w-4" /> Proposal
+					</Button>
 				{/if}
 				{#if ready && !adding}
 					<Button size="sm" onclick={() => (adding = true)}>

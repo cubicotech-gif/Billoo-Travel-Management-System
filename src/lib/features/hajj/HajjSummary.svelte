@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { Card } from '$ui';
+	import { FileText } from 'lucide-svelte';
+	import { Button, Card } from '$ui';
 	import { usePassengers } from '$features/passengers/queries';
 	import { fullName } from '$features/passengers/types';
 	import { baseCost } from './calc';
@@ -62,6 +63,11 @@
 {:else if result}
 	<div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
 		<Card title="Hajj travellers — {list.length}">
+			<div class="mb-3 flex justify-end">
+				<Button variant="secondary" size="sm" href="/queries/{queryId}/hajj-proposal">
+					<FileText class="h-4 w-4" /> Proposal
+				</Button>
+			</div>
 			<ul class="divide-y divide-slate-100">
 				{#each list as t, i (t.id)}
 					{@const pkg = ($packages.data ?? []).find((p) => p.id === t.package_id)}
