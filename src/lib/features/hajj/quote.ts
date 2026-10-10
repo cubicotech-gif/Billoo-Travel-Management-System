@@ -56,6 +56,7 @@ export function buildQuote(data: QuoteData): QuoteResult {
 			baseSell: Number(t.sell_price),
 			ticketCost: Number(t.ticket_cost_pkr),
 			ticketSell: Number(t.ticket_sell_pkr),
+			commission: pkg?.commission_per_person == null ? 0 : Number(pkg.commission_per_person),
 			addons: t.addons.flatMap((row) => {
 				const addon = addonById.get(row.addon_id);
 				if (!addon) return [];
@@ -66,7 +67,11 @@ export function buildQuote(data: QuoteData): QuoteResult {
 						def: addonDef(addon, cur),
 						qty: row.qty,
 						costOverride: row.cost_override === null ? null : Number(row.cost_override),
-						sellPrice: row.sell_price === null ? null : Number(row.sell_price)
+						sellPrice: row.sell_price === null ? null : Number(row.sell_price),
+						// `== null` (not `=== null`): before the settlement migration is applied the
+						// column is simply absent, and must read as "not settled", not NaN.
+						poolCost: row.pool_cost == null ? null : Number(row.pool_cost),
+						poolSharers: row.pool_sharers ?? null
 					}
 				];
 			})

@@ -242,6 +242,28 @@ Mehram (and the lady's mehram link), blood group, fiqah, Hajj performed in the
 last 5 years, Hajj-e-Badal, group worker, nominee / emergency contact,
 diabetic / smoker, profession. Passport must be valid to 30 Nov 2027.
 
+### Booking, money and commission
+- **Finance bridge:** payments, finance, receivables and the booking lifecycle are PKR-based and read
+  `queries.selling_price` and a `bookings` row. A Hajj quote writes those (SAR × ROE + tickets + USD ×
+  a **USD → PKR rate** held on the quote), so they work unchanged. USD is only counted once that rate
+  is set (the builder warns). The client-facing proposal still shows USD unconverted. Trip dates are
+  the earliest start / latest end of the travellers' packages. The `bookings` row is created on
+  entering the Booking stage.
+- **Commission** is a fixed amount per person per package (`hajj_packages.commission_per_person`,
+  edited on the **Hajj** page). Books carry **cost net of commission**, so profit includes it. What
+  the vendor has actually paid is recorded as receipts; outstanding = expected (confirmed travellers)
+  − received, per currency.
+- **GMC settlement:** when a query enters (or leaves) the Booking stage, the shared GMC is settled
+  across all confirmed clients — a family on its own vehicle, singles pooling across clients and
+  packages in confirmation order, `capacity` (6) per vehicle, USD and SAR pools apart. The result is
+  stored on the line (`pool_cost / pool_sharers / pool_vehicle`) and every affected booking is
+  re-synced. A quote that isn't confirmed never lowers another client's price.
+- **Payment schedule:** entering Booking creates the 50/50 schedule (50% due that day, 50% due
+  15 Nov 2026). While nothing is paid and it is still the auto-generated plan, it follows the total
+  (e.g. when the GMC share drops); once a payment is recorded it is left alone.
+- **Traveller details** (mehram, blood group, fiqah, next of kin, …) are captured per traveller, with a
+  readiness checklist (passport valid to 30 Nov 2027, age 12+, mehram for women, …).
+
 ### Build sequence (Hajj)
 1. Catalogue tables + 2027 seed (`20260637_hajj_catalogue.sql`, done).
 2. Hajj package builder in the Working stage (`20260638_hajj_quote.sql`, done): one quote per
@@ -249,5 +271,6 @@ diabetic / smoker, profession. Passport must be valid to 30 Nov 2027.
    currency. Quoted and Booking show a read-only summary for now.
 3. Proposal document (print/PDF + WhatsApp) — done: `/queries/[id]/hajj-proposal`. Selling prices
    only, our brand only; client wording lives in `src/lib/features/hajj/content.ts`.
-4. GMC pool settlement, commission receivable, 50/50 payment schedule, Hajj
-   traveller fields.
+4. Booking bridge, GMC settlement across clients, commission, 50/50 schedule, traveller details
+   (`20260639_hajj_booking.sql`, done). Not yet adapted for Hajj: invoice, voucher and itinerary
+   documents; vendor payments; per-vendor commission accounts.

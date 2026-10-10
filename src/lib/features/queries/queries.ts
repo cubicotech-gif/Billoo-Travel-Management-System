@@ -86,6 +86,10 @@ export function useSetQueryStatus() {
 		onSuccess: (q) => {
 			client.invalidateQueries({ queryKey: QUERIES_KEY });
 			client.invalidateQueries({ queryKey: queryKey(q.id) });
+			// A Hajj stage change also moves payments, the booking row and GMC shares.
+			client.invalidateQueries({ queryKey: ['hajj'] });
+			client.invalidateQueries({ queryKey: ['payments', q.id] });
+			client.invalidateQueries({ queryKey: ['booking', q.id] });
 		}
 	});
 }

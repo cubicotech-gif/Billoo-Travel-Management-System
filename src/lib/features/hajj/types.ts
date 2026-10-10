@@ -15,6 +15,9 @@ export type HajjAddonRoomPrice = Tables['hajj_addon_room_prices']['Row'];
 export type HajjQuote = Tables['hajj_quotes']['Row'];
 export type HajjQuoteUpdate = Tables['hajj_quotes']['Update'];
 
+export type HajjCommissionReceipt = Tables['hajj_commission_receipts']['Row'];
+export type NewHajjCommissionReceipt = Tables['hajj_commission_receipts']['Insert'];
+
 export type HajjTravellerRow = Tables['hajj_travellers']['Row'];
 export type NewHajjTraveller = Tables['hajj_travellers']['Insert'];
 export type HajjTravellerUpdate = Tables['hajj_travellers']['Update'];

@@ -126,6 +126,7 @@
 	}
 	function fmtRel(iso: string): string {
 		const d = daysSince(iso);
+		if (d < 0) return `in ${-d}d`; // a future date (e.g. an upcoming travel date)
 		return d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d}d ago`;
 	}
 </script>

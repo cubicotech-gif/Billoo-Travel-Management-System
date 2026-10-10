@@ -94,9 +94,11 @@ Copy `.env.example` → `.env` and set `PUBLIC_SUPABASE_URL` /
 
 - **Phase 0/1 (done):** SvelteKit shell, money layer, Queries wired end-to-end.
 - **Phase 2 (in progress):** full Queries detail + services, Passengers, Vendors, Finance.
-- **Hajj package system (in progress):** fixed vendor catalogue (USD + SAR kept separate), per-person
-  pricing, add-ons incl. a shared GMC pool, designed proposal. Spec §8. Catalogue data is generated
-  from `scripts/hajj-2027/data.mjs` into `database/seeds/hajj-2027-catalogue.sql`.
+- **Hajj package system (done through booking):** fixed vendor catalogue (USD + SAR kept separate),
+  per-person pricing, add-ons incl. a GMC pool settled across clients, designed proposal, commission,
+  50/50 schedule, finance bridge. Spec §8; staff back office at `/hajj`. Catalogue data is generated
+  from `scripts/hajj-2027/data.mjs` into `database/seeds/hajj-2027-catalogue.sql`. Still to adapt for
+  Hajj: invoice / voucher / itinerary documents, vendor payments.
 - **Phase 3:** Realtime notifications + Web Push. (PWA shell is done: `static/manifest.webmanifest`,
   `src/service-worker.ts` caches only the app shell — never Supabase data.)
 - **Phase 4:** squash migrations to one baseline, e2e tests, **re-enable auth**.

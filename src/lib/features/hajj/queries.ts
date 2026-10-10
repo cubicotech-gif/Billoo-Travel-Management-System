@@ -1,4 +1,5 @@
 import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
+import { afterHajjEdit } from './booking';
 import {
 	createTraveller,
 	deleteTraveller,
@@ -9,7 +10,6 @@ import {
 	listPackageDays,
 	listPackages,
 	listTravellers,
-	syncQueryPax,
 	updateQuote,
 	updateTraveller,
 	updateTravellerAddon,
@@ -74,7 +74,10 @@ export function useUpdateHajjQuote(queryId: string) {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: ({ id, patch }: { id: string; patch: HajjQuoteUpdate }) => updateQuote(id, patch),
-		onSuccess: () => client.invalidateQueries({ queryKey: quoteKey(queryId) })
+		onSuccess: async () => {
+			await client.invalidateQueries({ queryKey: quoteKey(queryId) });
+			void refresh(client, queryId);
+		}
 	});
 }
 
@@ -82,21 +85,25 @@ export function useHajjTravellers(queryId: string) {
 	return createQuery({ queryKey: travellersKey(queryId), queryFn: () => listTravellers(queryId) });
 }
 
-// Every traveller change refreshes the list and re-syncs the query's head-count.
+// Every quote change refreshes the list, then (in the background) brings the
+// query's PKR figures, the booking row and the GMC settlement up to date.
 async function refresh(client: ReturnType<typeof useQueryClient>, queryId: string) {
 	await client.invalidateQueries({ queryKey: travellersKey(queryId) });
+	void afterHajjEdit(queryId)
+		.catch((e) => console.warn('[hajj] finance sync failed', e))
+		.finally(() => {
+			client.invalidateQueries({ queryKey: ['queries', queryId] });
+			client.invalidateQueries({ queryKey: ['payments', queryId] });
+			client.invalidateQueries({ queryKey: ['booking', queryId] });
+			client.invalidateQueries({ queryKey: ['hajj', 'travellers'] });
+		});
 }
 
 export function useAddHajjTraveller(queryId: string) {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (input: NewHajjTraveller) => createTraveller(input),
-		onSuccess: async () => {
-			await refresh(client, queryId);
-			const list = client.getQueryData<unknown[]>(travellersKey(queryId));
-			if (list) await syncQueryPax(queryId, list.length);
-			client.invalidateQueries({ queryKey: ['queries', queryId] });
-		}
+		onSuccess: () => refresh(client, queryId)
 	});
 }
 
@@ -126,12 +133,7 @@ export function useRemoveHajjTraveller(queryId: string) {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (id: string) => deleteTraveller(id),
-		onSuccess: async () => {
-			await refresh(client, queryId);
-			const list = client.getQueryData<unknown[]>(travellersKey(queryId));
-			if (list) await syncQueryPax(queryId, list.length);
-			client.invalidateQueries({ queryKey: ['queries', queryId] });
-		}
+		onSuccess: () => refresh(client, queryId)
 	});
 }
 

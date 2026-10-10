@@ -28,6 +28,7 @@
 	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
 	import HajjBuilder from '$features/hajj/HajjBuilder.svelte';
 	import HajjSummary from '$features/hajj/HajjSummary.svelte';
+	import HajjBookingPanel from '$features/hajj/HajjBookingPanel.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingBuilder from '$features/bookings/BookingBuilder.svelte';
 	import BookingSummary from '$features/bookings/BookingSummary.svelte';
@@ -169,8 +170,7 @@
 			{/if}
 		{:else if q.status === 'Booking'}
 			{#if q.package_type === 'Hajj'}
-				<!-- Hajj vendor-booking tools come in a later step; the quote and payments work today. -->
-				<HajjSummary queryId={id} />
+				<HajjBookingPanel queryId={id} />
 			{:else if q.completed_date}
 				<BookingSummary queryId={id} />
 			{:else}

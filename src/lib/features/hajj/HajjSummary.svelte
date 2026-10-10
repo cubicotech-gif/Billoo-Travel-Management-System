@@ -90,7 +90,7 @@
 								Add-ons:
 								{#each t.addons as row, j (row.id)}
 									{@const line = r?.addons.find((l) => l.lineId === row.id)}
-									{addonName.get(row.addon_id) ?? 'Add-on'}{row.qty > 1 ? ` ×${row.qty}` : ''}{line ? ` (${formatAmount(line.sell, line.currency)})` : ''}{j < t.addons.length - 1 ? ', ' : ''}
+									{addonName.get(row.addon_id) ?? 'Add-on'}{row.qty > 1 ? ` ×${row.qty}` : ''}{line ? ` (${formatAmount(line.sell, line.currency)})` : ''}{line?.sharers && line.sharers > 1 ? ` — shared by ${line.sharers}${row.pool_vehicle ? `, vehicle ${row.pool_vehicle}` : ''}` : ''}{j < t.addons.length - 1 ? ', ' : ''}
 								{/each}
 							</p>
 						{/if}
@@ -104,7 +104,7 @@
 			</ul>
 		</Card>
 		<div class="xl:sticky xl:top-4 xl:self-start">
-			<HajjTotals {result} {names} />
+			<HajjTotals {result} {names} usdRate={$quote.data?.usd_rate == null ? null : Number($quote.data.usd_rate)} />
 		</div>
 	</div>
 {/if}

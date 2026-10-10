@@ -6,10 +6,13 @@ import type { HajjPackageRow } from './types';
 
 export const SEASON_LABEL = 'Hajj 2027 · 1448 AH';
 
-/** 50 / 50 plan. The balance date is fixed for the 2027 season. */
+/**
+ * 50 / 50 plan. The balance date is fixed for the 2027 season. `due` is either
+ * 'booking' (the day the booking is confirmed) or a fixed ISO date.
+ */
 export const PAYMENT_PLAN = [
-	{ label: 'At the time of booking', percent: 50 },
-	{ label: 'By 15 November 2026', percent: 50 }
+	{ label: 'At the time of booking', percent: 50, due: 'booking' },
+	{ label: 'By 15 November 2026', percent: 50, due: '2026-11-15' }
 ] as const;
 
 export const PRICE_NOTE =

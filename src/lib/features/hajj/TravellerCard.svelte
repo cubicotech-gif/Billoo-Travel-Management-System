@@ -8,6 +8,9 @@
 	import PackageSummary from './PackageSummary.svelte';
 	import NumberField from './NumberField.svelte';
 	import TravellerAddons from './TravellerAddons.svelte';
+	import TravellerDetails from './TravellerDetails.svelte';
+	import { travellerIssues } from './readiness';
+	import type { Passenger } from '$features/passengers/types';
 	import { carrySell, normalize, type Selection } from './selection';
 	import {
 		useRemoveHajjTraveller,
@@ -27,6 +30,8 @@
 		catalogues: HajjCatalogue[];
 		addons: HajjAddon[];
 		result: TravellerResult;
+		passenger: Passenger | undefined;
+		others: { id: string; name: string }[];
 		onMakeLead: () => void;
 	}
 	let {
@@ -38,6 +43,8 @@
 		catalogues,
 		addons,
 		result,
+		passenger,
+		others,
 		onMakeLead
 	}: Props = $props();
 
@@ -108,6 +115,7 @@
 		});
 	}
 
+	const issueCount = $derived(travellerIssues(traveller, passenger ?? null).length);
 	const baseMargin = $derived(result.baseSell - result.baseCost);
 	const normalized = $derived(selection ? normalize(packages, selection) : null);
 
@@ -176,6 +184,20 @@
 				</summary>
 				<div class="mt-3">
 					<TravellerAddons {queryId} {traveller} {pkg} {addons} {catalogues} {result} />
+				</div>
+			</details>
+
+			<details class="rounded-lg border border-slate-200 px-3 py-2">
+				<summary class="cursor-pointer text-sm font-medium text-slate-700">
+					Hajj details
+					{#if issueCount}
+						<span class="ml-1 rounded-full bg-amber-50 px-1.5 text-xs font-normal text-amber-700">{issueCount} to complete</span>
+					{:else}
+						<span class="ml-1 text-xs font-normal text-green-600">complete</span>
+					{/if}
+				</summary>
+				<div class="mt-3">
+					<TravellerDetails {queryId} {traveller} {passenger} {others} />
 				</div>
 			</details>
 
