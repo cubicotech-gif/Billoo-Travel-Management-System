@@ -26,6 +26,8 @@
 	import PackagePanel from './PackagePanel.svelte';
 	import QuotedChat from './QuotedChat.svelte';
 	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
+	import HajjBuilder from '$features/hajj/HajjBuilder.svelte';
+	import HajjSummary from '$features/hajj/HajjSummary.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
 	import BookingBuilder from '$features/bookings/BookingBuilder.svelte';
 	import BookingSummary from '$features/bookings/BookingSummary.svelte';
@@ -152,12 +154,24 @@
 				<QueryEditForm query={q} onSaved={() => $setStatus.mutate({ id, status: 'Working' })} />
 			</Card>
 		{:else if q.status === 'Working'}
-			<QuoteBuilder queryId={id} embedded />
+			<!-- Hajj sells from a fixed catalogue, not the stay-based Umrah quote. -->
+			{#if q.package_type === 'Hajj'}
+				<HajjBuilder query={q} />
+			{:else}
+				<QuoteBuilder queryId={id} embedded />
+			{/if}
 		{:else if q.status === 'Quoted'}
 			<QuotedChat queryId={id} {latest} />
-			<QuotationList queryId={id} />
+			{#if q.package_type === 'Hajj'}
+				<HajjSummary queryId={id} />
+			{:else}
+				<QuotationList queryId={id} />
+			{/if}
 		{:else if q.status === 'Booking'}
-			{#if q.completed_date}
+			{#if q.package_type === 'Hajj'}
+				<!-- Hajj vendor-booking tools come in a later step; the quote and payments work today. -->
+				<HajjSummary queryId={id} />
+			{:else if q.completed_date}
 				<BookingSummary queryId={id} />
 			{:else}
 				<BookingBuilder queryId={id} />

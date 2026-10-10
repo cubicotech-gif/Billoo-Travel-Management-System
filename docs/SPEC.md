@@ -244,7 +244,9 @@ diabetic / smoker, profession. Passport must be valid to 30 Nov 2027.
 
 ### Build sequence (Hajj)
 1. Catalogue tables + 2027 seed (`20260637_hajj_catalogue.sql`, done).
-2. Hajj package builder (travellers, add-ons, totals) in the Working stage.
+2. Hajj package builder in the Working stage (`20260638_hajj_quote.sql`, done): one quote per
+   query, one traveller per person, per-traveller package / option / room / add-ons, totals per
+   currency. Quoted and Booking show a read-only summary for now.
 3. Proposal document (print/PDF + WhatsApp).
 4. GMC pool settlement, commission receivable, 50/50 payment schedule, Hajj
    traveller fields.
