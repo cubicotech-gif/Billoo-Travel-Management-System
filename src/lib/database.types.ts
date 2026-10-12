@@ -34,6 +34,46 @@ export type BloodGroup = 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-'
 export type HajjCurrency = 'USD' | 'SAR';
 export type HajjRoomType = 'Sharing' | 'Quad' | 'Triple' | 'Double';
 export type HajjOptionCode = 'A' | 'B';
+export type HajjProposalStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'archived';
+
+/** A frozen Hajj family quote (see hajj/snapshot.ts). */
+export interface HajjProposalSnapshot {
+	roe: number;
+	usd_rate: number | null;
+	travellers: HajjSnapshotTraveller[];
+}
+
+export interface HajjSnapshotTraveller {
+	/** Position-independent id used inside the snapshot (mehram links point at it). */
+	ref: string;
+	passenger_id: string;
+	is_lead: boolean;
+	package_id: string;
+	option_code: HajjOptionCode;
+	room_type: HajjRoomType;
+	sell_price: number;
+	ticket_airline: string | null;
+	ticket_cost_pkr: number;
+	ticket_sell_pkr: number;
+	notes: string | null;
+	sort_order: number;
+	marital_status: string | null;
+	blood_group: BloodGroup | null;
+	fiqah: string | null;
+	performed_hajj_5y: boolean | null;
+	hajj_e_badal: boolean | null;
+	group_worker: boolean | null;
+	is_diabetic: boolean | null;
+	is_smoker: boolean | null;
+	profession: string | null;
+	mehram_ref: string | null;
+	mehram_relation: string | null;
+	kin_name: string | null;
+	kin_phone: string | null;
+	kin_cnic: string | null;
+	kin_relation: string | null;
+	addons: { addon_id: string; qty: number; cost_override: number | null; sell_price: number }[];
+}
 export type HajjSeries =
 	| 'platinum_makkah_medinah'
 	| 'platinum_aziziya_makkah_medinah'
@@ -1157,6 +1197,46 @@ export interface Database {
 					notes?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['hajj_commission_receipts']['Insert']>;
+				Relationships: [];
+			};
+			hajj_proposals: {
+				Row: {
+					id: string;
+					query_id: string;
+					version: number;
+					label: string | null;
+					status: HajjProposalStatus;
+					roe: number;
+					usd_rate: number | null;
+					snapshot: HajjProposalSnapshot;
+					traveller_count: number;
+					total_sell_pkr: number;
+					total_sell_usd: number | null;
+					profit_pkr: number;
+					valid_until: string | null;
+					whatsapp_text: string | null;
+					notes: string | null;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					query_id: string;
+					version?: number;
+					label?: string | null;
+					status?: HajjProposalStatus;
+					roe: number;
+					usd_rate?: number | null;
+					snapshot: HajjProposalSnapshot;
+					traveller_count?: number;
+					total_sell_pkr?: number;
+					total_sell_usd?: number | null;
+					profit_pkr?: number;
+					valid_until?: string | null;
+					whatsapp_text?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_proposals']['Insert']>;
 				Relationships: [];
 			};
 		};

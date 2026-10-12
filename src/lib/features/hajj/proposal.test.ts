@@ -13,6 +13,7 @@ import {
 import {
 	buildProposal,
 	instalments,
+	proposalOptionsWhatsApp,
 	proposalWhatsApp,
 	referenceFor,
 	type ProposalInput
@@ -325,6 +326,38 @@ describe('proposalWhatsApp', () => {
 			)
 		);
 		expect(text).toContain('Total in USD: USD 15,500.00 (payable separately)');
+	});
+});
+
+describe('proposalOptionsWhatsApp', () => {
+	const one = buildProposal(input([traveller('a')]));
+	const two = buildProposal(input([traveller('a'), traveller('b')]));
+
+	it('a single option reads exactly like a plain proposal', () => {
+		expect(proposalOptionsWhatsApp([{ title: 'Economy', proposal: one }])).toBe(
+			proposalWhatsApp(one)
+		);
+	});
+
+	it('lists every option with its own total, then one shared closing', () => {
+		const text = proposalOptionsWhatsApp(
+			[
+				{ title: 'Economy', proposal: one },
+				{ title: 'Family', proposal: two }
+			],
+			{ validUntil: '2026-10-17' }
+		);
+		expect(text).toContain('2 options');
+		expect(text).toContain('Option 1 — Economy');
+		expect(text).toContain('Option 2 — Family');
+		expect(text).toContain('Total — Economy');
+		expect(text).toContain('Total — Family');
+		expect(text.match(/Reply to confirm/g)).toHaveLength(1);
+		expect(text).toContain('Valid till 2026-10-17');
+	});
+
+	it('is empty with no options', () => {
+		expect(proposalOptionsWhatsApp([])).toBe('');
 	});
 });
 

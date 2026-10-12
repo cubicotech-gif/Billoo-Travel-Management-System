@@ -1,6 +1,13 @@
 import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 import { afterHajjEdit } from './booking';
 import {
+	acceptProposal,
+	createProposal,
+	listProposals,
+	loadProposalIntoBuilder,
+	removeProposal,
+	setProposalStatus,
+	updateProposal,
 	createTraveller,
 	deleteTraveller,
 	deleteTravellerAddon,
@@ -16,6 +23,10 @@ import {
 	upsertTravellerAddon
 } from './api';
 import type {
+	HajjProposal,
+	HajjProposalStatus,
+	HajjProposalUpdate,
+	NewHajjProposal,
 	HajjQuoteUpdate,
 	HajjTraveller,
 	HajjTravellerAddonUpdate,
@@ -159,5 +170,86 @@ export function useRemoveTravellerAddon(queryId: string) {
 	return createMutation({
 		mutationFn: (id: string) => deleteTravellerAddon(id),
 		onSuccess: () => refresh(client, queryId)
+	});
+}
+
+// --- Saved proposals (options) ------------------------------------------------
+
+const proposalsKey = (queryId: string) => ['hajj', 'proposals', queryId] as const;
+
+export function useHajjProposals(queryId: string) {
+	return createQuery({ queryKey: proposalsKey(queryId), queryFn: () => listProposals(queryId) });
+}
+
+/** After anything that can change the query's stage, quote or finance rows. */
+function refreshAll(client: ReturnType<typeof useQueryClient>, queryId: string) {
+	client.invalidateQueries({ queryKey: proposalsKey(queryId) });
+	client.invalidateQueries({ queryKey: ['queries'] });
+	client.invalidateQueries({ queryKey: quoteKey(queryId) });
+	client.invalidateQueries({ queryKey: travellersKey(queryId) });
+	void afterHajjEdit(queryId)
+		.catch((e) => console.warn('[hajj] finance sync failed', e))
+		.finally(() => {
+			client.invalidateQueries({ queryKey: ['queries', queryId] });
+			client.invalidateQueries({ queryKey: ['payments', queryId] });
+			client.invalidateQueries({ queryKey: ['booking', queryId] });
+			client.invalidateQueries({ queryKey: ['hajj', 'travellers'] });
+		});
+}
+
+export function useSaveHajjProposal(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (args: {
+			input: Omit<NewHajjProposal, 'version'>;
+			advance: boolean;
+			currentStatus: string;
+		}) => createProposal(args.input, args),
+		onSuccess: () => {
+			client.invalidateQueries({ queryKey: proposalsKey(queryId) });
+			client.invalidateQueries({ queryKey: ['queries'] });
+		}
+	});
+}
+
+export function useUpdateHajjProposal(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ id, patch }: { id: string; patch: HajjProposalUpdate }) =>
+			updateProposal(id, patch),
+		onSuccess: () => client.invalidateQueries({ queryKey: proposalsKey(queryId) })
+	});
+}
+
+export function useSetHajjProposalStatus(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ id, status }: { id: string; status: HajjProposalStatus }) =>
+			setProposalStatus(id, status),
+		onSuccess: () => client.invalidateQueries({ queryKey: proposalsKey(queryId) })
+	});
+}
+
+export function useRemoveHajjProposal(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (p: HajjProposal) => removeProposal(p),
+		onSuccess: () => client.invalidateQueries({ queryKey: proposalsKey(queryId) })
+	});
+}
+
+export function useLoadHajjProposal(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (p: HajjProposal) => loadProposalIntoBuilder(p),
+		onSuccess: () => refreshAll(client, queryId)
+	});
+}
+
+export function useAcceptHajjProposal(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (p: HajjProposal) => acceptProposal(p),
+		onSuccess: () => refreshAll(client, queryId)
 	});
 }

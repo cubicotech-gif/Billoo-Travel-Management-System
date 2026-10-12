@@ -236,21 +236,8 @@ const formatAmount: typeof formatAmountRaw = (n, c) =>
 
 const ONE = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-/**
- * Copy-paste WhatsApp version of the proposal: selling prices only, no vendor
- * name, no cost/margin. `validUntil` is an optional ISO date.
- */
-export function proposalWhatsApp(
-	p: Proposal,
-	opts: { validUntil?: string | null; brand?: string } = {}
-): string {
-	const brand = opts.brand?.trim() || 'Billoo Travel';
-	const out: string[] = [
-		`*${SEASON_LABEL.split(' · ')[0]} Package Proposal — ${p.clientName}*`,
-		`${ONE(p.travellerCount, 'traveller')} · Ref ${p.reference}`,
-		''
-	];
-
+function groupLines(p: Proposal): string[] {
+	const out: string[] = [];
 	for (const g of p.groups) {
 		out.push(`*${g.pkg.title}*${g.pkg.duration_label ? ` (${g.pkg.duration_label})` : ''}`);
 		out.push(`📅 ${g.span}`);
@@ -270,8 +257,11 @@ export function proposalWhatsApp(
 		}
 		out.push('');
 	}
+	return out;
+}
 
-	out.push('*Total*');
+function totalLines(p: Proposal, heading = '*Total*'): string[] {
+	const out: string[] = [heading];
 	const { totals } = p;
 	if (totals.sar !== null)
 		out.push(
@@ -284,13 +274,20 @@ export function proposalWhatsApp(
 			`*Total in USD: ${formatAmount(totals.usd, 'USD')}${totals.pkr !== null ? ' (payable separately)' : ''}*`
 		);
 	out.push('');
+	return out;
+}
 
-	out.push(
+function closingLines(
+	flags: { ticketQuoted: boolean; qurbaniQuoted: boolean },
+	opts: { validUntil?: string | null; brand?: string }
+): string[] {
+	const brand = opts.brand?.trim() || 'Billoo Travel';
+	const out: string[] = [
 		'✅ Includes: Makkah & Medinah hotels (half board), Mina & Arafat camps with meals, luxury buses for Mashaer days, Makkah–Medinah transfer, Ziyarat, Hajj training & guidance'
-	);
-	if (!p.ticketQuoted || !p.qurbaniQuoted)
+	];
+	if (!flags.ticketQuoted || !flags.qurbaniQuoted)
 		out.push(
-			`❌ Not included: ${[!p.ticketQuoted ? 'air ticket' : null, !p.qurbaniQuoted ? 'Qurbani' : null].filter(Boolean).join(', ')}`
+			`❌ Not included: ${[!flags.ticketQuoted ? 'air ticket' : null, !flags.qurbaniQuoted ? 'Qurbani' : null].filter(Boolean).join(', ')}`
 		);
 	out.push(
 		`💳 Payment: ${PAYMENT_PLAN.map((s) => `${s.percent}% ${s.label.charAt(0).toLowerCase()}${s.label.slice(1)}`).join(', ')}`
@@ -300,5 +297,58 @@ export function proposalWhatsApp(
 	out.push('');
 	out.push('Reply to confirm and we will send the booking form.');
 	out.push(`— ${brand}`);
+	return out;
+}
+
+/**
+ * Copy-paste WhatsApp version of the proposal: selling prices only, no vendor
+ * name, no cost/margin. `validUntil` is an optional ISO date.
+ */
+export function proposalWhatsApp(
+	p: Proposal,
+	opts: { validUntil?: string | null; brand?: string } = {}
+): string {
+	return [
+		`*${SEASON_LABEL.split(' · ')[0]} Package Proposal — ${p.clientName}*`,
+		`${ONE(p.travellerCount, 'traveller')} · Ref ${p.reference}`,
+		'',
+		...groupLines(p),
+		...totalLines(p),
+		...closingLines(p, opts)
+	].join('\n');
+}
+
+/**
+ * WhatsApp text for several saved options ("Option 1 — Economy", …) of one
+ * query. One option reads exactly like a plain proposal.
+ */
+export function proposalOptionsWhatsApp(
+	options: { title: string; proposal: Proposal }[],
+	opts: { validUntil?: string | null; brand?: string } = {}
+): string {
+	const first = options[0];
+	if (!first) return '';
+	if (options.length === 1) return proposalWhatsApp(first.proposal, opts);
+	const p = first.proposal;
+	const out: string[] = [
+		`*${SEASON_LABEL.split(' · ')[0]} Package Proposal — ${p.clientName}*`,
+		`${ONE(p.travellerCount, 'traveller')} · Ref ${p.reference}`,
+		`${options.length} options for you to choose from:`,
+		''
+	];
+	options.forEach((o, i) => {
+		out.push(`━━━ *Option ${i + 1} — ${o.title}* ━━━`);
+		out.push(...groupLines(o.proposal));
+		out.push(...totalLines(o.proposal, `*Total — ${o.title}*`));
+	});
+	out.push(
+		...closingLines(
+			{
+				ticketQuoted: options.every((o) => o.proposal.ticketQuoted),
+				qurbaniQuoted: options.every((o) => o.proposal.qurbaniQuoted)
+			},
+			opts
+		)
+	);
 	return out.join('\n');
 }

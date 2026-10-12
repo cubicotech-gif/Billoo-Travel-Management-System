@@ -1,10 +1,15 @@
 import { supabase } from '$lib/supabase';
+import { setQueryStatus } from '$features/queries/api';
+import { snapshotToTravellers } from './snapshot';
 import type {
 	HajjAddon,
 	HajjCatalogue,
 	HajjCommissionReceipt,
 	HajjDay,
 	HajjPackage,
+	HajjProposal,
+	HajjProposalStatus,
+	HajjProposalUpdate,
 	HajjQuote,
 	HajjQuoteUpdate,
 	HajjTraveller,
@@ -13,6 +18,7 @@ import type {
 	HajjTravellerRow,
 	HajjTravellerUpdate,
 	NewHajjCommissionReceipt,
+	NewHajjProposal,
 	NewHajjTraveller,
 	NewHajjTravellerAddon
 } from './types';
@@ -260,4 +266,113 @@ export async function listSettledPoolLines(): Promise<HajjTravellerAddonRow[]> {
 	return unwrap(
 		await supabase.from('hajj_traveller_addons').select('*').not('pool_vehicle', 'is', null)
 	);
+}
+
+// --- Saved proposals (options) ------------------------------------------------
+
+export async function listProposals(queryId: string): Promise<HajjProposal[]> {
+	return unwrap(
+		await supabase
+			.from('hajj_proposals')
+			.select('*')
+			.eq('query_id', queryId)
+			.order('version', { ascending: false })
+	);
+}
+
+async function nextProposalVersion(queryId: string): Promise<number> {
+	const { data, error } = await supabase
+		.from('hajj_proposals')
+		.select('version')
+		.eq('query_id', queryId)
+		.order('version', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	if (error) throw new Error(error.message);
+	return (data?.version ?? 0) + 1;
+}
+
+/** Save a new option; a New Query / Working query moves on to Quoted unless told not to. */
+export async function createProposal(
+	input: Omit<NewHajjProposal, 'version'>,
+	opts: { advance: boolean; currentStatus: string }
+): Promise<HajjProposal> {
+	const version = await nextProposalVersion(input.query_id);
+	const row = unwrap<HajjProposal>(
+		await supabase
+			.from('hajj_proposals')
+			.insert({ ...input, version })
+			.select()
+			.single()
+	);
+	if (opts.advance && (opts.currentStatus === 'New Query' || opts.currentStatus === 'Working'))
+		await setQueryStatus(input.query_id, 'Quoted');
+	return row;
+}
+
+export async function updateProposal(
+	id: string,
+	patch: HajjProposalUpdate
+): Promise<HajjProposal> {
+	return unwrap<HajjProposal>(
+		await supabase.from('hajj_proposals').update(patch).eq('id', id).select().single()
+	);
+}
+
+export function setProposalStatus(id: string, status: HajjProposalStatus) {
+	return updateProposal(id, { status });
+}
+
+/** Drafts are deleted outright; sent / accepted ones are archived (history). */
+export async function removeProposal(p: Pick<HajjProposal, 'id' | 'status'>): Promise<void> {
+	if (p.status === 'draft') {
+		const { error } = await supabase.from('hajj_proposals').delete().eq('id', p.id);
+		if (error) throw new Error(error.message);
+	} else await setProposalStatus(p.id, 'archived');
+}
+
+/**
+ * Replace the live working copy with a saved option: the family's travellers
+ * and their add-ons are rewritten from the snapshot, plus the ROE / USD rate.
+ */
+export async function loadProposalIntoBuilder(p: HajjProposal): Promise<void> {
+	const queryId = p.query_id;
+	const quote = await getOrCreateQuote(queryId);
+	const { error: delErr } = await supabase.from('hajj_travellers').delete().eq('query_id', queryId);
+	if (delErr) throw new Error(delErr.message);
+
+	const snap = snapshotToTravellers(p.snapshot, queryId);
+	const idByRef = new Map<string, string>();
+	for (const t of snap) {
+		// eslint-disable-next-line @typescript-eslint/no-unused-vars
+		const { id, addons, created_at, updated_at, mehram_traveller_id, ...fields } = t;
+		const row = await createTraveller({ ...fields, mehram_traveller_id: null });
+		idByRef.set(id, row.id);
+		if (addons.length > 0) {
+			const { error } = await supabase.from('hajj_traveller_addons').insert(
+				addons.map((a) => ({
+					traveller_id: row.id,
+					addon_id: a.addon_id,
+					qty: a.qty,
+					cost_override: a.cost_override,
+					sell_price: a.sell_price
+				}))
+			);
+			if (error) throw new Error(error.message);
+		}
+	}
+	// Mehram links point at other travellers, so they are set once all exist.
+	for (const t of snap) {
+		const target = t.mehram_traveller_id ? idByRef.get(t.mehram_traveller_id) : undefined;
+		const mine = idByRef.get(t.id);
+		if (target && mine) await updateTraveller(mine, { mehram_traveller_id: target });
+	}
+	await updateQuote(quote.id, { roe: Number(p.snapshot.roe), usd_rate: p.snapshot.usd_rate });
+}
+
+/** Accept an option: it becomes the working copy and the query moves to Booking. */
+export async function acceptProposal(p: HajjProposal): Promise<void> {
+	await loadProposalIntoBuilder(p);
+	await setProposalStatus(p.id, 'accepted');
+	await setQueryStatus(p.query_id, 'Booking');
 }

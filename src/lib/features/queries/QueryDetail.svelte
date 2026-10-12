@@ -27,6 +27,7 @@
 	import QuotedChat from './QuotedChat.svelte';
 	import QuoteBuilder from '$features/quotations/QuoteBuilder.svelte';
 	import HajjBuilder from '$features/hajj/HajjBuilder.svelte';
+	import HajjProposalList from '$features/hajj/HajjProposalList.svelte';
 	import HajjSummary from '$features/hajj/HajjSummary.svelte';
 	import HajjBookingPanel from '$features/hajj/HajjBookingPanel.svelte';
 	import QuotationList from '$features/quotations/QuotationList.svelte';
@@ -164,6 +165,7 @@
 		{:else if q.status === 'Quoted'}
 			<QuotedChat queryId={id} {latest} />
 			{#if q.package_type === 'Hajj'}
+				<HajjProposalList queryId={id} stage="quoted" />
 				<HajjSummary queryId={id} />
 			{:else}
 				<QuotationList queryId={id} />
@@ -171,6 +173,7 @@
 		{:else if q.status === 'Booking'}
 			{#if q.package_type === 'Hajj'}
 				<HajjBookingPanel queryId={id} />
+				<div class="mt-4"><HajjProposalList queryId={id} stage="booking" /></div>
 			{:else if q.completed_date}
 				<BookingSummary queryId={id} />
 			{:else}
