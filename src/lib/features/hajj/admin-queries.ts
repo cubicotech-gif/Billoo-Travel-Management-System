@@ -1,6 +1,10 @@
 import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query';
 import {
 	addCommissionReceipt,
+	addVendorPayment,
+	deleteVendorPayment,
+	listAllTravellers,
+	listVendorPayments,
 	deleteCommissionReceipt,
 	listAllTravellerRefs,
 	listCommissionReceipts,
@@ -10,7 +14,7 @@ import {
 	setPackageCommission
 } from './api';
 import { resyncAllConfirmedHajj, settleAllGmc } from './booking';
-import type { NewHajjCommissionReceipt } from './types';
+import type { NewHajjCommissionReceipt, NewHajjVendorPayment } from './types';
 
 // Hooks for the Hajj admin page: commission set-up and receipts, and the GMC pools.
 
@@ -97,5 +101,41 @@ export function useSettleGmc() {
 			client.invalidateQueries({ queryKey: ['queries'] });
 			client.invalidateQueries({ queryKey: ['booking'] });
 		}
+	});
+}
+
+// --- Vendor payables ----------------------------------------------------------
+
+const vendorPaymentsKey = ['hajj', 'vendor-payments'] as const;
+
+/** Every traveller (with add-ons) and the status of their query — the basis of what we owe. */
+export function usePayablesData() {
+	return createQuery({
+		queryKey: ['hajj', 'admin', 'payables'],
+		queryFn: async () => {
+			const travellers = await listAllTravellers();
+			const queries = await listQueryRefs([...new Set(travellers.map((t) => t.query_id))]);
+			return { travellers, queries };
+		}
+	});
+}
+
+export function useVendorPayments() {
+	return createQuery({ queryKey: vendorPaymentsKey, queryFn: listVendorPayments });
+}
+
+export function useAddVendorPayment() {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (input: NewHajjVendorPayment) => addVendorPayment(input),
+		onSuccess: () => client.invalidateQueries({ queryKey: vendorPaymentsKey })
+	});
+}
+
+export function useDeleteVendorPayment() {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (id: string) => deleteVendorPayment(id),
+		onSuccess: () => client.invalidateQueries({ queryKey: vendorPaymentsKey })
 	});
 }

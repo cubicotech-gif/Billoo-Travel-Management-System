@@ -1239,6 +1239,29 @@ export interface Database {
 				Update: Partial<Database['public']['Tables']['hajj_proposals']['Insert']>;
 				Relationships: [];
 			};
+			hajj_vendor_payments: {
+				Row: {
+					id: string;
+					amount: number;
+					currency: HajjCurrency;
+					paid_date: string;
+					query_id: string | null;
+					reference: string | null;
+					notes: string | null;
+					created_at: string;
+				};
+				Insert: {
+					id?: string;
+					amount: number;
+					currency: HajjCurrency;
+					paid_date?: string;
+					query_id?: string | null;
+					reference?: string | null;
+					notes?: string | null;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_vendor_payments']['Insert']>;
+				Relationships: [];
+			};
 		};
 		Views: Record<string, never>;
 		Functions: Record<string, never>;

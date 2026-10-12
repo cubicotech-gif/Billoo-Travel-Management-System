@@ -33,6 +33,9 @@ export type HajjQuoteUpdate = Tables['hajj_quotes']['Update'];
 export type HajjCommissionReceipt = Tables['hajj_commission_receipts']['Row'];
 export type NewHajjCommissionReceipt = Tables['hajj_commission_receipts']['Insert'];
 
+export type HajjVendorPayment = Tables['hajj_vendor_payments']['Row'];
+export type NewHajjVendorPayment = Tables['hajj_vendor_payments']['Insert'];
+
 export type HajjProposal = Tables['hajj_proposals']['Row'];
 export type NewHajjProposal = Tables['hajj_proposals']['Insert'];
 export type HajjProposalUpdate = Tables['hajj_proposals']['Update'];

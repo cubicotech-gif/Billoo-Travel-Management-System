@@ -7,6 +7,10 @@
 	import { fullName } from '$features/passengers/types';
 	import {
 		useAddCommissionReceipt,
+		useAddVendorPayment,
+		useDeleteVendorPayment,
+		usePayablesData,
+		useVendorPayments,
 		useCommissionReceipts,
 		useDeleteCommissionReceipt,
 		useGmcPoolData,
@@ -16,13 +20,14 @@
 	} from './admin-queries';
 	import { formatSpan } from './catalogue';
 	import { commissionSummary } from './commission';
+	import { costByQuery, payablesSummary } from './payables';
 	import { poolReport } from './pools';
-	import { useHajjCatalogues, useHajjPackages } from './queries';
+	import { useHajjAddons, useHajjCatalogues, useHajjPackages } from './queries';
 	import type { HajjCurrency } from './types';
 
 	// Staff-only Hajj back office: what the vendor pays us per person, what it has
 	// paid so far, and how the shared GMC vehicles are filled across clients.
-	let tab = $state<'commission' | 'received' | 'gmc'>('commission');
+	let tab = $state<'commission' | 'received' | 'payable' | 'gmc'>('commission');
 
 	const catalogues = untrack(() => useHajjCatalogues());
 	const packages = untrack(() => useHajjPackages());
@@ -32,6 +37,11 @@
 	const deleteReceipt = untrack(() => useDeleteCommissionReceipt());
 	const setCommission = untrack(() => useSetPackageCommission());
 	const pools = untrack(() => useGmcPoolData());
+	const addons = untrack(() => useHajjAddons());
+	const payablesData = untrack(() => usePayablesData());
+	const vendorPayments = untrack(() => useVendorPayments());
+	const addPayment = untrack(() => useAddVendorPayment());
+	const deletePayment = untrack(() => useDeleteVendorPayment());
 	const settle = untrack(() => useSettleGmc());
 	const passengers = untrack(() => usePassengers());
 
@@ -113,6 +123,54 @@
 		);
 	}
 
+	// --- Vendor payments (what we owe the vendor) ---------------------------------
+	const payables = $derived.by(() => {
+		const d = $payablesData.data;
+		if (!d) return null;
+		const rows = costByQuery({
+			travellers: d.travellers,
+			queries: d.queries,
+			packages: pkgs,
+			addons: $addons.data ?? [],
+			catalogues: cats
+		});
+		return {
+			rows,
+			...payablesSummary(
+				rows,
+				($vendorPayments.data ?? []).map((p) => ({
+					amount: Number(p.amount),
+					currency: p.currency,
+					query_id: p.query_id
+				}))
+			)
+		};
+	});
+	const queryLabel = $derived(
+		new Map(($payablesData.data?.queries ?? []).map((q) => [q.id, `${q.query_number} · ${q.client_name}`]))
+	);
+	let pay = $state({ amount: '', currency: 'SAR' as HajjCurrency, date: today, queryId: '', reference: '', notes: '' });
+	let payError = $state<string | null>(null);
+	function addPaymentNow() {
+		const amount = Number(pay.amount);
+		if (!Number.isFinite(amount) || amount <= 0) {
+			payError = 'Enter the amount paid.';
+			return;
+		}
+		payError = null;
+		$addPayment.mutate(
+			{
+				amount,
+				currency: pay.currency,
+				paid_date: pay.date,
+				query_id: pay.queryId || null,
+				reference: pay.reference.trim() || null,
+				notes: pay.notes.trim() || null
+			},
+			{ onSuccess: () => (pay = { ...pay, amount: '', reference: '', notes: '' }) }
+		);
+	}
+
 	// --- GMC pools ------------------------------------------------------------------
 	const vehicles = $derived.by(() => {
 		const d = $pools.data;
@@ -126,7 +184,7 @@
 </script>
 
 <div class="mb-4 flex flex-wrap gap-1 rounded-lg bg-slate-100 p-0.5 sm:inline-flex">
-	{#each [['commission', 'Commission set-up'], ['received', 'Commission received'], ['gmc', 'GMC pools']] as [key, label] (key)}
+	{#each [['commission', 'Commission set-up'], ['received', 'Commission received'], ['payable', 'Vendor payments'], ['gmc', 'GMC pools']] as [key, label] (key)}
 		<button
 			type="button"
 			onclick={() => (tab = key as typeof tab)}
@@ -268,6 +326,134 @@
 				<Input label="Notes" bind:value={form.notes} />
 				{#if formError}<p class="text-sm text-red-600">{formError}</p>{/if}
 				<Button disabled={$addReceipt.isPending} onclick={addReceiptNow}><Plus class="h-4 w-4" /> Add receipt</Button>
+			</div>
+		</Card>
+	</div>
+{:else if tab === 'payable'}
+	<p class="mb-3 max-w-2xl text-sm text-slate-500">
+		What we owe the vendor is its catalogue cost for every traveller whose query is in the Booking stage (package
+		plus add-ons, GMC at its settled share), kept in USD and SAR separately. Air tickets are ours, and commission
+		is tracked under “Commission received” — neither is netted here.
+	</p>
+	<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]" data-testid="hajj-payables">
+		<div class="space-y-4">
+			<Card title="Payable to the vendor">
+				{#if !payables}
+					<p class="text-sm text-slate-400">Loading…</p>
+				{:else if payables.lines.length === 0}
+					<p class="text-sm text-slate-400">Nothing yet — amounts accrue once Hajj queries reach the Booking stage.</p>
+				{:else}
+					<div class="table-scroll">
+						<table class="w-full text-sm tabular-nums">
+							<thead class="border-b border-slate-200 text-left text-xs uppercase text-slate-400">
+								<tr>
+									<th class="py-2 pr-3 font-medium">Currency</th>
+									<th class="py-2 pr-3 text-right font-medium">We owe</th>
+									<th class="py-2 pr-3 text-right font-medium">Paid</th>
+									<th class="py-2 text-right font-medium">Outstanding</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{#each payables.lines as l (l.currency)}
+									<tr>
+										<td class="py-2 pr-3 font-medium">{l.currency}</td>
+										<td class="py-2 pr-3 text-right">{formatAmount(l.owed, l.currency)}</td>
+										<td class="py-2 pr-3 text-right text-green-600">
+											{formatAmount(l.paid, l.currency)}
+											{#if l.unallocated > 0}<div class="text-xs text-slate-400">{formatAmount(l.unallocated, l.currency)} not tied to a booking</div>{/if}
+										</td>
+										<td class="py-2 text-right font-semibold {l.outstanding > 0 ? 'text-amber-600' : l.outstanding < 0 ? 'text-blue-600' : 'text-slate-700'}">
+											{formatAmount(l.outstanding, l.currency)}
+											{#if l.outstanding < 0}<div class="text-xs font-normal">overpaid</div>{/if}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</Card>
+
+			{#if payables && payables.queries.length > 0}
+				<Card title="By booking">
+					<div class="table-scroll">
+						<table class="w-full text-sm tabular-nums">
+							<thead class="border-b border-slate-200 text-left text-xs uppercase text-slate-400">
+								<tr>
+									<th class="py-2 pr-3 font-medium">Booking</th>
+									<th class="py-2 pr-3 text-right font-medium">We owe</th>
+									<th class="py-2 pr-3 text-right font-medium">Paid</th>
+									<th class="py-2 text-right font-medium">Balance</th>
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-slate-100">
+								{#each payables.queries as r (r.queryId)}
+									<tr>
+										<td class="py-2 pr-3">
+											<a class="font-medium text-brand-700 hover:underline" href="/queries/{r.queryId}">{r.queryNumber}</a>
+											<div class="text-xs text-slate-500">{r.client} · {r.travellers} traveller{r.travellers === 1 ? '' : 's'}</div>
+										</td>
+										<td class="py-2 pr-3 text-right">
+											{#each Object.entries(r.owed) as [cur, n] (cur)}<div>{formatAmount(Number(n), cur as HajjCurrency)}</div>{/each}
+										</td>
+										<td class="py-2 pr-3 text-right text-green-600">
+											{#each Object.entries(r.paid) as [cur, n] (cur)}<div>{formatAmount(Number(n), cur as HajjCurrency)}</div>{/each}
+										</td>
+										<td class="py-2 text-right">
+											{#each Object.entries(r.balance) as [cur, n] (cur)}
+												<div class="font-medium {Number(n) > 0 ? 'text-amber-600' : 'text-slate-600'}">{formatAmount(Number(n), cur as HajjCurrency)}</div>
+											{/each}
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</Card>
+			{/if}
+
+			<Card title="Paid to the vendor">
+				{#if ($vendorPayments.data ?? []).length === 0}
+					<p class="text-sm text-slate-400">No payments recorded yet.</p>
+				{:else}
+					<ul class="divide-y divide-slate-100 text-sm">
+						{#each $vendorPayments.data ?? [] as p (p.id)}
+							<li class="flex flex-wrap items-center justify-between gap-2 py-2">
+								<div>
+									<span class="font-medium tabular-nums">{formatAmount(Number(p.amount), p.currency)}</span>
+									<span class="ml-2 text-slate-500">{p.paid_date}</span>
+									{#if p.reference}<span class="ml-2 font-mono text-xs text-slate-400">{p.reference}</span>{/if}
+									<div class="text-xs text-slate-400">
+										{p.query_id ? (queryLabel.get(p.query_id) ?? 'Booking') : 'Not tied to a booking'}{p.notes ? ` · ${p.notes}` : ''}
+									</div>
+								</div>
+								<Button size="sm" variant="ghost" disabled={$deletePayment.isPending} onclick={() => confirm('Delete this payment?') && $deletePayment.mutate(p.id)}>
+									<Trash2 class="h-4 w-4" />
+								</Button>
+							</li>
+						{/each}
+					</ul>
+				{/if}
+			</Card>
+		</div>
+
+		<Card title="Record a payment">
+			<div class="space-y-3">
+				<Input label="Amount" type="number" min="0" step="any" bind:value={pay.amount} />
+				<Select label="Currency" bind:value={pay.currency} options={['SAR', 'USD']} />
+				<Input label="Date paid" type="date" bind:value={pay.date} />
+				<Select
+					label="For booking (optional)"
+					bind:value={pay.queryId}
+					options={[
+						{ value: '', label: 'Not tied to a booking' },
+						...(payables?.rows ?? []).map((r) => ({ value: r.query.id, label: `${r.query.query_number} · ${r.query.client_name}` }))
+					]}
+				/>
+				<Input label="Reference" bind:value={pay.reference} placeholder="Transfer / cheque no." />
+				<Input label="Notes" bind:value={pay.notes} />
+				{#if payError}<p class="text-sm text-red-600">{payError}</p>{/if}
+				<Button disabled={$addPayment.isPending} onclick={addPaymentNow}><Plus class="h-4 w-4" /> Add payment</Button>
 			</div>
 		</Card>
 	</div>

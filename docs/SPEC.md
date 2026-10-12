@@ -300,3 +300,12 @@ Accept (loads it as the working copy and moves the query to Booking), Reject, Re
 others archived). The client proposal/WhatsApp can carry several options (`?o=id,id` or the option
 chips); with no saved options it falls back to the live working copy. Client output stays vendor-free
 and shows selling prices only.
+
+### 8.y Vendor payments (payables)
+
+What we owe the vendor = catalogue cost of every traveller on a Booking-stage query (base package +
+add-ons, GMC at its settled share), per currency — USD and SAR never merged. Tickets are ours and
+commission is money the vendor pays us (tracked separately), so neither is netted. Payments we make are
+recorded in `hajj_vendor_payments` (USD/SAR, date, reference, optional booking). `/hajj` → *Vendor payments*
+shows owed / paid / outstanding per currency (negative = overpaid), a per-booking balance table
+(allocated payments only) and the payment list.
