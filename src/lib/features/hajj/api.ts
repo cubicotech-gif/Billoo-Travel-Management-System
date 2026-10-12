@@ -20,7 +20,9 @@ import type {
 	NewHajjCommissionReceipt,
 	NewHajjProposal,
 	NewHajjTraveller,
-	NewHajjTravellerAddon
+	NewHajjTravellerAddon,
+	NewHajjVendorPayment,
+	HajjVendorPayment
 } from './types';
 
 function unwrap<T>(result: { data: T | null; error: { message: string } | null }): T {
@@ -375,4 +377,35 @@ export async function acceptProposal(p: HajjProposal): Promise<void> {
 	await loadProposalIntoBuilder(p);
 	await setProposalStatus(p.id, 'accepted');
 	await setQueryStatus(p.query_id, 'Booking');
+}
+
+// --- Vendor payables ---------------------------------------------------------
+
+/** Every Hajj traveller with their add-ons, across all queries. */
+export async function listAllTravellers(): Promise<HajjTraveller[]> {
+	const rows = unwrap(
+		await supabase.from('hajj_travellers').select('*, addons:hajj_traveller_addons(*)')
+	);
+	return rows as unknown as HajjTraveller[];
+}
+
+export async function listVendorPayments(): Promise<HajjVendorPayment[]> {
+	return unwrap(
+		await supabase
+			.from('hajj_vendor_payments')
+			.select('*')
+			.order('paid_date', { ascending: false })
+			.order('created_at', { ascending: false })
+	);
+}
+
+export async function addVendorPayment(input: NewHajjVendorPayment): Promise<HajjVendorPayment> {
+	return unwrap<HajjVendorPayment>(
+		await supabase.from('hajj_vendor_payments').insert(input).select().single()
+	);
+}
+
+export async function deleteVendorPayment(id: string): Promise<void> {
+	const { error } = await supabase.from('hajj_vendor_payments').delete().eq('id', id);
+	if (error) throw new Error(error.message);
 }

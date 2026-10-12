@@ -1855,3 +1855,20 @@ CREATE INDEX IF NOT EXISTS idx_hajj_proposals_query ON public.hajj_proposals (qu
 DROP TRIGGER IF EXISTS update_hajj_proposals_updated_at ON public.hajj_proposals;
 CREATE TRIGGER update_hajj_proposals_updated_at BEFORE UPDATE ON public.hajj_proposals
 	FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Hajj vendor payments — 20260641
+CREATE TABLE IF NOT EXISTS public.hajj_vendor_payments (
+	id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+	amount NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
+	currency TEXT NOT NULL CHECK (currency IN ('USD', 'SAR')),
+	paid_date DATE NOT NULL DEFAULT CURRENT_DATE,
+	query_id UUID REFERENCES public.queries(id) ON DELETE SET NULL,
+	reference TEXT,
+	notes TEXT,
+	created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_hajj_vendor_payments_date
+	ON public.hajj_vendor_payments (paid_date DESC);
+CREATE INDEX IF NOT EXISTS idx_hajj_vendor_payments_query
+	ON public.hajj_vendor_payments (query_id);
