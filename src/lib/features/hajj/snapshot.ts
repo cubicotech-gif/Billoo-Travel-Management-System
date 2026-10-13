@@ -62,6 +62,13 @@ export function makeSnapshot(
 					cost_override: row.cost_override === null ? null : Number(row.cost_override),
 					// Materialise "sell at cost" / pooled shares into a fixed price.
 					sell_price: r?.addons.find((l) => l.lineId === row.id)?.sell ?? Number(row.sell_price ?? 0)
+				})),
+				extras: (t.extras ?? []).map((e) => ({
+					label: e.label,
+					currency: e.currency,
+					cost: Number(e.cost),
+					// Never below cost, same as in the quote.
+					sell_price: r?.extras.find((x) => x.id === e.id)?.sell ?? Number(e.sell_price)
 				}))
 			};
 		})
@@ -74,7 +81,7 @@ export function makeSnapshot(
  */
 export function snapshotToTravellers(snapshot: HajjProposalSnapshot, queryId: string): HajjTraveller[] {
 	return snapshot.travellers.map((s) => {
-		const { ref, mehram_ref, addons, ...rest } = s;
+		const { ref, mehram_ref, addons, extras, ...rest } = s;
 		return {
 			...rest,
 			id: ref,
@@ -82,6 +89,17 @@ export function snapshotToTravellers(snapshot: HajjProposalSnapshot, queryId: st
 			mehram_traveller_id: mehram_ref,
 			created_at: '',
 			updated_at: '',
+			extras: (extras ?? []).map((e, i) => ({
+				id: `${ref}:extra:${i}`,
+				traveller_id: ref,
+				label: e.label,
+				currency: e.currency,
+				cost: e.cost,
+				sell_price: e.sell_price,
+				sort_order: i,
+				created_at: '',
+				updated_at: ''
+			})),
 			addons: addons.map(
 				(a): HajjTravellerAddonRow => ({
 					id: `${ref}:${a.addon_id}`,

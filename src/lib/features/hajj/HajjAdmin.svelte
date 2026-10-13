@@ -332,7 +332,7 @@
 {:else if tab === 'payable'}
 	<p class="mb-3 max-w-2xl text-sm text-slate-500">
 		What we owe the vendor is its catalogue cost for every traveller whose query is in the Booking stage (package
-		plus add-ons, GMC at its settled share), kept in USD and SAR separately. Air tickets are ours, and commission
+		plus add-ons, GMC at its settled share), kept in USD and SAR separately. Air tickets and other services are ours, and commission
 		is tracked under “Commission received” — neither is netted here.
 	</p>
 	<div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]" data-testid="hajj-payables">

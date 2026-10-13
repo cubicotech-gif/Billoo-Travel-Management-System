@@ -63,7 +63,8 @@ export function costByQuery(
 	return data.queries
 		.filter((q) => q.status === 'Booking' && !q.is_deleted && byQuery.has(q.id))
 		.map((q) => {
-			const travellers = byQuery.get(q.id) ?? [];
+			// Hand-entered other services are not the vendor's, so they are left out.
+			const travellers = (byQuery.get(q.id) ?? []).map((t) => ({ ...t, extras: [] }));
 			// ROE only affects the PKR view; costs per currency are independent of it.
 			const result = buildQuote({ ...data, roe: 1, travellers });
 			const cost: Partial<Record<HajjCurrency, number>> = {};

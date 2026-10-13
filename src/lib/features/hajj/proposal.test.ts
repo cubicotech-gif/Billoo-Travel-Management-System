@@ -14,6 +14,8 @@ import {
 	buildProposal,
 	instalments,
 	proposalOptionsWhatsApp,
+	serviceNames,
+	travellerTotals,
 	proposalWhatsApp,
 	referenceFor,
 	type ProposalInput
@@ -405,5 +407,84 @@ describe('content', () => {
 
 	it('splits the payment plan 50 / 50', () => {
 		expect(PAYMENT_PLAN.map((s) => s.percent)).toEqual([50, 50]);
+	});
+});
+
+describe('other services', () => {
+	const extra = (id: string, over: object = {}) => ({
+		id,
+		traveller_id: 'a',
+		label: 'Wheelchair assistance',
+		currency: 'SAR',
+		cost: 200,
+		sell_price: 350,
+		sort_order: 0,
+		created_at: '',
+		updated_at: '',
+		...over
+	});
+	const withExtras = (extras: object[]) =>
+		buildProposal(
+			input([
+				traveller('a', {
+					extras: extras as never,
+					ticket_airline: 'Saudia',
+					ticket_cost_pkr: 335000,
+					ticket_sell_pkr: 345000
+				})
+			])
+		);
+
+	it('SAR services join the SAR total; PKR services join the PKR total', () => {
+		const p = withExtras([extra('e1'), extra('e2', { label: 'Meet & assist', currency: 'PKR', cost: 5000, sell_price: 8000 })]);
+		const t = p.groups[0]!.travellers[0]!;
+		expect(t.lines.filter((l) => l.kind === 'extra').map((l) => [l.label, l.amount, l.currency])).toEqual([
+			['Wheelchair assistance', 350, 'SAR'],
+			['Meet & assist', 8000, 'PKR']
+		]);
+		expect(t.totals.SAR).toBe(58400 + 350);
+		expect(t.otherPkr).toBe(8000);
+		expect(p.totals.otherPkr).toBe(8000);
+		expect(p.totals.pkr).toBe((58400 + 350) * 77 + 345000 + 8000);
+	});
+
+	it('are never sold below cost', () => {
+		const p = withExtras([extra('e1', { cost: 400, sell_price: 100 })]);
+		expect(p.groups[0]!.travellers[0]!.totals.SAR).toBe(58400 + 400);
+	});
+
+	it('a per-person amount hides the parts but names the services', () => {
+		const p = withExtras([extra('e1')]);
+		const t = p.groups[0]!.travellers[0]!;
+		expect(travellerTotals(t)).toEqual([
+			{ currency: 'SAR', amount: 58750 },
+			{ currency: 'PKR', amount: 345000 }
+		]);
+		expect(serviceNames(t)).toEqual(['Wheelchair assistance', 'Air ticket — Saudia']);
+	});
+
+	it('WhatsApp without the breakup: one amount per person, services by name only', () => {
+		const p = withExtras([extra('e1')]);
+		const text = proposalWhatsApp(p, { breakup: false });
+		expect(text).toContain('Ahmed Khan — SAR 58,750.00 + PKR 345,000.00');
+		expect(text).toContain('Includes: Wheelchair assistance, Air ticket — Saudia');
+		expect(text).not.toContain('SAR 350.00');
+		expect(text).not.toContain('Air tickets PKR');
+		expect(text).toContain('converted to PKR at 77');
+		const full = proposalWhatsApp(p);
+		expect(full).toContain('+ Wheelchair assistance — SAR 350.00');
+	});
+
+	it('the options text honours the same switch', () => {
+		const p = withExtras([extra('e1')]);
+		const text = proposalOptionsWhatsApp(
+			[
+				{ title: 'A', proposal: p },
+				{ title: 'B', proposal: p }
+			],
+			{ breakup: false }
+		);
+		expect(text).not.toContain('SAR 350.00');
+		expect(text).toContain('Includes: Wheelchair assistance');
 	});
 });

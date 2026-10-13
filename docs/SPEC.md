@@ -309,3 +309,15 @@ commission is money the vendor pays us (tracked separately), so neither is nette
 recorded in `hajj_vendor_payments` (USD/SAR, date, reference, optional booking). `/hajj` → *Vendor payments*
 shows owed / paid / outstanding per currency (negative = overpaid), a per-booking balance table
 (allocated payments only) and the payment list.
+
+### 8.z Other services and price breakup
+
+**Other services:** per traveller, hand-entered lines for anything not in the catalogue (wheelchair
+assistance, extra luggage …) — name, currency (SAR/USD/PKR), cost, sell (never below cost). SAR/USD ones
+join that currency's total; PKR ones are a separate PKR block added to the PKR total. They are frozen in
+saved proposals, appear on invoices, and are **not** counted in what we owe the vendor.
+
+**Price breakup (client proposal + WhatsApp):** a checkbox, off by default. Off = each traveller shows one
+amount (per currency; ticket and PKR services as PKR) with every service listed by name only, and the
+summary shows just the totals. On = every line priced, with subtotals and the SAR × ROE / tickets / other
+services lines. The grand total is the same either way.

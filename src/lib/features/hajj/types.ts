@@ -44,6 +44,10 @@ export type HajjTravellerRow = Tables['hajj_travellers']['Row'];
 export type NewHajjTraveller = Tables['hajj_travellers']['Insert'];
 export type HajjTravellerUpdate = Tables['hajj_travellers']['Update'];
 
+export type HajjTravellerExtraRow = Tables['hajj_traveller_extras']['Row'];
+export type NewHajjTravellerExtra = Tables['hajj_traveller_extras']['Insert'];
+export type HajjTravellerExtraUpdate = Tables['hajj_traveller_extras']['Update'];
+
 export type HajjTravellerAddonRow = Tables['hajj_traveller_addons']['Row'];
 export type NewHajjTravellerAddon = Tables['hajj_traveller_addons']['Insert'];
 export type HajjTravellerAddonUpdate = Tables['hajj_traveller_addons']['Update'];
@@ -61,6 +65,8 @@ export interface HajjAddon extends HajjAddonRow {
 /** A traveller with the add-ons they have taken. */
 export interface HajjTraveller extends HajjTravellerRow {
 	addons: HajjTravellerAddonRow[];
+	/** Other services (hand-entered). May be absent on older fixtures / before the migration. */
+	extras?: HajjTravellerExtraRow[];
 }
 
 export const ROOM_TYPES: HajjRoomType[] = ['Sharing', 'Quad', 'Triple', 'Double'];

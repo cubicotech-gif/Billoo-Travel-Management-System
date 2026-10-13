@@ -94,6 +94,15 @@ export interface CalcAddonLine {
 	poolSharers?: number | null;
 }
 
+/** A hand-entered service (wheelchair assistance, extra luggage …). */
+export interface CalcExtra {
+	id: string;
+	label: string;
+	currency: HajjCurrency | 'PKR';
+	cost: number;
+	sell: number;
+}
+
 export interface CalcTraveller {
 	id: string;
 	currency: HajjCurrency;
@@ -106,6 +115,17 @@ export interface CalcTraveller {
 	/** Commission the vendor pays us for this person (base currency); 0 if not set. */
 	commission?: number;
 	addons: CalcAddonLine[];
+	extras?: CalcExtra[];
+}
+
+export interface ExtraResult {
+	id: string;
+	label: string;
+	currency: HajjCurrency | 'PKR';
+	cost: number;
+	/** Never below cost. */
+	sell: number;
+	floored: boolean;
 }
 
 export interface LineResult {
@@ -133,7 +153,10 @@ export interface TravellerResult {
 	baseSell: number;
 	baseMissing: boolean;
 	addons: LineResult[];
-	/** Base + add-ons, per currency. */
+	extras: ExtraResult[];
+	/** PKR-priced extras (SAR / USD ones are inside `amounts`). */
+	otherPkr: Amounts;
+	/** Base + add-ons + USD/SAR extras, per currency. */
 	amounts: Partial<Record<HajjCurrency, Amounts>>;
 	ticketCost: number;
 	ticketSell: number;
@@ -150,6 +173,8 @@ export interface QuoteResult {
 	/** Per currency actually used, USD before SAR. */
 	byCurrency: CurrencyTotals[];
 	ticket: Amounts & { profit: number };
+	/** PKR-priced extras across the family. */
+	other: Amounts & { profit: number };
 	roe: number;
 	/** Commission receivable from the vendor, per currency (staff only). */
 	commission: Partial<Record<HajjCurrency, number>>;
@@ -252,8 +277,24 @@ export function computeQuote(input: { roe: number; travellers: CalcTraveller[] }
 			const cur0 = acc[cur] ?? { cost: money(0, cur), sell: money(0, cur) };
 			acc[cur] = { cost: add(cur0.cost, money(cost, cur)), sell: add(cur0.sell, money(sell, cur)) };
 		};
+		const extras: ExtraResult[] = (t.extras ?? []).map((e) => ({
+			id: e.id,
+			label: e.label,
+			currency: e.currency,
+			cost: e.cost,
+			sell: Math.max(e.sell, e.cost),
+			floored: e.sell < e.cost
+		}));
+		let otherCost = money(0, 'PKR');
+		let otherSell = money(0, 'PKR');
 		put(t.currency, baseCostN, t.baseSell);
 		for (const l of lines) put(l.currency, l.cost, l.sell);
+		for (const e of extras) {
+			if (e.currency === 'PKR') {
+				otherCost = add(otherCost, money(e.cost, 'PKR'));
+				otherSell = add(otherSell, money(e.sell, 'PKR'));
+			} else put(e.currency, e.cost, e.sell);
+		}
 
 		const amounts: Partial<Record<HajjCurrency, Amounts>> = {};
 		for (const cur of CURRENCY_ORDER) {
@@ -267,6 +308,8 @@ export function computeQuote(input: { roe: number; travellers: CalcTraveller[] }
 			baseSell: t.baseSell,
 			baseMissing: t.baseCost === null,
 			addons: lines,
+			extras,
+			otherPkr: { cost: toNumber(otherCost), sell: toNumber(otherSell) },
 			amounts,
 			ticketCost: t.ticketCost,
 			ticketSell: t.ticketSell,
@@ -317,9 +360,24 @@ export function computeQuote(input: { roe: number; travellers: CalcTraveller[] }
 		'PKR'
 	);
 
+	const otherCost = sum(
+		results.map((r) => money(r.otherPkr.cost, 'PKR')),
+		'PKR'
+	);
+	const otherSell = sum(
+		results.map((r) => money(r.otherPkr.sell, 'PKR')),
+		'PKR'
+	);
+
 	const sar = byCurrency.find((c) => c.currency === 'SAR');
-	const pkrCost = add(convertToPkr(money(sar?.cost ?? 0, 'SAR'), roe), ticketCost);
-	const pkrSell = add(convertToPkr(money(sar?.sell ?? 0, 'SAR'), roe), ticketSell);
+	const pkrCost = add(
+		add(convertToPkr(money(sar?.cost ?? 0, 'SAR'), roe), ticketCost),
+		otherCost
+	);
+	const pkrSell = add(
+		add(convertToPkr(money(sar?.sell ?? 0, 'SAR'), roe), ticketSell),
+		otherSell
+	);
 
 	return {
 		travellers: results,
@@ -328,6 +386,11 @@ export function computeQuote(input: { roe: number; travellers: CalcTraveller[] }
 			cost: toNumber(ticketCost),
 			sell: toNumber(ticketSell),
 			profit: toNumber(subtract(ticketSell, ticketCost))
+		},
+		other: {
+			cost: toNumber(otherCost),
+			sell: toNumber(otherSell),
+			profit: toNumber(subtract(otherSell, otherCost))
 		},
 		roe,
 		commission,

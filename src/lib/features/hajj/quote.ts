@@ -57,6 +57,13 @@ export function buildQuote(data: QuoteData): QuoteResult {
 			ticketCost: Number(t.ticket_cost_pkr),
 			ticketSell: Number(t.ticket_sell_pkr),
 			commission: pkg?.commission_per_person == null ? 0 : Number(pkg.commission_per_person),
+			extras: (t.extras ?? []).map((e) => ({
+				id: e.id,
+				label: e.label,
+				currency: e.currency,
+				cost: Number(e.cost),
+				sell: Number(e.sell_price)
+			})),
 			addons: t.addons.flatMap((row) => {
 				const addon = addonById.get(row.addon_id);
 				if (!addon) return [];
