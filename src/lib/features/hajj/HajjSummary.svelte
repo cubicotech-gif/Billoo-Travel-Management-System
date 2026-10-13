@@ -94,6 +94,11 @@
 								{/each}
 							</p>
 						{/if}
+						{#if r?.extras.length}
+							<p class="mt-1 text-xs text-slate-500">
+								Other services: {r.extras.map((e) => `${e.label} (${formatAmount(e.sell, e.currency)})`).join(', ')}
+							</p>
+						{/if}
 						{#if Number(t.ticket_sell_pkr) > 0}
 							<p class="mt-1 text-xs text-slate-500">
 								Ticket{t.ticket_airline ? ` · ${t.ticket_airline}` : ''}: {formatAmount(Number(t.ticket_sell_pkr), 'PKR')}

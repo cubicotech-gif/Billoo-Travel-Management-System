@@ -98,7 +98,7 @@ Copy `.env.example` → `.env` and set `PUBLIC_SUPABASE_URL` /
   per-person pricing, add-ons incl. a GMC pool settled across clients, designed proposal, commission,
   50/50 schedule, finance bridge. Spec §8; staff back office at `/hajj`. Catalogue data is generated
   from `scripts/hajj-2027/data.mjs` into `database/seeds/hajj-2027-catalogue.sql`. Hajj invoice / voucher /
-  itinerary documents are done. Saved proposals (Working-stage "Save proposal" → labelled options, multi-option client proposal, Load / Accept) are done (`hajj_proposals`, migration 20260640). Vendor payments (what we owe the vendor vs what we paid, per currency and per booking; `/hajj` → Vendor payments; `hajj_vendor_payments`, migration 20260641) are done.
+  itinerary documents are done. Saved proposals (Working-stage "Save proposal" → labelled options, multi-option client proposal, Load / Accept) are done (`hajj_proposals`, migration 20260640). Vendor payments (what we owe the vendor vs what we paid, per currency and per booking; `/hajj` → Vendor payments; `hajj_vendor_payments`, migration 20260641) are done. Other services (hand-entered extra lines per traveller — wheelchair etc., own cost/sell in SAR/USD/PKR; `hajj_traveller_extras`, migration 20260642) and a "Price breakup" switch on the client proposal (off = one amount per person, services named) are done.
 - **Phase 3:** Realtime notifications + Web Push. (PWA shell is done: `static/manifest.webmanifest`,
   `src/service-worker.ts` caches only the app shell — never Supabase data.)
 - **Phase 4:** squash migrations to one baseline, e2e tests, **re-enable auth**.

@@ -73,6 +73,8 @@ export interface HajjSnapshotTraveller {
 	kin_cnic: string | null;
 	kin_relation: string | null;
 	addons: { addon_id: string; qty: number; cost_override: number | null; sell_price: number }[];
+	/** Other services entered by hand (absent in snapshots saved before they existed). */
+	extras?: { label: string; currency: HajjCurrency | 'PKR'; cost: number; sell_price: number }[];
 }
 export type HajjSeries =
 	| 'platinum_makkah_medinah'
@@ -1260,6 +1262,30 @@ export interface Database {
 					notes?: string | null;
 				};
 				Update: Partial<Database['public']['Tables']['hajj_vendor_payments']['Insert']>;
+				Relationships: [];
+			};
+			hajj_traveller_extras: {
+				Row: {
+					id: string;
+					traveller_id: string;
+					label: string;
+					currency: HajjCurrency | 'PKR';
+					cost: number;
+					sell_price: number;
+					sort_order: number;
+					created_at: string;
+					updated_at: string;
+				};
+				Insert: {
+					id?: string;
+					traveller_id: string;
+					label: string;
+					currency?: HajjCurrency | 'PKR';
+					cost?: number;
+					sell_price?: number;
+					sort_order?: number;
+				};
+				Update: Partial<Database['public']['Tables']['hajj_traveller_extras']['Insert']>;
 				Relationships: [];
 			};
 		};

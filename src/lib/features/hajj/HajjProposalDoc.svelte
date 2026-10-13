@@ -21,6 +21,8 @@
 	} from './content';
 	import {
 		buildProposal,
+		serviceNames,
+		travellerTotals,
 		hotelsLine,
 		instalments,
 		minaCategory,
@@ -170,6 +172,9 @@
 	// --- Print-time choices ----------------------------------------------------
 	let showItinerary = $state(true);
 	let showTerms = $state(true);
+	// Off by default: the client sees one amount per person with the services named,
+	// not what each part costs. Tick it to print every line's price.
+	let showBreakup = $state(false);
 	const inSevenDays = () => {
 		const d = new Date();
 		d.setDate(d.getDate() + 7);
@@ -222,7 +227,8 @@
 					options.map((o, i) => ({ title: o.title ?? `Option ${i + 1}`, proposal: o.proposal })),
 					{
 						validUntil: validUntil ? fmtDate(validUntil) : null,
-						brand: org?.company_name ?? 'Billoo Travel'
+						brand: org?.company_name ?? 'Billoo Travel',
+						breakup: showBreakup
 					}
 				)
 			: ''
@@ -286,6 +292,9 @@
 	<div class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
 		<label class="flex items-center gap-1.5">
 			<input type="checkbox" bind:checked={showItinerary} class="rounded border-slate-300" /> Day-by-day itinerary
+		</label>
+		<label class="flex items-center gap-1.5">
+			<input type="checkbox" bind:checked={showBreakup} class="rounded border-slate-300" data-testid="hajj-breakup" /> Price breakup
 		</label>
 		<label class="flex items-center gap-1.5">
 			<input type="checkbox" bind:checked={showTerms} class="rounded border-slate-300" /> Terms &amp; conditions
@@ -424,23 +433,41 @@
 					</thead>
 					<tbody>
 						{#each g.travellers as t (t.id)}
-							{#each t.lines as l, li (li)}
-								<tr class="{li === 0 ? 'border-t border-slate-200' : ''}">
-									<td class="px-3 py-1 align-top font-medium text-slate-800">{li === 0 ? t.name : ''}</td>
-									<td class="px-3 py-1 text-slate-600">
-										{l.kind === 'package' ? 'Hajj package (per person)' : l.label}
-									</td>
-									<td class="px-3 py-1 text-right tabular-nums">{money(l.amount, l.currency)}</td>
-								</tr>
-							{/each}
-							{#if t.lines.length > 1}
-								{#each Object.entries(t.totals) as [cur, amt] (cur)}
-									<tr>
-										<td></td>
-										<td class="px-3 py-1 text-right text-[10px] font-semibold uppercase text-slate-400">Subtotal ({cur})</td>
-										<td class="px-3 py-1 text-right font-semibold tabular-nums">{money(amt, cur as HajjCurrency)}</td>
+							{#if showBreakup}
+								{#each t.lines as l, li (li)}
+									<tr class="{li === 0 ? 'border-t border-slate-200' : ''}">
+										<td class="px-3 py-1 align-top font-medium text-slate-800">{li === 0 ? t.name : ''}</td>
+										<td class="px-3 py-1 text-slate-600">
+											{l.kind === 'package' ? 'Hajj package (per person)' : l.label}
+										</td>
+										<td class="px-3 py-1 text-right tabular-nums">{money(l.amount, l.currency)}</td>
 									</tr>
 								{/each}
+								{#if t.lines.length > 1}
+									{#each Object.entries(t.totals) as [cur, amt] (cur)}
+										<tr>
+											<td></td>
+											<td class="px-3 py-1 text-right text-[10px] font-semibold uppercase text-slate-400">Subtotal ({cur})</td>
+											<td class="px-3 py-1 text-right font-semibold tabular-nums">{money(amt, cur as HajjCurrency)}</td>
+										</tr>
+									{/each}
+								{/if}
+							{:else}
+								{@const names = serviceNames(t)}
+								<tr class="border-t border-slate-200">
+									<td class="px-3 py-1.5 align-top font-medium text-slate-800">{t.name}</td>
+									<td class="px-3 py-1.5 text-slate-600">
+										Hajj package (per person)
+										{#if names.length}
+											<div class="mt-0.5 text-[11px] text-slate-500">Includes: {names.join(', ')}</div>
+										{/if}
+									</td>
+									<td class="px-3 py-1.5 text-right align-top font-semibold tabular-nums">
+										{#each travellerTotals(t) as a (a.currency)}
+											<div>{money(a.amount, a.currency)}</div>
+										{/each}
+									</td>
+								</tr>
 							{/if}
 						{/each}
 					</tbody>
@@ -481,16 +508,22 @@
 		<section class="doc-section mb-5 rounded border-2 border-brand-600 p-3">
 			<div class="mb-2 text-xs font-bold uppercase tracking-wide text-brand-700">Summary of charges</div>
 			<dl class="space-y-1 text-sm tabular-nums">
-				{#if proposal.totals.sar !== null}
+				{#if showBreakup && proposal.totals.sar !== null}
 					<div class="flex justify-between">
 						<dt class="text-slate-600">Package charges {money(proposal.totals.sar, 'SAR')} × {proposal.totals.roe}</dt>
 						<dd>{money(proposal.totals.sar * proposal.totals.roe, 'PKR')}</dd>
 					</div>
 				{/if}
-				{#if proposal.totals.ticketPkr > 0}
+				{#if showBreakup && proposal.totals.ticketPkr > 0}
 					<div class="flex justify-between">
 						<dt class="text-slate-600">Air tickets</dt>
 						<dd>{money(proposal.totals.ticketPkr, 'PKR')}</dd>
+					</div>
+				{/if}
+				{#if showBreakup && proposal.totals.otherPkr > 0}
+					<div class="flex justify-between">
+						<dt class="text-slate-600">Other services</dt>
+						<dd>{money(proposal.totals.otherPkr, 'PKR')}</dd>
 					</div>
 				{/if}
 				{#if proposal.totals.pkr !== null}
@@ -498,6 +531,9 @@
 						<dt>Total payable in PKR</dt>
 						<dd>{money(proposal.totals.pkr, 'PKR')}</dd>
 					</div>
+				{/if}
+				{#if !showBreakup && proposal.totals.sar !== null}
+					<div class="text-[11px] text-slate-400">SAR amounts converted to PKR at {proposal.totals.roe}.</div>
 				{/if}
 				{#if proposal.totals.usd !== null}
 					<div class="flex justify-between {proposal.totals.pkr !== null ? 'pt-1' : 'border-t border-slate-200 pt-1'} text-base font-bold text-slate-900">

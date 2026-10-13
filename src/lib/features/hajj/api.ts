@@ -15,6 +15,9 @@ import type {
 	HajjTraveller,
 	HajjTravellerAddonRow,
 	HajjTravellerAddonUpdate,
+	HajjTravellerExtraRow,
+	HajjTravellerExtraUpdate,
+	NewHajjTravellerExtra,
 	HajjTravellerRow,
 	HajjTravellerUpdate,
 	NewHajjCommissionReceipt,
@@ -105,7 +108,7 @@ export async function listTravellers(queryId: string): Promise<HajjTraveller[]> 
 	const rows = unwrap(
 		await supabase
 			.from('hajj_travellers')
-			.select('*, addons:hajj_traveller_addons(*)')
+			.select('*, addons:hajj_traveller_addons(*), extras:hajj_traveller_extras(*)')
 			.eq('query_id', queryId)
 			.order('sort_order', { ascending: true })
 			.order('created_at', { ascending: true })
@@ -159,6 +162,30 @@ export async function updateTravellerAddon(
 
 export async function deleteTravellerAddon(id: string): Promise<void> {
 	const { error } = await supabase.from('hajj_traveller_addons').delete().eq('id', id);
+	if (error) throw new Error(error.message);
+}
+
+// --- Other services (hand-entered extras) --------------------------------------
+
+export async function createTravellerExtra(
+	input: NewHajjTravellerExtra
+): Promise<HajjTravellerExtraRow> {
+	return unwrap<HajjTravellerExtraRow>(
+		await supabase.from('hajj_traveller_extras').insert(input).select().single()
+	);
+}
+
+export async function updateTravellerExtra(
+	id: string,
+	patch: HajjTravellerExtraUpdate
+): Promise<HajjTravellerExtraRow> {
+	return unwrap<HajjTravellerExtraRow>(
+		await supabase.from('hajj_traveller_extras').update(patch).eq('id', id).select().single()
+	);
+}
+
+export async function deleteTravellerExtra(id: string): Promise<void> {
+	const { error } = await supabase.from('hajj_traveller_extras').delete().eq('id', id);
 	if (error) throw new Error(error.message);
 }
 
@@ -347,7 +374,7 @@ export async function loadProposalIntoBuilder(p: HajjProposal): Promise<void> {
 	const idByRef = new Map<string, string>();
 	for (const t of snap) {
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		const { id, addons, created_at, updated_at, mehram_traveller_id, ...fields } = t;
+		const { id, addons, extras, created_at, updated_at, mehram_traveller_id, ...fields } = t;
 		const row = await createTraveller({ ...fields, mehram_traveller_id: null });
 		idByRef.set(id, row.id);
 		if (addons.length > 0) {
@@ -358,6 +385,19 @@ export async function loadProposalIntoBuilder(p: HajjProposal): Promise<void> {
 					qty: a.qty,
 					cost_override: a.cost_override,
 					sell_price: a.sell_price
+				}))
+			);
+			if (error) throw new Error(error.message);
+		}
+		if (extras && extras.length > 0) {
+			const { error } = await supabase.from('hajj_traveller_extras').insert(
+				extras.map((e, i) => ({
+					traveller_id: row.id,
+					label: e.label,
+					currency: e.currency,
+					cost: e.cost,
+					sell_price: e.sell_price,
+					sort_order: i
 				}))
 			);
 			if (error) throw new Error(error.message);
@@ -384,7 +424,7 @@ export async function acceptProposal(p: HajjProposal): Promise<void> {
 /** Every Hajj traveller with their add-ons, across all queries. */
 export async function listAllTravellers(): Promise<HajjTraveller[]> {
 	const rows = unwrap(
-		await supabase.from('hajj_travellers').select('*, addons:hajj_traveller_addons(*)')
+		await supabase.from('hajj_travellers').select('*, addons:hajj_traveller_addons(*), extras:hajj_traveller_extras(*)')
 	);
 	return rows as unknown as HajjTraveller[];
 }

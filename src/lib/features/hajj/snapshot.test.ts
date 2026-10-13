@@ -98,6 +98,25 @@ describe('hajj proposal snapshots', () => {
 		expect(snap.travellers.map((t) => t.addons[0]?.sell_price)).toEqual([17500, 17500]);
 	});
 
+	it('freezes other services too, and old snapshots without them still load', () => {
+		const d = data([
+			traveller('a', {
+				extras: [
+					{ id: 'x', traveller_id: 'a', label: 'Wheelchair', currency: 'SAR', cost: 200, sell_price: 100, sort_order: 0, created_at: '', updated_at: '' }
+				]
+			})
+		]);
+		const snap = makeSnapshot(d, null);
+		// sold at cost, never below
+		expect(snap.travellers[0]?.extras).toEqual([{ label: 'Wheelchair', currency: 'SAR', cost: 200, sell_price: 200 }]);
+		const back = snapshotToTravellers(snap, 'q');
+		expect(back[0]?.extras?.[0]).toMatchObject({ label: 'Wheelchair', sell_price: 200 });
+		expect(buildQuote({ ...d, travellers: back }).pkr.sell).toBe((56000 + 200) * 77);
+
+		delete snap.travellers[0]!.extras;
+		expect(snapshotToTravellers(snap, 'q')[0]?.extras).toEqual([]);
+	});
+
 	it('does not change when the working copy is edited afterwards', () => {
 		const d = data([traveller('a')]);
 		const snap = makeSnapshot(d, null);

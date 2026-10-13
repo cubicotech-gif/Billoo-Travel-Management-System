@@ -10,7 +10,10 @@ import {
 	updateProposal,
 	createTraveller,
 	deleteTraveller,
+	createTravellerExtra,
 	deleteTravellerAddon,
+	deleteTravellerExtra,
+	updateTravellerExtra,
 	getOrCreateQuote,
 	listAddons,
 	listCatalogues,
@@ -30,6 +33,8 @@ import type {
 	HajjQuoteUpdate,
 	HajjTraveller,
 	HajjTravellerAddonUpdate,
+	HajjTravellerExtraUpdate,
+	NewHajjTravellerExtra,
 	HajjTravellerUpdate,
 	NewHajjTraveller,
 	NewHajjTravellerAddon
@@ -169,6 +174,33 @@ export function useRemoveTravellerAddon(queryId: string) {
 	const client = useQueryClient();
 	return createMutation({
 		mutationFn: (id: string) => deleteTravellerAddon(id),
+		onSuccess: () => refresh(client, queryId)
+	});
+}
+
+// --- Other services ----------------------------------------------------------
+
+export function useAddTravellerExtra(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (input: NewHajjTravellerExtra) => createTravellerExtra(input),
+		onSuccess: () => refresh(client, queryId)
+	});
+}
+
+export function useUpdateTravellerExtra(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: ({ id, patch }: { id: string; patch: HajjTravellerExtraUpdate }) =>
+			updateTravellerExtra(id, patch),
+		onSuccess: () => refresh(client, queryId)
+	});
+}
+
+export function useRemoveTravellerExtra(queryId: string) {
+	const client = useQueryClient();
+	return createMutation({
+		mutationFn: (id: string) => deleteTravellerExtra(id),
 		onSuccess: () => refresh(client, queryId)
 	});
 }

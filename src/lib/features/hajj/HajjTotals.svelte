@@ -60,11 +60,15 @@
 			{@render block('Air tickets (PKR)', result.ticket.cost, result.ticket.sell, result.ticket.profit, 'PKR')}
 		{/if}
 
-		{#if sar || result.ticket.sell > 0}
+		{#if result.other.sell > 0 || result.other.cost > 0}
+			{@render block('Other services (PKR)', result.other.cost, result.other.sell, result.other.profit, 'PKR')}
+		{/if}
+
+		{#if sar || result.ticket.sell > 0 || result.other.sell > 0}
 			<div class="rounded-lg bg-brand-50 px-3 py-2.5">
 				<div class="flex flex-wrap items-baseline justify-between gap-2">
 					<span class="text-xs font-medium text-brand-700">
-						Total in PKR{sar ? ` — SAR × ${result.roe}` : ''}{result.ticket.sell > 0 ? ' + tickets' : ''}
+						Total in PKR{sar ? ` — SAR × ${result.roe}` : ''}{result.ticket.sell > 0 ? ' + tickets' : ''}{result.other.sell > 0 ? ' + other services' : ''}
 					</span>
 					<span class="text-lg font-semibold tabular-nums text-brand-800">{formatAmount(result.pkr.sell, 'PKR')}</span>
 				</div>
@@ -120,6 +124,7 @@
 								<span class="ml-2">{formatAmount(a.sell, cur as 'USD' | 'SAR')}</span>
 							{/each}
 							{#if t.ticketSell > 0}<span class="ml-2">+ {formatAmount(t.ticketSell, 'PKR')} ticket</span>{/if}
+							{#if t.otherPkr.sell > 0}<span class="ml-2">+ {formatAmount(t.otherPkr.sell, 'PKR')} other</span>{/if}
 						</span>
 					</li>
 				{/each}

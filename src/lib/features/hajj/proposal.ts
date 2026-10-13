@@ -9,14 +9,14 @@ import type {
 	HajjPackage,
 	HajjRoomType
 } from './types';
-import { formatAmount as formatAmountRaw, money, multiply, subtract, toNumber } from '$lib/money';
+import { add, formatAmount as formatAmountRaw, money, multiply, subtract, toNumber } from '$lib/money';
 
 // The client-facing proposal for a Hajj family quote. Built from the same
 // buildQuote numbers as the builder, but it only ever carries SELLING prices —
 // never cost, margin or commission. Used by the print page and the WhatsApp text.
 
 export interface ProposalLine {
-	kind: 'package' | 'addon' | 'ticket';
+	kind: 'package' | 'addon' | 'extra' | 'ticket';
 	label: string;
 	amount: number;
 	currency: HajjCurrency | 'PKR';
@@ -29,6 +29,8 @@ export interface ProposalTraveller {
 	/** Sell total per currency (package + add-ons), tickets excluded. */
 	totals: Partial<Record<HajjCurrency, number>>;
 	ticketPkr: number;
+	/** PKR-priced other services (SAR / USD ones are inside `totals`). */
+	otherPkr: number;
 }
 
 export interface ProposalGroup {
@@ -52,6 +54,7 @@ export interface ProposalTotals {
 	/** SAR converted to PKR plus tickets; null when there is neither. */
 	pkr: number | null;
 	ticketPkr: number;
+	otherPkr: number;
 }
 
 export interface Proposal {
@@ -113,6 +116,8 @@ export function buildProposal(input: ProposalInput): Proposal {
 				currency: line.currency
 			});
 		}
+		for (const e of r.extras)
+			lines.push({ kind: 'extra', label: e.label, amount: e.sell, currency: e.currency });
 		if (r.ticketSell > 0) {
 			ticketQuoted = true;
 			lines.push({
@@ -131,7 +136,8 @@ export function buildProposal(input: ProposalInput): Proposal {
 			name: names[t.id] ?? 'Traveller',
 			lines,
 			totals,
-			ticketPkr: r.ticketSell
+			ticketPkr: r.ticketSell,
+			otherPkr: r.otherPkr.sell
 		};
 
 		const key = `${pkg.id}|${t.option_code}|${t.room_type}`;
@@ -156,7 +162,7 @@ export function buildProposal(input: ProposalInput): Proposal {
 	}
 
 	const sar = result.byCurrency.find((c) => c.currency === 'SAR')?.sell ?? null;
-	const hasPkr = sar !== null || result.ticket.sell > 0;
+	const hasPkr = sar !== null || result.ticket.sell > 0 || result.other.sell > 0;
 
 	return {
 		reference: referenceFor(query),
@@ -170,7 +176,8 @@ export function buildProposal(input: ProposalInput): Proposal {
 			sar,
 			roe: result.roe,
 			pkr: hasPkr ? result.pkr.sell : null,
-			ticketPkr: result.ticket.sell
+			ticketPkr: result.ticket.sell,
+			otherPkr: result.other.sell
 		},
 		ticketQuoted,
 		qurbaniQuoted,
@@ -236,7 +243,31 @@ const formatAmount: typeof formatAmountRaw = (n, c) =>
 
 const ONE = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
-function groupLines(p: Proposal): string[] {
+export interface WhatsAppOpts {
+	validUntil?: string | null;
+	brand?: string;
+	/** Show each service's price. false = one amount per person, services listed by name. */
+	breakup?: boolean;
+}
+
+/** Per-person amount without the parts: one figure per currency, tickets / PKR services in PKR. */
+export function travellerTotals(t: ProposalTraveller): { currency: HajjCurrency | 'PKR'; amount: number }[] {
+	const out: { currency: HajjCurrency | 'PKR'; amount: number }[] = [];
+	for (const cur of ['USD', 'SAR'] as const) {
+		const n = t.totals[cur];
+		if (n !== undefined) out.push({ currency: cur, amount: n });
+	}
+	const pkr = toNumber(add(money(t.ticketPkr, 'PKR'), money(t.otherPkr, 'PKR')));
+	if (pkr > 0) out.push({ currency: 'PKR', amount: pkr });
+	return out;
+}
+
+/** Names of everything in a traveller's quote except the base package, in order. */
+export function serviceNames(t: ProposalTraveller): string[] {
+	return t.lines.filter((l) => l.kind !== 'package').map((l) => l.label);
+}
+
+function groupLines(p: Proposal, breakup = true): string[] {
 	const out: string[] = [];
 	for (const g of p.groups) {
 		out.push(`*${g.pkg.title}*${g.pkg.duration_label ? ` (${g.pkg.duration_label})` : ''}`);
@@ -247,11 +278,20 @@ function groupLines(p: Proposal): string[] {
 		const mina = minaCategory(g.catalogue);
 		if (mina) out.push(`⛺ Mina: ${mina}`);
 		for (const t of g.travellers) {
+			if (!breakup) {
+				const total = travellerTotals(t)
+					.map((a) => formatAmount(a.amount, a.currency))
+					.join(' + ');
+				out.push(`👤 ${t.name} — ${total}`);
+				const names = serviceNames(t);
+				if (names.length) out.push(`   Includes: ${names.join(', ')}`);
+				continue;
+			}
 			const pkgLine = t.lines.find((l) => l.kind === 'package');
-			const extras = t.lines.filter((l) => l.kind === 'addon');
+			const extras = t.lines.filter((l) => l.kind === 'addon' || l.kind === 'extra');
 			out.push(`👤 ${t.name} — ${pkgLine ? formatAmount(pkgLine.amount, g.currency) : ''}`);
 			for (const e of extras)
-				out.push(`   + ${e.label} — ${formatAmount(e.amount, e.currency as HajjCurrency)}`);
+				out.push(`   + ${e.label} — ${formatAmount(e.amount, e.currency)}`);
 			const tk = t.lines.find((l) => l.kind === 'ticket');
 			if (tk) out.push(`   + ${tk.label} — ${formatAmount(tk.amount, 'PKR')}`);
 		}
@@ -260,14 +300,17 @@ function groupLines(p: Proposal): string[] {
 	return out;
 }
 
-function totalLines(p: Proposal, heading = '*Total*'): string[] {
+function totalLines(p: Proposal, heading = '*Total*', breakup = true): string[] {
 	const out: string[] = [heading];
 	const { totals } = p;
-	if (totals.sar !== null)
-		out.push(
-			`${formatAmount(totals.sar, 'SAR')} (SAR) @ ${totals.roe} = ${formatAmount(totals.sar * totals.roe, 'PKR')}`
-		);
-	if (totals.ticketPkr > 0) out.push(`Air tickets ${formatAmount(totals.ticketPkr, 'PKR')}`);
+	if (breakup) {
+		if (totals.sar !== null)
+			out.push(
+				`${formatAmount(totals.sar, 'SAR')} (SAR) @ ${totals.roe} = ${formatAmount(totals.sar * totals.roe, 'PKR')}`
+			);
+		if (totals.ticketPkr > 0) out.push(`Air tickets ${formatAmount(totals.ticketPkr, 'PKR')}`);
+		if (totals.otherPkr > 0) out.push(`Other services ${formatAmount(totals.otherPkr, 'PKR')}`);
+	} else if (totals.sar !== null) out.push(`SAR amounts converted to PKR at ${totals.roe}`);
 	if (totals.pkr !== null) out.push(`*Total in PKR: ${formatAmount(totals.pkr, 'PKR')}*`);
 	if (totals.usd !== null)
 		out.push(
@@ -279,7 +322,7 @@ function totalLines(p: Proposal, heading = '*Total*'): string[] {
 
 function closingLines(
 	flags: { ticketQuoted: boolean; qurbaniQuoted: boolean },
-	opts: { validUntil?: string | null; brand?: string }
+	opts: WhatsAppOpts
 ): string[] {
 	const brand = opts.brand?.trim() || 'Billoo Travel';
 	const out: string[] = [
@@ -306,14 +349,15 @@ function closingLines(
  */
 export function proposalWhatsApp(
 	p: Proposal,
-	opts: { validUntil?: string | null; brand?: string } = {}
+	opts: WhatsAppOpts = {}
 ): string {
+	const breakup = opts.breakup ?? true;
 	return [
 		`*${SEASON_LABEL.split(' · ')[0]} Package Proposal — ${p.clientName}*`,
 		`${ONE(p.travellerCount, 'traveller')} · Ref ${p.reference}`,
 		'',
-		...groupLines(p),
-		...totalLines(p),
+		...groupLines(p, breakup),
+		...totalLines(p, '*Total*', breakup),
 		...closingLines(p, opts)
 	].join('\n');
 }
@@ -324,8 +368,9 @@ export function proposalWhatsApp(
  */
 export function proposalOptionsWhatsApp(
 	options: { title: string; proposal: Proposal }[],
-	opts: { validUntil?: string | null; brand?: string } = {}
+	opts: WhatsAppOpts = {}
 ): string {
+	const breakup = opts.breakup ?? true;
 	const first = options[0];
 	if (!first) return '';
 	if (options.length === 1) return proposalWhatsApp(first.proposal, opts);
@@ -338,8 +383,8 @@ export function proposalOptionsWhatsApp(
 	];
 	options.forEach((o, i) => {
 		out.push(`━━━ *Option ${i + 1} — ${o.title}* ━━━`);
-		out.push(...groupLines(o.proposal));
-		out.push(...totalLines(o.proposal, `*Total — ${o.title}*`));
+		out.push(...groupLines(o.proposal, breakup));
+		out.push(...totalLines(o.proposal, `*Total — ${o.title}*`, breakup));
 	});
 	out.push(
 		...closingLines(

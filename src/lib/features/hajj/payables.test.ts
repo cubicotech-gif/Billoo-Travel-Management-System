@@ -48,6 +48,21 @@ describe('costByQuery', () => {
 	});
 });
 
+describe('costByQuery — other services', () => {
+	it('leaves hand-entered other services out (they are not the vendor’s)', () => {
+		const rows = costByQuery({
+			...base,
+			travellers: [
+				t('a', '1', 'pS', {
+					extras: [{ id: 'x', traveller_id: 'a', label: 'Wheelchair', currency: 'SAR', cost: 200, sell_price: 350, sort_order: 0, created_at: '', updated_at: '' }]
+				})
+			],
+			queries: [q('1')]
+		});
+		expect(rows[0]?.cost).toEqual({ SAR: 54500 });
+	});
+});
+
 describe('payablesSummary', () => {
 	const rows = costByQuery({
 		...base,

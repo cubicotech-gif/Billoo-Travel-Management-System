@@ -8,6 +8,7 @@
 	import PackageSummary from './PackageSummary.svelte';
 	import NumberField from './NumberField.svelte';
 	import TravellerAddons from './TravellerAddons.svelte';
+	import TravellerExtras from './TravellerExtras.svelte';
 	import TravellerDetails from './TravellerDetails.svelte';
 	import { travellerIssues } from './readiness';
 	import type { Passenger } from '$features/passengers/types';
@@ -198,6 +199,19 @@
 				</summary>
 				<div class="mt-3">
 					<TravellerDetails {queryId} {traveller} {passenger} {others} />
+				</div>
+			</details>
+
+			<details class="rounded-lg border border-slate-200 px-3 py-2" open={result.extras.length > 0}>
+				<summary class="cursor-pointer text-sm font-medium text-slate-700">
+					Other services
+					{#if result.extras.length}
+						<span class="ml-1 rounded-full bg-brand-50 px-1.5 text-xs font-normal text-brand-700">{result.extras.length}</span>
+					{/if}
+					<span class="ml-1 text-xs font-normal text-slate-400">wheelchair, luggage, anything not in the package</span>
+				</summary>
+				<div class="mt-3">
+					<TravellerExtras {queryId} {traveller} results={result.extras} defaultCurrency={currency} />
 				</div>
 			</details>
 
